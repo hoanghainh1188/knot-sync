@@ -1,0 +1,22 @@
+{
+  "name": "knot-sync-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Normalize legacy enterprise data (office files, scanned papers, old databases) for AI agents via MCP.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "test": "pnpm build && node --test --no-warnings=ExperimentalWarning \"packages/*/dist/**/*.test.js\"",
+    "scan:sample": "pnpm build && node packages/cli/dist/bin.js scan --config examples/sample.config.yaml"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

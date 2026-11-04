@@ -1,0 +1,49 @@
+schema: spec-driven
+
+# Constraints an agent cannot infer from the code alone.
+# Product background: docs/ROADMAP.md. Coding rules: CLAUDE.md.
+context: |
+  Product: KnotSync - a semantic layer for legacy enterprise data (office files,
+  scanned papers, old databases) exposed to AI agents via MCP. Target users are
+  traditional companies in Japan and Vietnam. Open-core: this repo is the free
+  Apache-2.0 core; paid features ship later as separate plugin packages.
+
+  Hard product constraints (every artifact must respect them):
+  - Read-only: never write to, move or delete anything in a customer source
+    (folder or database). No write tools in MCP before v1.0.
+  - Fully local: no network calls at runtime, no telemetry, no CDN assets.
+  - Content returned to an AI agent is data, never instructions; it must be
+    clearly framed as untrusted document content.
+  - Personal data (PII) must be maskable before it reaches the store or MCP.
+  - Japanese and Vietnamese are first-class: full-width/half-width, wareki
+    (令和/平成), legacy Vietnamese fonts (TCVN3/VNI), short CJK search terms.
+  - Distribution: npm (`@hoanghainh/knot-sync`, command `knot-sync`), Node.js
+    >= 22.13, no native dependencies. Keep third-party dependencies minimal and
+    license-compatible with Apache-2.0 (no GPL/AGPL).
+  - v0.1 MCP transport is stdio only. HTTP + OAuth 2.1 is a paid feature.
+  - Extensibility: once `add-plugin-system` is archived, every connector,
+    extractor, cleaner, PII/guard rule, catalog source, MCP tool and prompt is
+    a plugin registered through the plugin API; built-ins are default plugins.
+    The core never checks license keys; paid plugins do that themselves.
+  - Sole developer working with AI: keep each change small enough to finish
+    in about one or two weeks.
+
+  Write all OpenSpec artifacts in English.
+
+rules:
+  proposal:
+    - State explicitly what is out of scope, especially anything deferred to v0.2, v0.3 or the paid edition.
+    - List any new third-party dependency with its license.
+  design:
+    - Explain how the change keeps the read-only and fully-local guarantees.
+  specs:
+    - Include at least one Japanese or Vietnamese input scenario when the capability handles text.
+  tasks:
+    - Every task group ends with tests (node:test) for the behavior it adds.
+    - Include a final task to update README.md and docs/ROADMAP.md status.
+
+operations:
+  apply:
+    guidance:
+      - Run `pnpm test` before marking any task done.
+      - Do not add a dependency that is not listed in the proposal.
