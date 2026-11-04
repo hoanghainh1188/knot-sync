@@ -1,0 +1,38 @@
+{
+  "name": "@hoanghainh/knot-sync",
+  "version": "0.0.1",
+  "description": "Scan, clean and serve legacy enterprise data to AI agents via MCP. Runs fully on your own machine.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "knot-sync": "./dist/bin.js"
+  },
+  "main": "./dist/main.js",
+  "types": "./dist/main.d.ts",
+  "files": [
+    "dist",
+    "!dist/**/*.test.*"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai-agent",
+    "data-cleaning",
+    "legacy-data",
+    "japanese",
+    "vietnamese"
+  ],
+  "dependencies": {
+    "@hoanghainh/knot-sync-connector-fs": "workspace:*",
+    "@hoanghainh/knot-sync-core": "workspace:*",
+    "@hoanghainh/knot-sync-store-sqlite": "workspace:*"
+  },
+  "author": "hoanghainh",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

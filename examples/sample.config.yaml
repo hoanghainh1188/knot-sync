@@ -1,0 +1,13 @@
+# Sample config: scans ./sample-data (Japanese + Vietnamese folder names)
+sources:
+  - id: sample
+    type: fs
+    path: ./sample-data
+    extensions: [.xlsx, .xls, .docx, .doc, .pdf, .csv, .txt]
+
+store:
+  path: ./.data/store.sqlite
+
+scan:
+  old_file_years: 5
+  hash: true

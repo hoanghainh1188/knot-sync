@@ -1,0 +1,30 @@
+{
+  "name": "@hoanghainh/knot-sync-store-sqlite",
+  "version": "0.0.1",
+  "description": "SQLite store (node:sqlite, FTS5 trigram) for KnotSync.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@hoanghainh/knot-sync-core": "workspace:*"
+  },
+  "author": "hoanghainh",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}
