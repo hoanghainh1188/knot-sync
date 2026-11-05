@@ -47,8 +47,14 @@ When standard output is closed early by the reader (for example `knot-sync scan 
 - **THEN** no stack trace is printed and the exit code is 0
 
 ### Requirement: Commands not yet available
-`run` and `serve` SHALL exit with code 2 and a message that they are not available yet; unknown commands SHALL exit with code 2 and show help.
+`serve` SHALL exit with code 2 and a message that it is not available yet.
+Unknown commands SHALL exit with code 2 and show help. `run` is available and
+MUST NOT use this “not available yet” path.
 
 #### Scenario: Unknown command
 - **WHEN** the user runs `knot-sync nope`
 - **THEN** the exit code is 2 and help is shown
+
+#### Scenario: Serve still unavailable
+- **WHEN** the user runs `knot-sync serve`
+- **THEN** the exit code is 2 and the message says it is not available yet

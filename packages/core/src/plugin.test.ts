@@ -37,14 +37,21 @@ test("createPluginHost registers extensions", () => {
           scan: async function* () {},
         });
         api.registerPiiRule({ id: "email" });
+        api.registerExtractor({
+          id: "office",
+          extensions: [".xlsx"],
+          extract: async () => ({ ok: false, code: "SKIP", message: "stub" }),
+        });
       },
     }),
   );
   assert.equal(host.connectors.has("fs"), true);
   assert.equal(host.piiRules.has("email"), true);
+  assert.equal(host.extractors.get("office")?.extensions.includes(".xlsx"), true);
   assert.deepEqual(host.loaded[0]?.extensions, [
     { point: "connector", id: "fs" },
     { point: "pii-rule", id: "email" },
+    { point: "extractor", id: "office" },
   ]);
 });
 

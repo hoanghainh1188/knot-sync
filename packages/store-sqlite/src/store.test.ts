@@ -57,6 +57,24 @@ test("upsert updates the FTS index", () => {
   store.close();
 });
 
+test("listFiles and unchanged extraction helpers", () => {
+  const store = new Store(":memory:");
+  store.replaceScan("s", [file("経理/a.xlsx", 10, "abc"), file("b.xlsx", 5, "def")], []);
+  const listed = store.listFiles("s");
+  assert.equal(listed.length, 2);
+  assert.equal(listed[0]?.relPath, "b.xlsx");
+  assert.equal(listed[1]?.relPath, "経理/a.xlsx");
+
+  assert.equal(store.isUnchangedExtraction(file("経理/a.xlsx", 10, "abc")), false);
+  const d = doc("s", "経理/a.xlsx", "t", "c");
+  d.metadata = { sourceFileHash: "abc" };
+  store.upsertDocument(d);
+  assert.equal(store.isUnchangedExtraction(file("経理/a.xlsx", 10, "abc")), true);
+  assert.equal(store.isUnchangedExtraction(file("経理/a.xlsx", 10, "changed")), false);
+  assert.equal(store.getDocumentByLocation("s", "経理/a.xlsx")?.title, "t");
+  store.close();
+});
+
 test("scan stats: types, duplicates, old and empty files", () => {
   const store = new Store(":memory:");
   const tenYearsAgo = Date.now() - 10 * 365 * 24 * 3600 * 1000;

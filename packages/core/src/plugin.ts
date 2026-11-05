@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ConfigError } from "./errors.js";
-import type { FileEntry, ScanIssue, SourceConfig } from "./types.js";
+import type { Document, FileEntry, ScanIssue, SourceConfig } from "./types.js";
 
 /** Host plugin API version. Plugins must declare the same number. */
 export const PLUGIN_API_VERSION = 1;
@@ -33,9 +33,21 @@ export interface Connector {
   scan(source: SourceConfig, options?: ConnectorScanOptions): AsyncGenerator<FileEntry>;
 }
 
-/** Stub until a later change fills in behavior. */
+export interface ExtractContext {
+  /** Reserved for future pipeline options (cleaners, etc.). */
+  signal?: AbortSignal;
+}
+
+export type ExtractResult =
+  | { ok: true; document: Document }
+  | { ok: false; code: string; message: string };
+
+/** Turns an inventory file into a Document. */
 export interface Extractor {
   id: string;
+  /** Lower-case extensions with dot, e.g. ".xlsx". */
+  extensions: string[];
+  extract(file: FileEntry, ctx?: ExtractContext): Promise<ExtractResult>;
 }
 
 /** Stub until a later change fills in behavior. */
@@ -233,7 +245,19 @@ export function createPluginHost(options: CreatePluginHostOptions = {}): PluginH
     const extensions: RegisteredExtension[] = [];
     const api: PluginApi = {
       registerConnector: (c) => registerInMap(connectors, "connector", c, plugin.name, extensions),
-      registerExtractor: (e) => registerInMap(extractors, "extractor", e, plugin.name, extensions),
+      registerExtractor: (e) => {
+        if (!Array.isArray(e.extensions) || e.extensions.some((x) => typeof x !== "string")) {
+          throw new ConfigError(
+            `Plugin "${plugin.name}" extractor "${e.id}" must declare extensions as a string array (e.g. [".xlsx"]).`,
+          );
+        }
+        if (typeof e.extract !== "function") {
+          throw new ConfigError(
+            `Plugin "${plugin.name}" extractor "${e.id}" must provide extract(file).`,
+          );
+        }
+        registerInMap(extractors, "extractor", e, plugin.name, extensions);
+      },
       registerCleaner: (c) => registerInMap(cleaners, "cleaner", c, plugin.name, extensions),
       registerPiiRule: (r) => registerInMap(piiRules, "pii-rule", r, plugin.name, extensions),
       registerGuardRule: (r) => registerInMap(guardRules, "guard-rule", r, plugin.name, extensions),

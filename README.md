@@ -3,7 +3,7 @@
 > Scan, clean and serve legacy enterprise data to AI agents via the
 > [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
 
-**Status: pre-alpha.** `init`, `scan` and `plugins` work today.
+**Status: pre-alpha.** `init`, `scan`, `run` and `plugins` work today.
 
 - Runs **fully on your own machine**. Nothing is sent to the Internet.
 - Sources are **read-only**. The tool never changes your files or databases.
@@ -19,8 +19,14 @@ Requires Node.js 22.13 or newer.
 ```bash
 npx @hoanghainh/knot-sync init --path /path/to/shared/folder
 npx @hoanghainh/knot-sync scan
+npx @hoanghainh/knot-sync run
 npx @hoanghainh/knot-sync plugins
 ```
+
+`run` extracts text and tables from the last scan (`.xlsx`, `.docx`, text PDF,
+`.csv`/`.tsv`, `.txt`, `.md`) into the local document store. Unchanged files
+(same content hash) are skipped. Unsupported or broken files are reported as
+issues; the run continues.
 
 Example output:
 
@@ -52,7 +58,8 @@ cryptic fields (`TKSK_CD`, `ma_kh`…) so AI agents call tools correctly.
 
 - ✅ Foundation: folder source, SQLite store, `init`, `scan`
 - ✅ Plugin system (`plugins` command, built-in `fs` connector plugin)
-- ⏳ Office extraction, JP/VN cleaning, PII masking, prompt-injection guard
+- ✅ Office extraction (`run`, built-in `extractor-office` plugin)
+- ⏳ JP/VN cleaning, PII masking, prompt-injection guard
 - ⏳ `scan --report` (one-file HTML), MCP server (`serve`), PostgreSQL / MySQL
 - ⏳ Semantic Catalog (`describe`, reads テーブル定義書)
 
@@ -74,6 +81,7 @@ Packages:
 |---|---|
 | `packages/core` | Types (`Document`, `FileEntry`), config loader, plugin host API |
 | `packages/connector-fs` | Built-in `fs` connector plugin (read-only folder walker) |
+| `packages/extractor-office` | Built-in extractor for Office/text files (`run`) |
 | `packages/store-sqlite` | `node:sqlite` store, FTS5 trigram search (works for 日本語 / Tiếng Việt) |
 | `packages/cli` | `knot-sync` command |
 

@@ -12,7 +12,7 @@ import {
 } from "@hoanghainh/knot-sync-core";
 import { Store, type SourceStats } from "@hoanghainh/knot-sync-store-sqlite";
 import { formatBytes, formatCount, table } from "./format.js";
-import { loadAppPlugins } from "./plugins.js";
+import { findExtractor, loadAppPlugins } from "./plugins.js";
 
 export const VERSION = "0.0.1";
 
@@ -39,8 +39,8 @@ Usage:
 Commands:
   init      Create a config file in the current folder
   scan      Inventory all sources: file types, sizes, duplicates, old files
+  run       Extract text/tables from the last scan into the document store
   plugins   List loaded plugins and their extension points
-  run       (coming soon) Extract, clean and mask personal data
   serve     (coming soon) Start the MCP server
 
 Options:
@@ -102,11 +102,12 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         return await cmdInit(configPath, values.path, Boolean(values.force), io);
       case "scan":
         return await cmdScan(configPath, Boolean(values.json), Boolean(values.report), io);
+      case "run":
+        return await cmdRun(configPath, io);
       case "plugins":
         return await cmdPlugins(configPath, io);
-      case "run":
       case "serve":
-        io.err(`"${command}" is not available yet. It is planned for a later v0.1 milestone.`);
+        io.err(`"serve" is not available yet. It is planned for a later v0.1 milestone.`);
         return 2;
       default:
         io.err(`Unknown command "${command}".\n`);
@@ -208,6 +209,80 @@ async function cmdScan(configPath: string, json: boolean, report: boolean, io: I
     io.err('Note: "--report" (HTML report) is not available yet. It is planned for week 6.');
   }
   return 0;
+}
+
+async function cmdRun(configPath: string, io: Io): Promise<number> {
+  const structural = await loadConfig(configPath);
+  const host = await loadAppPlugins(structural);
+  resolveConfig(structural, host); // validate sources even though run uses inventory
+  const store = new Store(structural.store.path);
+
+  try {
+    const files = store.listFiles();
+    if (files.length === 0) {
+      io.err(
+        `No scan inventory found in ${structural.store.path}.\n` +
+          `Run "knot-sync scan" first, then "knot-sync run".`,
+      );
+      return 1;
+    }
+
+    let extracted = 0;
+    let skipped = 0;
+    let failed = 0;
+    const issues: { path: string; code: string; message: string }[] = [];
+
+    for (const file of files) {
+      const extractor = findExtractor(host, file);
+      if (!extractor) {
+        failed += 1;
+        issues.push({
+          path: file.relPath,
+          code: "UNSUPPORTED",
+          message: `No extractor registered for ${file.ext || "(no extension)"}.`,
+        });
+        continue;
+      }
+
+      if (store.isUnchangedExtraction(file)) {
+        skipped += 1;
+        continue;
+      }
+
+      try {
+        const result = await extractor.extract(file);
+        if (!result.ok) {
+          failed += 1;
+          issues.push({ path: file.relPath, code: result.code, message: result.message });
+          continue;
+        }
+        store.upsertDocument(result.document);
+        extracted += 1;
+      } catch (err) {
+        failed += 1;
+        issues.push({
+          path: file.relPath,
+          code: "EXTRACT",
+          message: (err as Error).message || String(err),
+        });
+      }
+    }
+
+    io.out(
+      `Run complete: ${formatCount(extracted)} extracted, ${formatCount(skipped)} unchanged, ${formatCount(failed)} issues`,
+    );
+    if (issues.length > 0) {
+      io.out("\nIssues:");
+      for (const i of issues.slice(0, 20)) {
+        io.out(`  [${i.code}] ${i.path}: ${i.message}`);
+      }
+      if (issues.length > 20) io.out(`  … and ${issues.length - 20} more`);
+    }
+    io.out(`Documents saved to ${structural.store.path}`);
+    return 0;
+  } finally {
+    store.close();
+  }
 }
 
 async function cmdPlugins(configPath: string, io: Io): Promise<number> {
