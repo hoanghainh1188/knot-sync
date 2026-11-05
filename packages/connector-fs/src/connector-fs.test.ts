@@ -3,8 +3,13 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_EXCLUDES, type FileEntry, type FsSourceConfig } from "@hoanghainh/knot-sync-core";
-import { scanFs } from "./index.js";
+import {
+  DEFAULT_EXCLUDES,
+  createPluginHost,
+  type FileEntry,
+  type FsSourceConfig,
+} from "@hoanghainh/knot-sync-core";
+import fsPlugin, { parseFsSource, scanFs } from "./index.js";
 
 async function collect(src: FsSourceConfig, hash = true): Promise<FileEntry[]> {
   const out: FileEntry[] = [];
@@ -67,4 +72,22 @@ test("scanFs rejects a missing root", async () => {
   await assert.rejects(
     collect({ id: "t", type: "fs", path: "/no/such/dir", extensions: [], exclude: [] }),
   );
+});
+
+test("fs plugin registers connector id fs", () => {
+  const host = createPluginHost();
+  host.registerPlugin(fsPlugin);
+  assert.equal(host.getConnector("fs")?.id, "fs");
+  assert.deepEqual(host.loaded[0]?.extensions, [{ point: "connector", id: "fs" }]);
+});
+
+test("parseFsSource normalizes extensions and excludes", () => {
+  const src = parseFsSource(
+    { id: "a", type: "fs", path: "./share", extensions: ["XLSX", ".Pdf"], exclude: ["tmp"] },
+    { baseDir: "/work", index: 0 },
+  );
+  assert.equal(src.path, "/work/share");
+  assert.deepEqual(src.extensions, [".xlsx", ".pdf"]);
+  assert.ok(src.exclude.includes("node_modules"));
+  assert.ok(src.exclude.includes("tmp"));
 });

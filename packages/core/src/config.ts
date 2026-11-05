@@ -1,7 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { parse } from "yaml";
-import type { AppConfig, FsSourceConfig, SourceConfig } from "./types.js";
+import { ConfigError } from "./errors.js";
+import type { PluginHost } from "./plugin.js";
+import type { AppConfig, ScanConfig, SourceConfig, StoreConfig } from "./types.js";
+
+export { ConfigError } from "./errors.js";
 
 export const DEFAULT_CONFIG_FILE = "knot-sync.config.yaml";
 
@@ -16,20 +20,15 @@ export const DEFAULT_EXCLUDES = [
   ".Trashes",
 ];
 
-export class ConfigError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ConfigError";
-  }
-}
-
 const ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
-function resolvePath(baseDir: string, p: string): string {
+const CORE_TOP_LEVEL_KEYS = new Set(["sources", "store", "scan", "plugins"]);
+
+export function resolvePath(baseDir: string, p: string): string {
   return isAbsolute(p) ? p : resolve(baseDir, p);
 }
 
-function asStringArray(value: unknown, field: string): string[] {
+export function asStringArray(value: unknown, field: string): string[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value) || value.some((v) => typeof v !== "string")) {
     throw new ConfigError(`"${field}" must be a list of strings.`);
@@ -37,42 +36,55 @@ function asStringArray(value: unknown, field: string): string[] {
   return value as string[];
 }
 
-function normalizeExt(ext: string): string {
+export function normalizeExt(ext: string): string {
   const e = ext.trim().toLowerCase();
   return e.startsWith(".") ? e : `.${e}`;
 }
 
-function parseSource(raw: unknown, index: number, baseDir: string): SourceConfig {
-  if (typeof raw !== "object" || raw === null) {
-    throw new ConfigError(`sources[${index}] must be an object.`);
-  }
-  const s = raw as Record<string, unknown>;
-  const id = s.id;
+export function assertSourceId(id: unknown, index: number): string {
   if (typeof id !== "string" || !ID_PATTERN.test(id)) {
     throw new ConfigError(
       `sources[${index}].id must be lower-case letters, digits, "-" or "_" (got ${JSON.stringify(id)}).`,
     );
   }
-  if (s.type !== "fs") {
-    throw new ConfigError(
-      `sources[${index}].type "${String(s.type)}" is not supported yet. Supported: fs.`,
-    );
-  }
-  if (typeof s.path !== "string" || s.path.trim() === "") {
-    throw new ConfigError(`sources[${index}].path is required.`);
-  }
-  const source: FsSourceConfig = {
-    id,
-    type: "fs",
-    path: resolvePath(baseDir, s.path),
-    extensions: asStringArray(s.extensions, `sources[${index}].extensions`).map(normalizeExt),
-    exclude: [...DEFAULT_EXCLUDES, ...asStringArray(s.exclude, `sources[${index}].exclude`)],
-  };
-  return source;
+  return id;
 }
 
-/** Parse YAML text into a validated config. Paths resolve from `baseDir`. */
-export function parseConfig(yamlText: string, baseDir: string): AppConfig {
+/** Config after YAML parse, before connectors validate each source. */
+export interface StructuralConfig {
+  baseDir: string;
+  rawSources: Record<string, unknown>[];
+  store: StoreConfig;
+  scan: ScanConfig;
+  /** Plugin entries as written in config (relative paths or package names). */
+  plugins: string[];
+  /** Opaque top-level keys for plugins, keyed by plugin name. */
+  pluginSettings: Record<string, unknown>;
+}
+
+function parsePluginsList(raw: unknown): string[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw) || raw.some((v) => typeof v !== "string")) {
+    throw new ConfigError('"plugins" must be a list of strings (package names or relative paths).');
+  }
+  const list = raw as string[];
+  const seen = new Set<string>();
+  for (const entry of list) {
+    if (entry.trim() === "") {
+      throw new ConfigError('"plugins" entries must be non-empty strings.');
+    }
+    if (seen.has(entry)) {
+      throw new ConfigError(
+        `Duplicate plugins entry "${entry}". List each plugin only once.`,
+      );
+    }
+    seen.add(entry);
+  }
+  return list;
+}
+
+/** Parse YAML text into a structural config. Source types are not validated yet. */
+export function parseConfig(yamlText: string, baseDir: string): StructuralConfig {
   let raw: unknown;
   try {
     raw = parse(yamlText);
@@ -87,11 +99,22 @@ export function parseConfig(yamlText: string, baseDir: string): AppConfig {
   if (!Array.isArray(c.sources) || c.sources.length === 0) {
     throw new ConfigError('"sources" must list at least one source.');
   }
-  const sources = c.sources.map((s, i) => parseSource(s, i, baseDir));
+
+  const rawSources: Record<string, unknown>[] = [];
   const ids = new Set<string>();
-  for (const s of sources) {
-    if (ids.has(s.id)) throw new ConfigError(`Duplicate source id "${s.id}".`);
-    ids.add(s.id);
+  for (let i = 0; i < c.sources.length; i++) {
+    const item = c.sources[i];
+    if (typeof item !== "object" || item === null) {
+      throw new ConfigError(`sources[${i}] must be an object.`);
+    }
+    const s = item as Record<string, unknown>;
+    const id = assertSourceId(s.id, i);
+    if (ids.has(id)) throw new ConfigError(`Duplicate source id "${id}".`);
+    ids.add(id);
+    if (typeof s.type !== "string" || s.type.trim() === "") {
+      throw new ConfigError(`sources[${i}].type is required (a non-empty string).`);
+    }
+    rawSources.push(s);
   }
 
   const store = (c.store ?? {}) as Record<string, unknown>;
@@ -101,9 +124,18 @@ export function parseConfig(yamlText: string, baseDir: string): AppConfig {
     throw new ConfigError('"scan.old_file_years" must be a positive number.');
   }
 
+  const plugins = parsePluginsList(c.plugins);
+
+  const pluginSettings: Record<string, unknown> = Object.create(null);
+  for (const [key, value] of Object.entries(c)) {
+    if (CORE_TOP_LEVEL_KEYS.has(key)) continue;
+    if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
+    pluginSettings[key] = value;
+  }
+
   return {
     baseDir,
-    sources,
+    rawSources,
     store: {
       path: resolvePath(
         baseDir,
@@ -114,10 +146,37 @@ export function parseConfig(yamlText: string, baseDir: string): AppConfig {
       oldFileYears,
       hash: scan.hash === undefined ? true : Boolean(scan.hash),
     },
+    plugins,
+    pluginSettings,
   };
 }
 
-export async function loadConfig(configPath: string): Promise<AppConfig> {
+/** Resolve each source through the connector registry on the plugin host. */
+export function resolveConfig(structural: StructuralConfig, host: PluginHost): AppConfig {
+  const sources: SourceConfig[] = structural.rawSources.map((raw, index) => {
+    const type = String(raw.type);
+    const connector = host.getConnector(type);
+    if (!connector) {
+      const supported = host.listConnectorIds();
+      const list = supported.length > 0 ? supported.join(", ") : "(none registered)";
+      throw new ConfigError(
+        `sources[${index}].type "${type}" is not supported. Registered connector types: ${list}.`,
+      );
+    }
+    return connector.parseSource(raw, { baseDir: structural.baseDir, index });
+  });
+
+  return {
+    baseDir: structural.baseDir,
+    sources,
+    store: structural.store,
+    scan: structural.scan,
+    plugins: structural.plugins,
+    pluginSettings: structural.pluginSettings,
+  };
+}
+
+export async function loadConfig(configPath: string): Promise<StructuralConfig> {
   const abs = resolve(configPath);
   let text: string;
   try {
@@ -137,12 +196,18 @@ export function starterConfigYaml(sourcePath = "./data-to-scan"): string {
 
 sources:
   - id: shared-folder          # lower-case, unique
-    type: fs                   # fs = folder on disk (read-only)
+    type: fs                   # fs = folder on disk (read-only); types come from connector plugins
     path: ${sourcePath}
     # Only scan these types. Remove the line to scan everything.
     extensions: [.xlsx, .xls, .docx, .doc, .pdf, .csv, .txt]
     # Extra folder/file names to skip (node_modules, .git, $RECYCLE.BIN are always skipped).
     exclude: []
+
+# Optional extra plugins (npm package names or paths relative to this file).
+# Built-in plugins (fs connector) always load. Plugins run in-process with full trust —
+# install only plugins you trust. Paid plugins check their own license keys.
+# plugins:
+#   - ./plugins/mask-company-id.mjs
 
 store:
   path: ./.data/store.sqlite   # one SQLite file, safe to delete

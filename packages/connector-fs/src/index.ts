@@ -1,13 +1,24 @@
 import { opendir, stat } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import {
+  ConfigError,
+  DEFAULT_EXCLUDES,
+  PLUGIN_API_VERSION,
+  asStringArray,
+  assertSourceId,
   extOf,
   isJunkFile,
+  normalizeExt,
+  resolvePath,
   sha256File,
   typeFromExt,
+  type Connector,
+  type ConnectorScanOptions,
   type FileEntry,
   type FsSourceConfig,
+  type KnotSyncPlugin,
   type ScanIssue,
+  type SourceConfig,
 } from "@hoanghainh/knot-sync-core";
 
 export interface FsScanOptions {
@@ -22,6 +33,31 @@ function issueCode(err: unknown): ScanIssue["code"] {
   return code === "EACCES" || code === "EPERM" || code === "ENOENT" || code === "EBUSY"
     ? code
     : "OTHER";
+}
+
+export function parseFsSource(
+  raw: Record<string, unknown>,
+  ctx: { baseDir: string; index: number },
+): FsSourceConfig {
+  const id = assertSourceId(raw.id, ctx.index);
+  if (raw.type !== "fs") {
+    throw new ConfigError(
+      `sources[${ctx.index}].type must be "fs" for the fs connector (got ${JSON.stringify(raw.type)}).`,
+    );
+  }
+  if (typeof raw.path !== "string" || raw.path.trim() === "") {
+    throw new ConfigError(`sources[${ctx.index}].path is required.`);
+  }
+  return {
+    id,
+    type: "fs",
+    path: resolvePath(ctx.baseDir, raw.path),
+    extensions: asStringArray(raw.extensions, `sources[${ctx.index}].extensions`).map(normalizeExt),
+    exclude: [
+      ...DEFAULT_EXCLUDES,
+      ...asStringArray(raw.exclude, `sources[${ctx.index}].exclude`),
+    ],
+  };
 }
 
 /**
@@ -115,3 +151,26 @@ export async function* scanFs(
     stack.push(...subdirs);
   }
 }
+
+export const fsConnector: Connector = {
+  id: "fs",
+  parseSource: parseFsSource,
+  async *scan(source: SourceConfig, options: ConnectorScanOptions = {}) {
+    if (source.type !== "fs") {
+      throw new Error(`fs connector cannot scan source type "${source.type}".`);
+    }
+    yield* scanFs(source, options);
+  },
+};
+
+/** Built-in folder connector plugin. */
+const fsPlugin: KnotSyncPlugin = {
+  name: "fs",
+  version: "0.0.1",
+  apiVersion: PLUGIN_API_VERSION,
+  register(api) {
+    api.registerConnector(fsConnector);
+  },
+};
+
+export default fsPlugin;
