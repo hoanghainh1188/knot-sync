@@ -3,11 +3,14 @@
 > Scan, clean and serve legacy enterprise data to AI agents via the
 > [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
 
-**Status: pre-alpha.** Only `init` and `scan` work today.
+**Status: pre-alpha.** `init`, `scan` and `plugins` work today.
 
 - Runs **fully on your own machine**. Nothing is sent to the Internet.
 - Sources are **read-only**. The tool never changes your files or databases.
 - Built for **Japanese and Vietnamese** legacy data (和暦, 全角/半角, TCVN3/VNI fonts…).
+- Extensible via **plugins** (connectors, extractors, cleaners, rules…). Plugins run
+  in-process with full trust — install only modules you trust. Paid plugins check
+  their own license keys; the core never does.
 
 ## Quick start
 
@@ -16,6 +19,7 @@ Requires Node.js 22.13 or newer.
 ```bash
 npx @hoanghainh/knot-sync init --path /path/to/shared/folder
 npx @hoanghainh/knot-sync scan
+npx @hoanghainh/knot-sync plugins
 ```
 
 Example output:
@@ -47,6 +51,7 @@ KnotSync is a **semantic layer for legacy data**: it does not only clean files, 
 cryptic fields (`TKSK_CD`, `ma_kh`…) so AI agents call tools correctly.
 
 - ✅ Foundation: folder source, SQLite store, `init`, `scan`
+- ✅ Plugin system (`plugins` command, built-in `fs` connector plugin)
 - ⏳ Office extraction, JP/VN cleaning, PII masking, prompt-injection guard
 - ⏳ `scan --report` (one-file HTML), MCP server (`serve`), PostgreSQL / MySQL
 - ⏳ Semantic Catalog (`describe`, reads テーブル定義書)
@@ -67,16 +72,20 @@ Packages:
 
 | Package | Purpose |
 |---|---|
-| `packages/core` | Types (`Document`, `FileEntry`), config loader, hashing |
-| `packages/connector-fs` | Read-only folder walker (skips symlinks, Office lock files) |
+| `packages/core` | Types (`Document`, `FileEntry`), config loader, plugin host API |
+| `packages/connector-fs` | Built-in `fs` connector plugin (read-only folder walker) |
 | `packages/store-sqlite` | `node:sqlite` store, FTS5 trigram search (works for 日本語 / Tiếng Việt) |
 | `packages/cli` | `knot-sync` command |
+
+Extra plugins are listed under `plugins:` in the config (npm package name or path
+relative to the config file). Example: `examples/plugins/mask-company-id.mjs`.
 
 Design notes:
 
 - **No native dependencies.** Storage uses the built-in `node:sqlite`, so `npx` installs fast and works offline-friendly.
 - **Few dependencies on purpose** (only `yaml` today). Less supply-chain risk for enterprise users.
 - Search terms shorter than 3 characters (e.g. `請求`) fall back to `LIKE`, because trigram FTS needs 3+ characters.
+- **Plugins are never auto-discovered** — only built-ins plus entries in `plugins:`.
 
 ---
 

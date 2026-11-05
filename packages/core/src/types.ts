@@ -104,4 +104,8 @@ export interface AppConfig {
   sources: SourceConfig[];
   store: StoreConfig;
   scan: ScanConfig;
+  /** Extra plugins listed in config (built-ins are separate). */
+  plugins: string[];
+  /** Opaque top-level settings keyed by plugin name. */
+  pluginSettings: Record<string, unknown>;
 }

@@ -1,17 +1,18 @@
 import { access, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { scanFs } from "@hoanghainh/knot-sync-connector-fs";
 import {
   ConfigError,
   DEFAULT_CONFIG_FILE,
   loadConfig,
+  resolveConfig,
   starterConfigYaml,
   type FileEntry,
   type ScanIssue,
 } from "@hoanghainh/knot-sync-core";
 import { Store, type SourceStats } from "@hoanghainh/knot-sync-store-sqlite";
 import { formatBytes, formatCount, table } from "./format.js";
+import { loadAppPlugins } from "./plugins.js";
 
 export const VERSION = "0.0.1";
 
@@ -38,6 +39,7 @@ Usage:
 Commands:
   init      Create a config file in the current folder
   scan      Inventory all sources: file types, sizes, duplicates, old files
+  plugins   List loaded plugins and their extension points
   run       (coming soon) Extract, clean and mask personal data
   serve     (coming soon) Start the MCP server
 
@@ -53,6 +55,10 @@ init options:
 scan options:
   --json                Print results as JSON
   --report              (coming soon) Also write an HTML report
+
+plugins:
+  Plugins run in-process with full trust. Install only plugins you trust.
+  Paid plugins check their own license keys; the core never does.
 `;
 
 export async function main(argv: string[], io: Io = defaultIo): Promise<number> {
@@ -96,6 +102,8 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         return await cmdInit(configPath, values.path, Boolean(values.force), io);
       case "scan":
         return await cmdScan(configPath, Boolean(values.json), Boolean(values.report), io);
+      case "plugins":
+        return await cmdPlugins(configPath, io);
       case "run":
       case "serve":
         io.err(`"${command}" is not available yet. It is planned for a later v0.1 milestone.`);
@@ -147,17 +155,27 @@ interface ScanResult {
 }
 
 async function cmdScan(configPath: string, json: boolean, report: boolean, io: Io): Promise<number> {
-  const config = await loadConfig(configPath);
+  const structural = await loadConfig(configPath);
+  const host = await loadAppPlugins(structural);
+  const config = resolveConfig(structural, host);
   const store = new Store(config.store.path);
   const results: ScanResult[] = [];
 
   try {
     for (const source of config.sources) {
+      const connector = host.getConnector(source.type);
+      if (!connector) {
+        throw new ConfigError(
+          `No connector registered for source type "${source.type}". ` +
+            `Registered: ${host.listConnectorIds().join(", ") || "(none)"}.`,
+        );
+      }
+
       const files: FileEntry[] = [];
       const issues: ScanIssue[] = [];
       let lastShown = 0;
 
-      for await (const entry of scanFs(source, {
+      for await (const entry of connector.scan(source, {
         hash: config.scan.hash,
         onIssue: (i) => issues.push(i),
       })) {
@@ -188,6 +206,26 @@ async function cmdScan(configPath: string, json: boolean, report: boolean, io: I
   }
   if (report) {
     io.err('Note: "--report" (HTML report) is not available yet. It is planned for week 6.');
+  }
+  return 0;
+}
+
+async function cmdPlugins(configPath: string, io: Io): Promise<number> {
+  const structural = await loadConfig(configPath);
+  const host = await loadAppPlugins(structural);
+
+  io.out("Loaded plugins (in-process, full trust — install only plugins you trust):");
+  if (host.loaded.length === 0) {
+    io.out("  (none)");
+    return 0;
+  }
+  for (const plugin of host.loaded) {
+    const ext =
+      plugin.extensions.length === 0
+        ? "(no extensions)"
+        : plugin.extensions.map((e) => `${e.point}:${e.id}`).join(", ");
+    io.out(`  ${plugin.name}@${plugin.version}`);
+    io.out(`    ${ext}`);
   }
   return 0;
 }

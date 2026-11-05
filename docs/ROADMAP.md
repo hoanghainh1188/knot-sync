@@ -28,7 +28,7 @@ Work through the changes **in order**, one at a time:
 | # | Change | Status |
 |---|---|---|
 | 0 | Foundation: core, folder source, SQLite store, `init`, `scan` | ✅ done (baseline specs) |
-| 1 | `add-plugin-system` | ⏳ do this first |
+| 1 | `add-plugin-system` | ✅ done |
 | 2 | `add-office-extraction` | ⏳ |
 | 3 | `add-ja-vi-cleaning` | ⏳ |
 | 4 | `add-pii-masking` | ⏳ |
