@@ -75,6 +75,48 @@ test("plugins lists built-in fs connector", async () => {
     assert.match(text, /full trust/);
     assert.match(text, /fs@/);
     assert.match(text, /connector:fs/);
+    assert.match(text, /extractor-office@/);
+    assert.match(text, /extractor:office/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("run extracts documents and skips unchanged hashes", async () => {
+  const { buildXlsx } = await import("@hoanghainh/knot-sync-extractor-office/fixtures");
+  const { Store } = await import("@hoanghainh/knot-sync-store-sqlite");
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-run-"));
+  try {
+    const share = join(root, "share");
+    await mkdir(share, { recursive: true });
+    await writeFile(join(share, "請求.xlsx"), await buildXlsx([["品名"], ["ねじ"]]));
+    await writeFile(join(share, "note.txt"), "Hóa đơn 001\n", "utf8");
+    await writeFile(join(share, "bad.docx"), "not-docx", "utf8");
+
+    const config = join(root, "cfg.yaml");
+    let io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], io), 0);
+
+    io = capture();
+    assert.equal(await main(["run", "-c", config], io), 1, "run without scan fails");
+    assert.match(io.stderr.join("\n"), /scan/);
+
+    io = capture();
+    assert.equal(await main(["scan", "-c", config], io), 0);
+
+    io = capture();
+    assert.equal(await main(["run", "-c", config], io), 0);
+    assert.match(io.stdout.join("\n"), /extracted/);
+
+    // Second run should skip unchanged files.
+    io = capture();
+    assert.equal(await main(["run", "-c", config], io), 0);
+    assert.match(io.stdout.join("\n"), /unchanged/);
+
+    const store = new Store(join(root, ".data/store.sqlite"));
+    assert.ok(store.search("ねじ").length >= 1, "extracted xlsx is searchable");
+    assert.ok(store.search("Hóa đơn").length >= 1, "extracted txt is searchable");
+    store.close();
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -143,6 +185,7 @@ test("helpful errors", async () => {
 
   io = capture();
   assert.equal(await main(["serve"], io), 2);
+  assert.match(io.stderr.join("\n"), /not available yet/);
 
   io = capture();
   assert.equal(await main(["--version"], io), 0);

@@ -29,7 +29,7 @@ Work through the changes **in order**, one at a time:
 |---|---|---|
 | 0 | Foundation: core, folder source, SQLite store, `init`, `scan` | ✅ done (baseline specs) |
 | 1 | `add-plugin-system` | ✅ done |
-| 2 | `add-office-extraction` | ⏳ |
+| 2 | `add-office-extraction` | ✅ done |
 | 3 | `add-ja-vi-cleaning` | ⏳ |
 | 4 | `add-pii-masking` | ⏳ |
 | 5 | `add-injection-guard` | ⏳ |

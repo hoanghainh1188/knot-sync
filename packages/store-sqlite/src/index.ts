@@ -1,7 +1,13 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { Document, DocumentType, FileEntry, ScanIssue } from "@hoanghainh/knot-sync-core";
+import {
+  documentId,
+  type Document,
+  type DocumentType,
+  type FileEntry,
+  type ScanIssue,
+} from "@hoanghainh/knot-sync-core";
 
 const SCHEMA_VERSION = 1;
 
@@ -237,6 +243,52 @@ export class Store {
       size: g.size,
       paths: (pathsOf.all(sourceId, g.hash) as { rel_path: string }[]).map((r) => r.rel_path),
     }));
+  }
+
+  /** Inventory files from the last scan, optionally filtered by source. */
+  listFiles(sourceId?: string): FileEntry[] {
+    const rows = (
+      sourceId === undefined
+        ? this.db
+            .prepare(
+              `SELECT source_id, rel_path, abs_path, ext, type, size, mtime_ms, hash
+               FROM files ORDER BY source_id, rel_path`,
+            )
+            .all()
+        : this.db
+            .prepare(
+              `SELECT source_id, rel_path, abs_path, ext, type, size, mtime_ms, hash
+               FROM files WHERE source_id = ? ORDER BY rel_path`,
+            )
+            .all(sourceId)
+    ) as Record<string, string | number | null>[];
+
+    return rows.map((r) => ({
+      sourceId: String(r.source_id),
+      relPath: String(r.rel_path),
+      absPath: String(r.abs_path),
+      ext: String(r.ext),
+      type: r.type as DocumentType,
+      size: Number(r.size),
+      mtimeMs: Number(r.mtime_ms),
+      hash: r.hash === null || r.hash === undefined ? null : String(r.hash),
+    }));
+  }
+
+  /** Document for a source + relative path, or null. */
+  getDocumentByLocation(sourceId: string, relPath: string): Document | null {
+    return this.getDocument(documentId(sourceId, relPath));
+  }
+
+  /**
+   * True when an existing document was extracted from the same inventory file hash.
+   * Missing hash on either side means "not unchanged" (must re-extract).
+   */
+  isUnchangedExtraction(file: FileEntry): boolean {
+    if (!file.hash) return false;
+    const doc = this.getDocumentByLocation(file.sourceId, file.relPath);
+    if (!doc) return false;
+    return doc.metadata.sourceFileHash === file.hash;
   }
 
   upsertDocument(doc: Document): void {

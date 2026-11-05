@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/core" },
     { "path": "packages/connector-fs" },
+    { "path": "packages/extractor-office" },
     { "path": "packages/store-sqlite" },
     { "path": "packages/cli" }
   ]

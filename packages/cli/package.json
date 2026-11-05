@@ -28,6 +28,7 @@
   "dependencies": {
     "@hoanghainh/knot-sync-connector-fs": "workspace:*",
     "@hoanghainh/knot-sync-core": "workspace:*",
+    "@hoanghainh/knot-sync-extractor-office": "workspace:*",
     "@hoanghainh/knot-sync-store-sqlite": "workspace:*"
   },
   "author": "hoanghainh",
