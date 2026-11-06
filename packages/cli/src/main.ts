@@ -11,6 +11,7 @@ import {
   type ScanIssue,
 } from "@hoanghainh/knot-sync-core";
 import { applyGuardToDocument } from "@hoanghainh/knot-sync-guard";
+import { serveStdio } from "@hoanghainh/knot-sync-mcp-server";
 import { applyPiiToDocument, textHasPii } from "@hoanghainh/knot-sync-pii-basic";
 import { Store, type SourceStats } from "@hoanghainh/knot-sync-store-sqlite";
 import { formatBytes, formatCount, table } from "./format.js";
@@ -51,7 +52,7 @@ Commands:
   scan      Inventory all sources: file types, sizes, duplicates, old files
   run       Extract text/tables from the last scan into the document store
   plugins   List loaded plugins and their extension points
-  serve     (coming soon) Start the MCP server
+  serve     Start the MCP server (stdio only; for Claude Desktop / Cursor / Claude Code)
 
 Options:
   -c, --config <file>   Config file (default: ${DEFAULT_CONFIG_FILE})
@@ -125,8 +126,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
       case "plugins":
         return await cmdPlugins(configPath, io);
       case "serve":
-        io.err(`"serve" is not available yet. It is planned for a later v0.1 milestone.`);
-        return 2;
+        return await cmdServe(configPath, io);
       default:
         io.err(`Unknown command "${command}".\n`);
         io.err(HELP);
@@ -508,6 +508,26 @@ async function cmdPlugins(configPath: string, io: Io): Promise<number> {
         : plugin.extensions.map((e) => `${e.point}:${e.id}`).join(", ");
     io.out(`  ${plugin.name}@${plugin.version}`);
     io.out(`    ${ext}`);
+  }
+  return 0;
+}
+
+/**
+ * Start the MCP server on stdio. Human diagnostics go to stderr only —
+ * stdout belongs to the MCP JSON-RPC transport.
+ */
+async function cmdServe(configPath: string, io: Io): Promise<number> {
+  const structural = await loadConfig(configPath);
+  const host = await loadAppPlugins(structural);
+  const config = resolveConfig(structural, host);
+  const store = new Store(config.store.path);
+  io.err(
+    `KnotSync MCP server on stdio. Store: ${config.store.path}. Audit: ${config.server.auditLog}.`,
+  );
+  try {
+    await serveStdio({ store, config, host });
+  } finally {
+    store.close();
   }
   return 0;
 }

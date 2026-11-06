@@ -3,7 +3,7 @@
 > Scan, clean and serve legacy enterprise data to AI agents via the
 > [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
 
-**Status: pre-alpha.** `init`, `scan`, `run` and `plugins` work today.
+**Status: pre-alpha.** `init`, `scan`, `run`, `plugins` and `serve` work today.
 
 - Runs **fully on your own machine**. Nothing is sent to the Internet.
 - Sources are **read-only**. The tool never changes your files or databases.
@@ -21,6 +21,7 @@ npx @hoanghainh/knot-sync init --path /path/to/shared/folder
 npx @hoanghainh/knot-sync scan
 npx @hoanghainh/knot-sync run
 npx @hoanghainh/knot-sync plugins
+npx @hoanghainh/knot-sync serve
 ```
 
 `run` extracts text and tables from the last scan (`.xlsx`, `.docx`, text PDF,
@@ -63,6 +64,54 @@ Use `scan --json` for machine-readable output. Use `scan --report [file]` to wri
 one self-contained HTML health report (offline, light/dark, EN/日本語/Tiếng Việt
 labels). Default path: `./knot-sync-scan-report.html` (never inside a source folder).
 
+## MCP server (`serve`)
+
+`knot-sync serve` speaks MCP over **stdio only** (no HTTP, no network). It is
+read-only: tools never change sources or the store. Document text is always
+framed as untrusted data. Tool calls are appended to a JSONL audit log
+(`server.audit_log`, default beside the store as `mcp-audit.jsonl`).
+
+| Surface | What it does |
+|---|---|
+| Resource `knot://sources` | List configured source ids/types |
+| Resource `knot://docs/{source}/{doc_id}` | Fetch one stored document |
+| Tool `search_documents` | Keyword search (`query`, optional `source` / `type` / `limit`) |
+| Tool `get_document` | Fetch by document id |
+| Config `prompts:` | Optional MCP prompts (name, description, arguments, template) |
+
+### Register in Claude Desktop
+
+Add to `claude_desktop_config.json` (adjust the config path):
+
+```json
+{
+  "mcpServers": {
+    "knot-sync": {
+      "command": "npx",
+      "args": ["@hoanghainh/knot-sync", "serve", "-c", "/absolute/path/to/knot-sync.config.yaml"]
+    }
+  }
+}
+```
+
+### Register in Claude Code / Cursor
+
+Point the MCP server entry at the same command (stdio). Example Cursor
+`.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "knot-sync": {
+      "command": "npx",
+      "args": ["@hoanghainh/knot-sync", "serve", "-c", "/absolute/path/to/knot-sync.config.yaml"]
+    }
+  }
+}
+```
+
+Run `scan` then `run` before `serve` so the store has documents to search.
+
 ## Roadmap
 
 KnotSync is a **semantic layer for legacy data**: it does not only clean files, it explains
@@ -75,7 +124,8 @@ cryptic fields (`TKSK_CD`, `ma_kh`…) so AI agents call tools correctly.
 - ✅ PII masking (`pii-basic`, config `pii:`, `scan --pii`)
 - ✅ Prompt-injection guard (`guard`, config `guard:`)
 - ✅ HTML scan report (`scan --report`, `report-html`)
-- ⏳ MCP server (`serve`), PostgreSQL / MySQL
+- ✅ MCP server (`serve`, stdio, `mcp-server`)
+- ⏳ PostgreSQL / MySQL
 - ⏳ Semantic Catalog (`describe`, reads テーブル定義書)
 
 Details and order: [docs/ROADMAP.md](./docs/ROADMAP.md). Development uses
@@ -101,6 +151,7 @@ Packages:
 | `packages/pii-basic` | Built-in PII detection/masking (email, phones, CCCD, My Number, Luhn) |
 | `packages/guard` | Built-in prompt-injection guard (EN/JP/VN phrases, controls, hidden text) |
 | `packages/report-html` | Self-contained HTML scan health report (`scan --report`) |
+| `packages/mcp-server` | Stdio MCP server (resources, search/get tools, audit log) |
 | `packages/store-sqlite` | `node:sqlite` store, FTS5 trigram search (works for 日本語 / Tiếng Việt) |
 | `packages/cli` | `knot-sync` command |
 
@@ -110,7 +161,7 @@ relative to the config file). Example: `examples/plugins/mask-company-id.mjs`.
 Design notes:
 
 - **No native dependencies.** Storage uses the built-in `node:sqlite`, so `npx` installs fast and works offline-friendly.
-- **Few dependencies on purpose** (only `yaml` today). Less supply-chain risk for enterprise users.
+- **Few dependencies on purpose** (`yaml`; MCP adds `@modelcontextprotocol/sdk` + `zod`, both MIT). Less supply-chain risk for enterprise users.
 - Search terms shorter than 3 characters (e.g. `請求`) fall back to `LIKE`, because trigram FTS needs 3+ characters.
 - **Plugins are never auto-discovered** — only built-ins plus entries in `plugins:`.
 

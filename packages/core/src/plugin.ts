@@ -73,14 +73,31 @@ export interface CatalogSource {
   id: string;
 }
 
-/** Stub until a later change fills in behavior. */
-export interface McpTool {
-  id: string;
+/** Opaque context passed to MCP tool handlers (filled by the MCP host). */
+export type McpHandlerContext = Record<string, unknown>;
+
+export interface McpToolResult {
+  /** Framed text (and any other human-readable payload) for the MCP client. */
+  content: string;
+  /** Optional structured extras (e.g. hit count, guard flags). */
+  meta?: Record<string, unknown>;
 }
 
-/** Stub until a later change fills in behavior. */
+/** Executable MCP tool registered via the plugin API. */
+export interface McpTool {
+  id: string;
+  description: string;
+  /** JSON Schema object describing tool inputs (MCP-compatible). */
+  inputSchema: Record<string, unknown>;
+  handler(args: unknown, ctx: McpHandlerContext): Promise<McpToolResult> | McpToolResult;
+}
+
+/** Executable MCP prompt registered via the plugin API. */
 export interface McpPrompt {
   id: string;
+  description: string;
+  arguments?: Array<{ name: string; description: string; required?: boolean }>;
+  template: string;
 }
 
 export interface PluginApi {
@@ -287,8 +304,37 @@ export function createPluginHost(options: CreatePluginHostOptions = {}): PluginH
       },
       registerCatalogSource: (s) =>
         registerInMap(catalogSources, "catalog-source", s, plugin.name, extensions),
-      registerMcpTool: (t) => registerInMap(mcpTools, "mcp-tool", t, plugin.name, extensions),
-      registerMcpPrompt: (p) => registerInMap(mcpPrompts, "mcp-prompt", p, plugin.name, extensions),
+      registerMcpTool: (t) => {
+        if (typeof t.description !== "string" || t.description.trim() === "") {
+          throw new ConfigError(
+            `Plugin "${plugin.name}" mcp-tool "${t.id}" must provide a non-empty description.`,
+          );
+        }
+        if (typeof t.inputSchema !== "object" || t.inputSchema === null || Array.isArray(t.inputSchema)) {
+          throw new ConfigError(
+            `Plugin "${plugin.name}" mcp-tool "${t.id}" must provide inputSchema as a JSON Schema object.`,
+          );
+        }
+        if (typeof t.handler !== "function") {
+          throw new ConfigError(
+            `Plugin "${plugin.name}" mcp-tool "${t.id}" must provide handler(args, ctx).`,
+          );
+        }
+        registerInMap(mcpTools, "mcp-tool", t, plugin.name, extensions);
+      },
+      registerMcpPrompt: (p) => {
+        if (typeof p.description !== "string" || p.description.trim() === "") {
+          throw new ConfigError(
+            `Plugin "${plugin.name}" mcp-prompt "${p.id}" must provide a non-empty description.`,
+          );
+        }
+        if (typeof p.template !== "string" || p.template.trim() === "") {
+          throw new ConfigError(
+            `Plugin "${plugin.name}" mcp-prompt "${p.id}" must provide a non-empty template.`,
+          );
+        }
+        registerInMap(mcpPrompts, "mcp-prompt", p, plugin.name, extensions);
+      },
       getPluginSettings: () =>
         Object.hasOwn(pluginSettings, plugin.name) ? pluginSettings[plugin.name] : undefined,
     };

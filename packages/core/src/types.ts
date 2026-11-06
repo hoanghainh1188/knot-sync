@@ -134,6 +134,27 @@ export interface GuardConfig {
   mode: GuardMode;
 }
 
+/** MCP server settings (`server:` in config). */
+export interface ServerConfig {
+  /** Absolute path to the JSONL audit log after config loading. */
+  auditLog: string;
+}
+
+/** One argument descriptor for a config-defined MCP prompt. */
+export interface PromptArgumentConfig {
+  name: string;
+  description: string;
+  required: boolean;
+}
+
+/** One entry under config `prompts:`. */
+export interface PromptConfig {
+  name: string;
+  description: string;
+  arguments: PromptArgumentConfig[];
+  template: string;
+}
+
 export interface AppConfig {
   /** Directory of the config file. Relative paths resolve from here. */
   baseDir: string;
@@ -143,6 +164,8 @@ export interface AppConfig {
   cleaning: CleaningConfig;
   pii: PiiConfig;
   guard: GuardConfig;
+  server: ServerConfig;
+  prompts: PromptConfig[];
   /** Extra plugins listed in config (built-ins are separate). */
   plugins: string[];
   /** Opaque top-level settings keyed by plugin name. */

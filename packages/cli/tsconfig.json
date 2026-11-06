@@ -13,6 +13,7 @@
     { "path": "../pii-basic" },
     { "path": "../guard" },
     { "path": "../report-html" },
+    { "path": "../mcp-server" },
     { "path": "../store-sqlite" }
   ]
 }

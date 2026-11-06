@@ -108,6 +108,13 @@ export interface SearchHit {
   snippet: string;
 }
 
+/** Optional filters for {@link Store.search}. */
+export interface SearchOptions {
+  limit?: number;
+  sourceId?: string;
+  type?: DocumentType | string;
+}
+
 function escapeLike(term: string): string {
   return term.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
@@ -354,11 +361,27 @@ export class Store {
    * Keyword search. Terms are AND-ed.
    * Trigram FTS needs 3+ characters per term; shorter terms (common in Japanese,
    * e.g. "請求") fall back to LIKE, which is slower but still correct.
+   * Pass a number as the second argument for limit only, or {@link SearchOptions}
+   * for limit plus optional sourceId / type filters.
    */
-  search(query: string, limit = 20): SearchHit[] {
+  search(query: string, limitOrOptions: number | SearchOptions = 20): SearchHit[] {
     const terms = query.trim().split(/\s+/).filter(Boolean);
     if (terms.length === 0) return [];
+    const options: SearchOptions =
+      typeof limitOrOptions === "number" ? { limit: limitOrOptions } : (limitOrOptions ?? {});
+    const limit = options.limit ?? 20;
     const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
+    const filters: string[] = [];
+    const filterParams: string[] = [];
+    if (options.sourceId !== undefined && options.sourceId !== "") {
+      filters.push("d.source_id = ?");
+      filterParams.push(options.sourceId);
+    }
+    if (options.type !== undefined && options.type !== "") {
+      filters.push("d.type = ?");
+      filterParams.push(String(options.type));
+    }
+    const filterSql = filters.length > 0 ? ` AND ${filters.join(" AND ")}` : "";
 
     let rows: Record<string, string>[];
     if (terms.every((t) => [...t].length >= 3)) {
@@ -367,17 +390,21 @@ export class Store {
         .prepare(
           `SELECT d.id, d.source_id, d.type, d.title, d.content
            FROM documents_fts f JOIN documents d ON d.rowid = f.rowid
-           WHERE documents_fts MATCH ? ORDER BY rank LIMIT ?`,
+           WHERE documents_fts MATCH ?${filterSql} ORDER BY rank LIMIT ?`,
         )
-        .all(match, safeLimit) as Record<string, string>[];
+        .all(match, ...filterParams, safeLimit) as Record<string, string>[];
     } else {
-      const where = terms.map(() => "(title || ' ' || content) LIKE ? ESCAPE '\\'").join(" AND ");
+      const likeWhere = terms
+        .map(() => "(d.title || ' ' || d.content) LIKE ? ESCAPE '\\'")
+        .join(" AND ");
+      const likeParams = terms.map((t) => `%${escapeLike(t)}%`);
       rows = this.db
         .prepare(
-          `SELECT id, source_id, type, title, content FROM documents WHERE ${where}
-           ORDER BY updated_at DESC LIMIT ?`,
+          `SELECT d.id, d.source_id, d.type, d.title, d.content FROM documents d
+           WHERE ${likeWhere}${filterSql}
+           ORDER BY d.updated_at DESC LIMIT ?`,
         )
-        .all(...terms.map((t) => `%${escapeLike(t)}%`), safeLimit) as Record<string, string>[];
+        .all(...likeParams, ...filterParams, safeLimit) as Record<string, string>[];
     }
 
     return rows.map((r) => ({

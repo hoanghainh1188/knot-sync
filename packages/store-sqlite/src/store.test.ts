@@ -46,6 +46,27 @@ test("search works for Japanese, Vietnamese and short terms", () => {
   store.close();
 });
 
+test("search filters by sourceId and type", () => {
+  const store = new Store(":memory:");
+  store.upsertDocument(doc("share", "a", "令和6年度 請求書一覧", "請求書 body"));
+  const other = doc("other", "b", "請求書 other", "請求書 other body");
+  other.type = "txt";
+  store.upsertDocument(other);
+
+  const bySource = store.search("請求書", { sourceId: "share" });
+  assert.equal(bySource.length, 1);
+  assert.equal(bySource[0]?.sourceId, "share");
+
+  const byType = store.search("請求書", { type: "txt" });
+  assert.equal(byType.length, 1);
+  assert.equal(byType[0]?.type, "txt");
+
+  const shortFiltered = store.search("請求", { sourceId: "share" });
+  assert.equal(shortFiltered.length, 1);
+  assert.equal(shortFiltered[0]?.sourceId, "share");
+  store.close();
+});
+
 test("upsert updates the FTS index", () => {
   const store = new Store(":memory:");
   const d = doc("s", "a", "見積書", "旧内容テキスト");
