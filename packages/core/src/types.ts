@@ -93,8 +93,32 @@ export interface FsSourceConfig {
   exclude: string[];
 }
 
-// SQL sources come in week 9.
-export type SourceConfig = FsSourceConfig;
+/** Allow-listed columns for one SQL table. */
+export interface SqlAllowTable {
+  columns: string[];
+}
+
+/** Postgres or MySQL source (connection URL resolved from env at load time). */
+export interface SqlSourceConfig {
+  id: string;
+  type: "postgres" | "mysql";
+  /** Resolved connection string — never written back to YAML. */
+  url: string;
+  /** Environment variable name that provided the URL (for errors). */
+  urlEnv: string;
+  /** Table name → allowed columns. */
+  allow: Record<string, SqlAllowTable>;
+}
+
+export type SourceConfig = FsSourceConfig | SqlSourceConfig;
+
+export function isFsSource(source: SourceConfig): source is FsSourceConfig {
+  return source.type === "fs";
+}
+
+export function isSqlSource(source: SourceConfig): source is SqlSourceConfig {
+  return source.type === "postgres" || source.type === "mysql";
+}
 
 export interface StoreConfig {
   /** Absolute path to the SQLite file after config loading. */

@@ -8,6 +8,7 @@
   "references": [
     { "path": "../core" },
     { "path": "../connector-fs" },
+    { "path": "../connector-sql" },
     { "path": "../extractor-office" },
     { "path": "../cleaner-ja-vi" },
     { "path": "../pii-basic" },

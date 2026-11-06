@@ -75,8 +75,11 @@ framed as untrusted data. Tool calls are appended to a JSONL audit log
 |---|---|
 | Resource `knot://sources` | List configured source ids/types |
 | Resource `knot://docs/{source}/{doc_id}` | Fetch one stored document |
+| Resource `knot://db/{source}/{table}/schema` | Allow-listed SQL table schema |
 | Tool `search_documents` | Keyword search (`query`, optional `source` / `type` / `limit`) |
 | Tool `get_document` | Fetch by document id |
+| Tool `describe_table` | Describe allow-listed SQL columns |
+| Tool `query_table` | Parameterized filters on allow-listed columns (no free SQL) |
 | Config `prompts:` | Optional MCP prompts (name, description, arguments, template) |
 
 ### Register in Claude Desktop
@@ -112,6 +115,34 @@ Point the MCP server entry at the same command (stdio). Example Cursor
 
 Run `scan` then `run` before `serve` so the store has documents to search.
 
+## SQL sources (PostgreSQL / MySQL)
+
+Built-in connectors `postgres` and `mysql` connect **read-only**. The database
+URL must come from an environment variable (`url: env:NAME`) — never store a
+plaintext URL in the config file. Only tables/columns listed under `allow:` are
+visible to `scan` and MCP.
+
+```yaml
+sources:
+  - id: erp
+    type: postgres
+    url: env:KNOT_PG_URL
+    allow:
+      受注:
+        columns: [受注番号, 得意先名, 金額]
+      hoa_don:
+        columns: [ma_kh, so_tien]
+```
+
+```bash
+export KNOT_PG_URL='postgres://readonly_user@127.0.0.1:5432/erp'
+npx @hoanghainh/knot-sync scan -c knot-sync.config.yaml
+```
+
+`scan` inventories each allow-listed table (row estimates when available). MCP
+`query_table` supports filters `eq` / `in` / `range` / `contains` with a max of
+200 rows (default 50). Cell values are framed as untrusted content.
+
 ## Roadmap
 
 KnotSync is a **semantic layer for legacy data**: it does not only clean files, it explains
@@ -125,7 +156,7 @@ cryptic fields (`TKSK_CD`, `ma_kh`…) so AI agents call tools correctly.
 - ✅ Prompt-injection guard (`guard`, config `guard:`)
 - ✅ HTML scan report (`scan --report`, `report-html`)
 - ✅ MCP server (`serve`, stdio, `mcp-server`)
-- ⏳ PostgreSQL / MySQL
+- ✅ PostgreSQL / MySQL (`connector-sql`, allow-list, `query_table`)
 - ⏳ Semantic Catalog (`describe`, reads テーブル定義書)
 
 Details and order: [docs/ROADMAP.md](./docs/ROADMAP.md). Development uses
@@ -146,6 +177,7 @@ Packages:
 |---|---|
 | `packages/core` | Types (`Document`, `FileEntry`), config loader, plugin host API |
 | `packages/connector-fs` | Built-in `fs` connector plugin (read-only folder walker) |
+| `packages/connector-sql` | Built-in `postgres` / `mysql` connectors (env URL, allow-list) |
 | `packages/extractor-office` | Built-in extractor for Office/text files (`run`) |
 | `packages/cleaner-ja-vi` | Built-in JP/VN text cleaner (NFKC, wareki, ISO dates, TCVN3/VNI, token reduce) |
 | `packages/pii-basic` | Built-in PII detection/masking (email, phones, CCCD, My Number, Luhn) |
@@ -161,7 +193,7 @@ relative to the config file). Example: `examples/plugins/mask-company-id.mjs`.
 Design notes:
 
 - **No native dependencies.** Storage uses the built-in `node:sqlite`, so `npx` installs fast and works offline-friendly.
-- **Few dependencies on purpose** (`yaml`; MCP adds `@modelcontextprotocol/sdk` + `zod`, both MIT). Less supply-chain risk for enterprise users.
+- **Few dependencies on purpose** (`yaml`; MCP adds `@modelcontextprotocol/sdk` + `zod`; SQL adds `pg` + `mysql2` — all MIT). Less supply-chain risk for enterprise users.
 - Search terms shorter than 3 characters (e.g. `請求`) fall back to `LIKE`, because trigram FTS needs 3+ characters.
 - **Plugins are never auto-discovered** — only built-ins plus entries in `plugins:`.
 

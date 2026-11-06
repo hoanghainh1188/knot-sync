@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/core" },
     { "path": "packages/connector-fs" },
+    { "path": "packages/connector-sql" },
     { "path": "packages/extractor-office" },
     { "path": "packages/cleaner-ja-vi" },
     { "path": "packages/pii-basic" },

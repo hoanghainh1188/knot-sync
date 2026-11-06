@@ -35,7 +35,7 @@ Work through the changes **in order**, one at a time:
 | 5 | `add-injection-guard` | ✅ done |
 | 6 | `add-html-scan-report` | ✅ done |
 | 7 | `add-mcp-server` | ✅ done |
-| 8 | `add-sql-source` | ⏳ |
+| 8 | `add-sql-source` | ✅ done |
 | 9 | `add-semantic-catalog` | ⏳ needs sample テーブル定義書 |
 | 10 | `prepare-npm-release` | ⏳ |
 
