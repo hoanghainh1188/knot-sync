@@ -1,0 +1,41 @@
+# KnotSync (Tổng quan tiếng Việt)
+
+KnotSync chuẩn hóa dữ liệu doanh nghiệp cũ (Excel, Word, PDF, thư mục chia sẻ,
+PostgreSQL / MySQL…) và cung cấp cho AI agent qua
+[MCP](https://modelcontextprotocol.io).
+
+## Điều kiện
+
+- Node.js ≥ 22.13
+- Chạy **hoàn toàn trên máy của bạn** (không telemetry)
+- Nguồn dữ liệu chỉ **đọc**, không ghi đè / không sửa file hay database khách hàng
+
+## Cài đặt
+
+```bash
+npx @hoanghainh/knot-sync init --path /path/to/shared/folder
+npx @hoanghainh/knot-sync scan
+npx @hoanghainh/knot-sync run
+npx @hoanghainh/knot-sync describe   # Nếu có SQL: tạo Semantic Catalog
+npx @hoanghainh/knot-sync serve      # MCP (stdio)
+```
+
+Sau khi publish, kiểm tra:
+
+```bash
+npx @hoanghainh/knot-sync@0.1.0 --version
+```
+
+## Lệnh chính
+
+| Lệnh | Mô tả |
+|---|---|
+| `init` | Tạo file cấu hình |
+| `scan` | Kiểm kê nguồn (loại file, trùng, file cũ…) |
+| `run` | Trích xuất văn bản/bảng vào store cục bộ |
+| `describe` | Sinh/cập nhật Semantic Catalog cho SQL (`knot-sync.catalog.yaml`) |
+| `plugins` | Liệt kê plugin đã nạp |
+| `serve` | Chạy MCP server (stdio) |
+
+Chi tiết (tiếng Anh): [README.md](../../README.md) và
+[docs/ROADMAP.md](../ROADMAP.md).

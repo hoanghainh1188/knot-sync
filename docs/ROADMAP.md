@@ -37,7 +37,7 @@ Work through the changes **in order**, one at a time:
 | 7 | `add-mcp-server` | ✅ done |
 | 8 | `add-sql-source` | ✅ done |
 | 9 | `add-semantic-catalog` | ✅ done |
-| 10 | `prepare-npm-release` | ⏳ |
+| 10 | `prepare-npm-release` | ✅ done |
 
 From change 2 on, every new connector, extractor, cleaner, rule, catalog source,
 MCP tool or prompt MUST be built as a plugin on the plugin API from change 1.
@@ -153,15 +153,12 @@ columns only (equals, in, range, contains), parameterized queries, max rows, no 
 (fixture-built in tests), MCP enrichment / business-name filters / enum checks.
 Reviewed entries preserved across re-runs. Out of scope: local LLM (paid).
 
-### 10. prepare-npm-release
+### 10. prepare-npm-release — ✅ done
 
-```
-/opsx:propose prepare-npm-release: Make v0.1.0 publishable. README and LICENSE in every package,
-docs in English, Japanese and Vietnamese (docs/ja, docs/vi), GitHub Actions: CI on Node 22 and
-24 (Linux, macOS, Windows), publish workflow with npm provenance on tag, dependency license
-check that fails on GPL/AGPL, CHANGELOG, version 0.1.0. Verify `npx @hoanghainh/knot-sync`
-works from a clean machine.
-```
+v0.1.0 metadata, per-package README/LICENSE, CHANGELOG, `docs/ja` + `docs/vi`,
+CI matrix (Node 22/24 × Linux/macOS/Windows), license gate, tag publish with
+npm provenance. After merge: tag `v0.1.0` when ready, then
+`npx @hoanghainh/knot-sync@0.1.0 --version`.
 
 ## Later
 
