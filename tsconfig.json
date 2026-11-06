@@ -5,6 +5,7 @@
     { "path": "packages/connector-fs" },
     { "path": "packages/extractor-office" },
     { "path": "packages/cleaner-ja-vi" },
+    { "path": "packages/pii-basic" },
     { "path": "packages/store-sqlite" },
     { "path": "packages/cli" }
   ]

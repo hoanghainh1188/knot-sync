@@ -35,6 +35,9 @@ importers:
       '@hoanghainh/knot-sync-extractor-office':
         specifier: workspace:*
         version: link:../extractor-office
+      '@hoanghainh/knot-sync-pii-basic':
+        specifier: workspace:*
+        version: link:../pii-basic
       '@hoanghainh/knot-sync-store-sqlite':
         specifier: workspace:*
         version: link:../store-sqlite
@@ -65,6 +68,12 @@ importers:
       unpdf:
         specifier: ^1.1.0
         version: 1.9.1
+
+  packages/pii-basic:
+    dependencies:
+      '@hoanghainh/knot-sync-core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/store-sqlite:
     dependencies:

@@ -28,8 +28,12 @@ npx @hoanghainh/knot-sync plugins
 built-in JP/VN cleaner (`cleaner-ja-vi`: NFKC, wareki→Gregorian, ISO dates,
 TCVN3/VNI, token reduction). Original text and rough token counts are kept in
 document metadata. Toggle steps under config `cleaning:` (all enabled by
-default). Unchanged files (same content hash) are skipped. Unsupported or
-broken files are reported as issues; the run continues.
+default). Then built-in PII rules mask emails, JP/VN phones, CCCD, My Number,
+and card numbers (`pii.mode`: `mask` | `hash` | `drop`); findings are stored
+without raw values. `scan --pii` estimates how many small text files look like
+they contain PII without storing matches. Unchanged files (same content hash)
+are skipped. Unsupported or broken files are reported as issues; the run
+continues.
 
 Example output:
 
@@ -63,7 +67,8 @@ cryptic fields (`TKSK_CD`, `ma_kh`…) so AI agents call tools correctly.
 - ✅ Plugin system (`plugins` command, built-in `fs` connector plugin)
 - ✅ Office extraction (`run`, built-in `extractor-office` plugin)
 - ✅ JP/VN cleaning (`cleaner-ja-vi`, config `cleaning:`)
-- ⏳ PII masking, prompt-injection guard
+- ✅ PII masking (`pii-basic`, config `pii:`, `scan --pii`)
+- ⏳ Prompt-injection guard
 - ⏳ `scan --report` (one-file HTML), MCP server (`serve`), PostgreSQL / MySQL
 - ⏳ Semantic Catalog (`describe`, reads テーブル定義書)
 
@@ -87,6 +92,7 @@ Packages:
 | `packages/connector-fs` | Built-in `fs` connector plugin (read-only folder walker) |
 | `packages/extractor-office` | Built-in extractor for Office/text files (`run`) |
 | `packages/cleaner-ja-vi` | Built-in JP/VN text cleaner (NFKC, wareki, ISO dates, TCVN3/VNI, token reduce) |
+| `packages/pii-basic` | Built-in PII detection/masking (email, phones, CCCD, My Number, Luhn) |
 | `packages/store-sqlite` | `node:sqlite` store, FTS5 trigram search (works for 日本語 / Tiếng Việt) |
 | `packages/cli` | `knot-sync` command |
 

@@ -10,6 +10,7 @@
     { "path": "../connector-fs" },
     { "path": "../extractor-office" },
     { "path": "../cleaner-ja-vi" },
+    { "path": "../pii-basic" },
     { "path": "../store-sqlite" }
   ]
 }

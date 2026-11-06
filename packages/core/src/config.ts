@@ -6,6 +6,8 @@ import type { PluginHost } from "./plugin.js";
 import type {
   AppConfig,
   CleaningConfig,
+  PiiConfig,
+  PiiMode,
   ScanConfig,
   SourceConfig,
   StoreConfig,
@@ -28,7 +30,19 @@ export const DEFAULT_EXCLUDES = [
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
-const CORE_TOP_LEVEL_KEYS = new Set(["sources", "store", "scan", "plugins", "cleaning"]);
+const CORE_TOP_LEVEL_KEYS = new Set([
+  "sources",
+  "store",
+  "scan",
+  "plugins",
+  "cleaning",
+  "pii",
+]);
+
+const PII_MODES = new Set<PiiMode>(["mask", "hash", "drop"]);
+const PII_KEYS = new Set(["mode", "saltPath"]);
+
+export const DEFAULT_PII_MODE: PiiMode = "mask";
 
 const CLEANING_KEYS = [
   "nfkc",
@@ -79,10 +93,46 @@ export interface StructuralConfig {
   store: StoreConfig;
   scan: ScanConfig;
   cleaning: CleaningConfig;
+  pii: PiiConfig;
   /** Plugin entries as written in config (relative paths or package names). */
   plugins: string[];
   /** Opaque top-level keys for plugins, keyed by plugin name. */
   pluginSettings: Record<string, unknown>;
+}
+
+/** Parse optional `pii:` section. `defaultSaltPath` is absolute. */
+export function parsePiiConfig(raw: unknown, defaultSaltPath: string, baseDir: string): PiiConfig {
+  if (raw === undefined || raw === null) {
+    return { mode: DEFAULT_PII_MODE, saltPath: defaultSaltPath };
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ConfigError('"pii" must be an object (e.g. { mode: mask }).');
+  }
+  const obj = raw as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    if (!PII_KEYS.has(key)) {
+      throw new ConfigError(
+        `Unknown key "${key}" under "pii". Allowed keys: mode, saltPath.`,
+      );
+    }
+  }
+  let mode: PiiMode = DEFAULT_PII_MODE;
+  if (obj.mode !== undefined) {
+    if (typeof obj.mode !== "string" || !PII_MODES.has(obj.mode as PiiMode)) {
+      throw new ConfigError(
+        `"pii.mode" must be one of: mask, hash, drop (got ${JSON.stringify(obj.mode)}).`,
+      );
+    }
+    mode = obj.mode as PiiMode;
+  }
+  let saltPath = defaultSaltPath;
+  if (obj.saltPath !== undefined) {
+    if (typeof obj.saltPath !== "string" || obj.saltPath.trim() === "") {
+      throw new ConfigError('"pii.saltPath" must be a non-empty string.');
+    }
+    saltPath = resolvePath(baseDir, obj.saltPath);
+  }
+  return { mode, saltPath };
 }
 
 /** Parse optional `cleaning:` section; omitted keys default to true. */
@@ -182,6 +232,13 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
   const plugins = parsePluginsList(c.plugins);
   const cleaning = parseCleaningConfig(c.cleaning);
 
+  const storePath = resolvePath(
+    baseDir,
+    typeof store.path === "string" ? store.path : ".data/store.sqlite",
+  );
+  const defaultSaltPath = resolve(dirname(storePath), "pii-salt");
+  const pii = parsePiiConfig(c.pii, defaultSaltPath, baseDir);
+
   const pluginSettings: Record<string, unknown> = Object.create(null);
   for (const [key, value] of Object.entries(c)) {
     if (CORE_TOP_LEVEL_KEYS.has(key)) continue;
@@ -192,17 +249,13 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
   return {
     baseDir,
     rawSources,
-    store: {
-      path: resolvePath(
-        baseDir,
-        typeof store.path === "string" ? store.path : ".data/store.sqlite",
-      ),
-    },
+    store: { path: storePath },
     scan: {
       oldFileYears,
       hash: scan.hash === undefined ? true : Boolean(scan.hash),
     },
     cleaning,
+    pii,
     plugins,
     pluginSettings,
   };
@@ -229,6 +282,7 @@ export function resolveConfig(structural: StructuralConfig, host: PluginHost): A
     store: structural.store,
     scan: structural.scan,
     cleaning: structural.cleaning,
+    pii: structural.pii,
     plugins: structural.plugins,
     pluginSettings: structural.pluginSettings,
   };
@@ -281,5 +335,10 @@ scan:
 #   datesIso: true
 #   legacyVietnamese: true
 #   tokenReduce: true
+
+# Optional PII masking applied by "knot-sync run" after cleaning (default mode: mask).
+# pii:
+#   mode: mask   # mask | hash | drop
+#   # saltPath: ./.data/pii-salt
 `;
 }

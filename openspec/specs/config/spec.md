@@ -90,10 +90,10 @@ loading with a message naming the duplicate.
 - **THEN** loading fails with a message naming the duplicate entry
 
 ### Requirement: Reserved plugin config keys
-Top-level config keys other than `sources`, `store`, `scan`, `plugins`, and
-`cleaning` SHALL be treated as plugin-owned settings and left as opaque objects
-for the matching plugin. The core config loader MUST NOT reject unknown
-top-level keys that are valid YAML objects or omit them.
+Top-level config keys other than `sources`, `store`, `scan`, `plugins`,
+`cleaning`, and `pii` SHALL be treated as plugin-owned settings and left as
+opaque objects for the matching plugin. The core config loader MUST NOT reject
+unknown top-level keys that are valid YAML objects or omit them.
 
 #### Scenario: Plugin settings preserved
 - **GIVEN** a config with a top-level key `mask-company-id: { pattern: "ACME-.*" }`
@@ -120,3 +120,24 @@ When `cleaning` is absent, loaders SHALL treat all steps as enabled (`true`).
 - **WHEN** config contains `cleaning: { nfkc: "yes" }`
 - **THEN** config load fails
 - **AND** the error states that boolean values are required
+
+### Requirement: Optional pii section
+
+Config MAY include a `pii` object. Allowed keys:
+
+- `mode` — string enum: `mask` | `hash` | `drop` (default `mask` when `pii` omitted or `mode` omitted)
+- `saltPath` — optional string path (relative to config dir or absolute) for the
+  hash salt file; when omitted, a default under the store directory SHALL be used
+
+Unknown keys under `pii` SHALL fail config load with an actionable error listing
+allowed keys. Invalid `mode` values SHALL fail similarly.
+
+#### Scenario: Default mode
+
+- **WHEN** config has no `pii` key
+- **THEN** effective mode is `mask`
+
+#### Scenario: Reject bad mode
+
+- **WHEN** config contains `pii: { mode: redact }`
+- **THEN** config load fails and the error lists allowed modes

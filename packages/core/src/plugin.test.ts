@@ -23,6 +23,10 @@ function makePlugin(
   };
 }
 
+function stubFind(_text: string): Array<{ start: number; end: number }> {
+  return [];
+}
+
 test("createPluginHost registers extensions", () => {
   const host = createPluginHost();
   host.registerPlugin(
@@ -36,7 +40,13 @@ test("createPluginHost registers extensions", () => {
           },
           scan: async function* () {},
         });
-        api.registerPiiRule({ id: "email" });
+        api.registerPiiRule({
+          id: "email",
+          find: (text) => {
+            const i = text.indexOf("@");
+            return i >= 0 ? [{ start: i - 1, end: i + 1 }] : [];
+          },
+        });
         api.registerExtractor({
           id: "office",
           extensions: [".xlsx"],
@@ -50,7 +60,7 @@ test("createPluginHost registers extensions", () => {
     }),
   );
   assert.equal(host.connectors.has("fs"), true);
-  assert.equal(host.piiRules.has("email"), true);
+  assert.equal(typeof host.piiRules.get("email")?.find, "function");
   assert.equal(host.extractors.get("office")?.extensions.includes(".xlsx"), true);
   assert.equal(typeof host.cleaners.get("noop")?.clean, "function");
   assert.deepEqual(host.loaded[0]?.extensions, [
@@ -77,6 +87,22 @@ test("rejects cleaner without clean()", () => {
   );
 });
 
+test("rejects pii-rule without find()", () => {
+  const host = createPluginHost();
+  assert.throws(
+    () =>
+      host.registerPlugin(
+        makePlugin({
+          name: "bad-pii",
+          onRegister: (api) => {
+            api.registerPiiRule({ id: "email" } as never);
+          },
+        }),
+      ),
+    /must provide find/,
+  );
+});
+
 test("rejects incompatible apiVersion", () => {
   const host = createPluginHost();
   assert.throws(
@@ -95,7 +121,7 @@ test("rejects duplicate extension id", () => {
   host.registerPlugin(
     makePlugin({
       name: "a",
-      onRegister: (api) => api.registerPiiRule({ id: "email" }),
+      onRegister: (api) => api.registerPiiRule({ id: "email", find: stubFind }),
     }),
   );
   assert.throws(
@@ -103,7 +129,7 @@ test("rejects duplicate extension id", () => {
       host.registerPlugin(
         makePlugin({
           name: "b",
-          onRegister: (api) => api.registerPiiRule({ id: "email" }),
+          onRegister: (api) => api.registerPiiRule({ id: "email", find: stubFind }),
         }),
       ),
     /Duplicate pii-rule id "email"/,
@@ -115,7 +141,7 @@ test("Japanese plugin name is preserved in loaded list", () => {
   host.registerPlugin(
     makePlugin({
       name: "mask-請求書-id",
-      onRegister: (api) => api.registerPiiRule({ id: "mask-seikyusho" }),
+      onRegister: (api) => api.registerPiiRule({ id: "mask-seikyusho", find: stubFind }),
     }),
   );
   assert.equal(host.loaded[0]?.name, "mask-請求書-id");
@@ -132,7 +158,7 @@ test("loadPlugins imports a module and applies settings", async () => {
         name: "demo",
         onRegister: (api) => {
           assert.deepEqual(api.getPluginSettings(), settings);
-          api.registerPiiRule({ id: "mask-company-id" });
+          api.registerPiiRule({ id: "mask-company-id", find: stubFind });
         },
       }),
   });
@@ -169,9 +195,14 @@ test("register keeps this binding", () => {
     version: "1.0.0",
     apiVersion: PLUGIN_API_VERSION,
     tag: "ok",
-    register(this: { tag: string }, api: { registerPiiRule: (r: { id: string }) => void }) {
+    register(
+      this: { tag: string },
+      api: {
+        registerPiiRule: (r: { id: string; find: (text: string) => Array<{ start: number; end: number }> }) => void;
+      },
+    ) {
       assert.equal(this.tag, "ok");
-      api.registerPiiRule({ id: this.tag });
+      api.registerPiiRule({ id: this.tag, find: stubFind });
     },
   };
   host.registerPlugin(plugin);
