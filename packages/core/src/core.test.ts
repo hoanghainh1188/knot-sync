@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   ConfigError,
+  DEFAULT_CLEANING_CONFIG,
+  parseCleaningConfig,
   parseConfig,
   resolveConfig,
   resolvePath,
@@ -74,6 +76,44 @@ test("starter config parses", () => {
   assert.equal(cfg.store.path, "/base/.data/store.sqlite");
   assert.equal(cfg.scan.oldFileYears, 5);
   assert.equal(cfg.scan.hash, true);
+  assert.deepEqual(cfg.cleaning, DEFAULT_CLEANING_CONFIG);
+});
+
+test("cleaning defaults to all true when omitted", () => {
+  assert.deepEqual(parseCleaningConfig(undefined), DEFAULT_CLEANING_CONFIG);
+  const structural = parseConfig("sources:\n  - id: a\n    type: fs\n    path: /x\n", "/");
+  assert.deepEqual(structural.cleaning, DEFAULT_CLEANING_CONFIG);
+});
+
+test("cleaning partial override keeps other steps enabled", () => {
+  const structural = parseConfig(
+    [
+      "sources:",
+      "  - id: a",
+      "    type: fs",
+      "    path: /x",
+      "cleaning:",
+      "  wareki: false",
+      "",
+    ].join("\n"),
+    "/",
+  );
+  assert.equal(structural.cleaning.wareki, false);
+  assert.equal(structural.cleaning.nfkc, true);
+  assert.equal(structural.cleaning.datesIso, true);
+  assert.equal(structural.cleaning.legacyVietnamese, true);
+  assert.equal(structural.cleaning.tokenReduce, true);
+});
+
+test("cleaning rejects unknown keys and non-booleans", () => {
+  assert.throws(
+    () => parseCleaningConfig({ foo: true }),
+    /Unknown key "foo".*cleaning/,
+  );
+  assert.throws(
+    () => parseCleaningConfig({ nfkc: "yes" }),
+    /cleaning\.nfkc.*boolean/,
+  );
 });
 
 test("config normalizes plugins and preserves opaque keys", () => {

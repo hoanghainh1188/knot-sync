@@ -98,12 +98,22 @@ export interface ScanConfig {
   hash: boolean;
 }
 
+/** Per-step toggles for the built-in JA/VN cleaner. All default to true. */
+export interface CleaningConfig {
+  nfkc: boolean;
+  wareki: boolean;
+  datesIso: boolean;
+  legacyVietnamese: boolean;
+  tokenReduce: boolean;
+}
+
 export interface AppConfig {
   /** Directory of the config file. Relative paths resolve from here. */
   baseDir: string;
   sources: SourceConfig[];
   store: StoreConfig;
   scan: ScanConfig;
+  cleaning: CleaningConfig;
   /** Extra plugins listed in config (built-ins are separate). */
   plugins: string[];
   /** Opaque top-level settings keyed by plugin name. */

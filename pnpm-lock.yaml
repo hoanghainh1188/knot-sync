@@ -15,8 +15,17 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  packages/cleaner-ja-vi:
+    dependencies:
+      '@hoanghainh/knot-sync-core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/cli:
     dependencies:
+      '@hoanghainh/knot-sync-cleaner-ja-vi':
+        specifier: workspace:*
+        version: link:../cleaner-ja-vi
       '@hoanghainh/knot-sync-connector-fs':
         specifier: workspace:*
         version: link:../connector-fs

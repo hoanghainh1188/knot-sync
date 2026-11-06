@@ -256,8 +256,36 @@ async function cmdRun(configPath: string, io: Io): Promise<number> {
           issues.push({ path: file.relPath, code: result.code, message: result.message });
           continue;
         }
-        store.upsertDocument(result.document);
-        extracted += 1;
+
+        let document = result.document;
+        let currentCleanerId = "(unknown)";
+        try {
+          for (const cleaner of host.cleaners.values()) {
+            currentCleanerId = cleaner.id;
+            document = await cleaner.clean(document);
+          }
+          store.upsertDocument(document);
+          extracted += 1;
+        } catch (err) {
+          const message =
+            `Cleaner "${currentCleanerId}" failed (${(err as Error).message || String(err)}). ` +
+            `Disable steps under cleaning: or fix the input, then retry "knot-sync run".`;
+          // Drop sourceFileHash so the next run retries instead of treating this as unchanged.
+          const { sourceFileHash: _drop, ...restMeta } = result.document.metadata;
+          void _drop;
+          store.upsertDocument({
+            ...result.document,
+            metadata: {
+              ...restMeta,
+              status: "error",
+              errorMessage: message,
+              originalContent:
+                result.document.metadata.originalContent ?? result.document.content,
+            },
+          });
+          failed += 1;
+          issues.push({ path: file.relPath, code: "CLEAN", message });
+        }
       } catch (err) {
         failed += 1;
         issues.push({

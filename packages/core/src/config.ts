@@ -3,7 +3,13 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { parse } from "yaml";
 import { ConfigError } from "./errors.js";
 import type { PluginHost } from "./plugin.js";
-import type { AppConfig, ScanConfig, SourceConfig, StoreConfig } from "./types.js";
+import type {
+  AppConfig,
+  CleaningConfig,
+  ScanConfig,
+  SourceConfig,
+  StoreConfig,
+} from "./types.js";
 
 export { ConfigError } from "./errors.js";
 
@@ -22,7 +28,23 @@ export const DEFAULT_EXCLUDES = [
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
-const CORE_TOP_LEVEL_KEYS = new Set(["sources", "store", "scan", "plugins"]);
+const CORE_TOP_LEVEL_KEYS = new Set(["sources", "store", "scan", "plugins", "cleaning"]);
+
+const CLEANING_KEYS = [
+  "nfkc",
+  "wareki",
+  "datesIso",
+  "legacyVietnamese",
+  "tokenReduce",
+] as const;
+
+export const DEFAULT_CLEANING_CONFIG: CleaningConfig = {
+  nfkc: true,
+  wareki: true,
+  datesIso: true,
+  legacyVietnamese: true,
+  tokenReduce: true,
+};
 
 export function resolvePath(baseDir: string, p: string): string {
   return isAbsolute(p) ? p : resolve(baseDir, p);
@@ -56,10 +78,43 @@ export interface StructuralConfig {
   rawSources: Record<string, unknown>[];
   store: StoreConfig;
   scan: ScanConfig;
+  cleaning: CleaningConfig;
   /** Plugin entries as written in config (relative paths or package names). */
   plugins: string[];
   /** Opaque top-level keys for plugins, keyed by plugin name. */
   pluginSettings: Record<string, unknown>;
+}
+
+/** Parse optional `cleaning:` section; omitted keys default to true. */
+export function parseCleaningConfig(raw: unknown): CleaningConfig {
+  if (raw === undefined || raw === null) {
+    return { ...DEFAULT_CLEANING_CONFIG };
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ConfigError('"cleaning" must be an object with boolean step toggles.');
+  }
+  const obj = raw as Record<string, unknown>;
+  const allowed = new Set<string>(CLEANING_KEYS);
+  for (const key of Object.keys(obj)) {
+    if (!allowed.has(key)) {
+      throw new ConfigError(
+        `Unknown key "${key}" under "cleaning". Allowed keys: ${CLEANING_KEYS.join(", ")}.`,
+      );
+    }
+    if (typeof obj[key] !== "boolean") {
+      throw new ConfigError(
+        `"cleaning.${key}" must be a boolean (true/false).`,
+      );
+    }
+  }
+  return {
+    nfkc: typeof obj.nfkc === "boolean" ? obj.nfkc : true,
+    wareki: typeof obj.wareki === "boolean" ? obj.wareki : true,
+    datesIso: typeof obj.datesIso === "boolean" ? obj.datesIso : true,
+    legacyVietnamese:
+      typeof obj.legacyVietnamese === "boolean" ? obj.legacyVietnamese : true,
+    tokenReduce: typeof obj.tokenReduce === "boolean" ? obj.tokenReduce : true,
+  };
 }
 
 function parsePluginsList(raw: unknown): string[] {
@@ -125,6 +180,7 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
   }
 
   const plugins = parsePluginsList(c.plugins);
+  const cleaning = parseCleaningConfig(c.cleaning);
 
   const pluginSettings: Record<string, unknown> = Object.create(null);
   for (const [key, value] of Object.entries(c)) {
@@ -146,6 +202,7 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
       oldFileYears,
       hash: scan.hash === undefined ? true : Boolean(scan.hash),
     },
+    cleaning,
     plugins,
     pluginSettings,
   };
@@ -171,6 +228,7 @@ export function resolveConfig(structural: StructuralConfig, host: PluginHost): A
     sources,
     store: structural.store,
     scan: structural.scan,
+    cleaning: structural.cleaning,
     plugins: structural.plugins,
     pluginSettings: structural.pluginSettings,
   };
@@ -215,5 +273,13 @@ store:
 scan:
   old_file_years: 5            # files older than this are reported as "old"
   hash: true                   # sha256 for duplicate detection (slower on big shares)
+
+# Optional JA/VN cleaning steps applied by "knot-sync run" after extract (all true by default).
+# cleaning:
+#   nfkc: true
+#   wareki: true
+#   datesIso: true
+#   legacyVietnamese: true
+#   tokenReduce: true
 `;
 }
