@@ -215,6 +215,17 @@ test("describe and query handlers frame untrusted content", async () => {
     pii: { mode: "mask" as const, saltPath: "/tmp/salt" },
     guard: { mode: "flag" as const },
     server: { auditLog: "/tmp/a.jsonl" },
+    catalog: {
+      path: "/tmp/knot-sync.catalog.yaml",
+      definitionMapping: {
+        physical: "物理名",
+        label_ja: "論理名",
+        label_vi: "Tên nghiệp vụ",
+        label_en: "Business name",
+        description: "説明",
+        sheet: "項目",
+      },
+    },
     prompts: [],
     plugins: [],
     pluginSettings: {},
@@ -229,4 +240,112 @@ test("describe and query handlers frame untrusted content", async () => {
   assert.match(queried.content, /UNTRUSTED_DOCUMENT_CONTENT/);
   assert.match(queried.content, /A社/);
   assert.equal(queried.meta?.resultCount, 1);
+});
+
+test("query_table resolves catalog business labels and validates enums", async () => {
+  const source: SqlSourceConfig = {
+    id: "erp",
+    type: "postgres",
+    url: "postgres://mock",
+    urlEnv: "X",
+    allow: { 受注: { columns: ["TKSK_CD", "KBN"] } },
+  };
+  const driver = mockDriver(
+    {
+      受注: {
+        name: "受注",
+        columns: [
+          { name: "TKSK_CD", dataType: "text", isNullable: false, isPrimaryKey: false },
+          { name: "KBN", dataType: "text", isNullable: false, isPrimaryKey: false },
+        ],
+        rowEstimate: 1,
+      },
+    },
+    [{ TKSK_CD: "001", KBN: "A" }],
+  );
+  const factory = async () => driver;
+  const catalog = {
+    version: 1 as const,
+    sources: {
+      erp: {
+        tables: {
+          受注: {
+            label: { ja: "受注", vi: "", en: "" },
+            description: "",
+            reviewed: false,
+            columns: {
+              TKSK_CD: {
+                label: { ja: "得意先コード", vi: "", en: "" },
+                description: "",
+                type: "text",
+                values: [],
+                pii: false,
+                expose: true,
+                reviewed: false,
+              },
+              KBN: {
+                label: { ja: "区分", vi: "", en: "" },
+                description: "",
+                type: "text",
+                values: ["A", "B"],
+                pii: false,
+                expose: true,
+                reviewed: false,
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+  const config = {
+    baseDir: "/",
+    sources: [source],
+    store: { path: "/tmp/s.sqlite" },
+    scan: { oldFileYears: 5, hash: true },
+    cleaning: {
+      nfkc: true,
+      wareki: true,
+      datesIso: true,
+      legacyVietnamese: true,
+      tokenReduce: true,
+    },
+    pii: { mode: "mask" as const, saltPath: "/tmp/salt" },
+    guard: { mode: "flag" as const },
+    server: { auditLog: "/tmp/a.jsonl" },
+    catalog: {
+      path: "/tmp/knot-sync.catalog.yaml",
+      definitionMapping: {
+        physical: "物理名",
+        label_ja: "論理名",
+        label_vi: "Tên nghiệp vụ",
+        label_en: "Business name",
+        description: "説明",
+        sheet: "項目",
+      },
+    },
+    prompts: [],
+    plugins: [],
+    pluginSettings: {},
+  };
+  const ctx = { config, catalog, sqlDriverFactories: { erp: factory } };
+  const described = await handleDescribeTable({ source: "erp", table: "受注" }, ctx);
+  assert.match(described.content, /得意先コード/);
+  const ok = await handleQueryTable(
+    {
+      source: "erp",
+      table: "受注",
+      filters: [{ op: "eq", column: "得意先コード", value: "001" }],
+    },
+    ctx,
+  );
+  assert.equal(ok.meta?.resultCount, 1);
+  await assert.rejects(
+    () =>
+      handleQueryTable(
+        { source: "erp", table: "受注", filters: [{ op: "eq", column: "KBN", value: "Z" }] },
+        ctx,
+      ),
+    /valid values|Allowed/,
+  );
 });

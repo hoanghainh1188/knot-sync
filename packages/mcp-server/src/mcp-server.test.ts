@@ -72,6 +72,17 @@ function minimalConfig(sourcePath: string, auditLog: string): AppConfig {
     pii: { mode: "mask", saltPath: "/tmp/salt" },
     guard: { mode: "flag" },
     server: { auditLog },
+    catalog: {
+      path: "/tmp/knot-sync.catalog.yaml",
+      definitionMapping: {
+        physical: "物理名",
+        label_ja: "論理名",
+        label_vi: "Tên nghiệp vụ",
+        label_en: "Business name",
+        description: "説明",
+        sheet: "項目",
+      },
+    },
     prompts: [
       {
         name: "find-invoice",

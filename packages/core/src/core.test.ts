@@ -124,6 +124,36 @@ test("server defaults audit_log beside store when omitted", () => {
   assert.deepEqual(structural.prompts, []);
 });
 
+test("catalog defaults path beside config when omitted", () => {
+  const structural = parseConfig("sources:\n  - id: a\n    type: fs\n    path: /x\n", "/work");
+  assert.equal(structural.catalog.path, "/work/knot-sync.catalog.yaml");
+  assert.equal(structural.catalog.definitionMapping.physical, "物理名");
+});
+
+test("catalog rejects unknown keys and resolves relative definition_excel", () => {
+  assert.throws(
+    () =>
+      parseConfig(
+        "sources:\n  - id: a\n    type: fs\n    path: /x\ncatalog:\n  llm: true\n",
+        "/work",
+      ),
+    /Unknown key "llm".*catalog/,
+  );
+  const structural = parseConfig(
+    [
+      "sources:",
+      "  - id: a",
+      "    type: fs",
+      "    path: /x",
+      "catalog:",
+      "  definition_excel: ./defs/項目定義.xlsx",
+      "",
+    ].join("\n"),
+    "/work",
+  );
+  assert.equal(structural.catalog.definitionExcel, "/work/defs/項目定義.xlsx");
+});
+
 test("server rejects unknown keys", () => {
   assert.throws(
     () => parseServerConfig({ port: 8080 }, "/default.jsonl", "/base"),

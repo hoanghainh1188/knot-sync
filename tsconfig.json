@@ -9,6 +9,7 @@
     { "path": "packages/pii-basic" },
     { "path": "packages/guard" },
     { "path": "packages/report-html" },
+    { "path": "packages/catalog" },
     { "path": "packages/mcp-server" },
     { "path": "packages/store-sqlite" },
     { "path": "packages/cli" }

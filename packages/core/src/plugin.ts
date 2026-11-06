@@ -68,9 +68,32 @@ export interface GuardRule {
   find(text: string): Array<{ start: number; end: number }>;
 }
 
-/** Stub until a later change fills in behavior. */
+/** Input for catalog-source suggestions during `describe`. */
+export interface CatalogSuggestInput {
+  sourceId: string;
+  table: string;
+  column: string;
+  dbType?: string;
+  sampleValues?: string[];
+}
+
+/** Suggested catalog fields from a CatalogSource (partial). */
+export interface CatalogSuggestion {
+  label?: { ja?: string; vi?: string; en?: string };
+  description?: string;
+  values?: string[];
+  pii?: boolean;
+}
+
+/**
+ * Executable catalog-source: suggests labels/descriptions for one column
+ * without network I/O or writing to customer sources.
+ */
 export interface CatalogSource {
   id: string;
+  suggest(
+    input: CatalogSuggestInput,
+  ): CatalogSuggestion | Promise<CatalogSuggestion>;
 }
 
 /** Opaque context passed to MCP tool handlers (filled by the MCP host). */
@@ -302,8 +325,14 @@ export function createPluginHost(options: CreatePluginHostOptions = {}): PluginH
         }
         registerInMap(guardRules, "guard-rule", r, plugin.name, extensions);
       },
-      registerCatalogSource: (s) =>
-        registerInMap(catalogSources, "catalog-source", s, plugin.name, extensions),
+      registerCatalogSource: (s) => {
+        if (typeof s.suggest !== "function") {
+          throw new ConfigError(
+            `Plugin "${plugin.name}" catalog-source "${s.id}" must provide suggest(input).`,
+          );
+        }
+        registerInMap(catalogSources, "catalog-source", s, plugin.name, extensions);
+      },
       registerMcpTool: (t) => {
         if (typeof t.description !== "string" || t.description.trim() === "") {
           throw new ConfigError(

@@ -164,6 +164,27 @@ export interface ServerConfig {
   auditLog: string;
 }
 
+/** Excel column mapping for optional テーブル定義書 / 項目定義書. */
+export interface CatalogDefinitionMapping {
+  sheet?: string;
+  physical: string;
+  label_ja?: string;
+  label_vi?: string;
+  label_en?: string;
+  description?: string;
+}
+
+/** Semantic Catalog settings (`catalog:` in config). */
+export interface CatalogConfig {
+  /** Absolute path to knot-sync.catalog.yaml after config loading. */
+  path: string;
+  /** Absolute path to optional customer dictionary file. */
+  dictionary?: string;
+  /** Absolute path to optional definition Excel workbook. */
+  definitionExcel?: string;
+  definitionMapping: CatalogDefinitionMapping;
+}
+
 /** One argument descriptor for a config-defined MCP prompt. */
 export interface PromptArgumentConfig {
   name: string;
@@ -189,6 +210,7 @@ export interface AppConfig {
   pii: PiiConfig;
   guard: GuardConfig;
   server: ServerConfig;
+  catalog: CatalogConfig;
   prompts: PromptConfig[];
   /** Extra plugins listed in config (built-ins are separate). */
   plugins: string[];

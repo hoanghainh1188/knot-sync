@@ -2,6 +2,11 @@ import { z } from "zod";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
+  formatColumnLabels,
+  getCatalogColumn,
+  type CatalogDocument,
+} from "@hoanghainh/knot-sync-catalog";
+import {
   describeAllowedTable,
   frameSqlSchema,
   handleDescribeTable,
@@ -71,6 +76,29 @@ export interface CreateKnotMcpServerOptions {
   host: PluginHost;
   /** Override audit path (defaults to config.server.auditLog). */
   auditLogPath?: string;
+  /** Optional Semantic Catalog (loaded by serve when the file exists). */
+  catalog?: CatalogDocument;
+}
+
+function enrichSchemaForResource(
+  schema: Awaited<ReturnType<typeof describeAllowedTable>>,
+  catalog: CatalogDocument | undefined,
+): unknown {
+  if (!catalog) return schema;
+  return {
+    ...schema,
+    columns: schema.columns.map((c) => {
+      const entry = getCatalogColumn(catalog, schema.sourceId, schema.table, c.name);
+      if (!entry) return c;
+      return {
+        ...c,
+        businessLabel: entry.label,
+        description: entry.description || undefined,
+        validValues: entry.values.length > 0 ? entry.values : undefined,
+        labelsText: formatColumnLabels(entry) || undefined,
+      };
+    }),
+  };
 }
 
 function sourcePaths(sources: SourceConfig[]): string[] {
@@ -129,7 +157,8 @@ export function createKnotMcpServer(options: CreateKnotMcpServerOptions): McpSer
     sourcePaths(config.sources),
   );
   const audit = new AuditLog(auditAbs);
-  const toolCtx = { store, config };
+  const catalog = options.catalog;
+  const toolCtx = { store, config, catalog };
 
   const server = new McpServer({
     name: "knot-sync",
@@ -236,6 +265,7 @@ export function createKnotMcpServer(options: CreateKnotMcpServerOptions): McpSer
           throw new Error(`Source "${sourceId}" is not a configured postgres/mysql source.`);
         }
         const schema = await describeAllowedTable(source, table);
+        const enriched = enrichSchemaForResource(schema, catalog);
         await auditSafe(audit, {
           timestamp: new Date().toISOString(),
           kind: "resource",
@@ -250,7 +280,7 @@ export function createKnotMcpServer(options: CreateKnotMcpServerOptions): McpSer
             {
               uri: uri.href,
               mimeType: "application/json",
-              text: frameSqlSchema(schema),
+              text: frameSqlSchema(enriched),
             },
           ],
         };

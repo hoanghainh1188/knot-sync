@@ -1,0 +1,32 @@
+{
+  "name": "@hoanghainh/knot-sync-catalog",
+  "version": "0.0.1",
+  "description": "Semantic Catalog builder and YAML merge for KnotSync SQL sources.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@hoanghainh/knot-sync-core": "workspace:*",
+    "exceljs": "^4.4.0",
+    "yaml": "^2.6.0"
+  },
+  "author": "hoanghainh",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

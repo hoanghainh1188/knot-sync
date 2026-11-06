@@ -5,6 +5,8 @@ import { ConfigError } from "./errors.js";
 import type { PluginHost } from "./plugin.js";
 import type {
   AppConfig,
+  CatalogConfig,
+  CatalogDefinitionMapping,
   CleaningConfig,
   GuardConfig,
   GuardMode,
@@ -21,6 +23,7 @@ import type {
 export { ConfigError } from "./errors.js";
 
 export const DEFAULT_CONFIG_FILE = "knot-sync.config.yaml";
+export const DEFAULT_CATALOG_FILE = "knot-sync.catalog.yaml";
 
 /** Folders that are never useful and often huge or protected. */
 export const DEFAULT_EXCLUDES = [
@@ -44,10 +47,26 @@ const CORE_TOP_LEVEL_KEYS = new Set([
   "pii",
   "guard",
   "server",
+  "catalog",
   "prompts",
 ]);
 
 const SERVER_KEYS = new Set(["audit_log"]);
+const CATALOG_KEYS = new Set([
+  "path",
+  "dictionary",
+  "definition_excel",
+  "definition_mapping",
+]);
+
+export const DEFAULT_DEFINITION_MAPPING: CatalogDefinitionMapping = {
+  sheet: "項目",
+  physical: "物理名",
+  label_ja: "論理名",
+  label_vi: "Tên nghiệp vụ",
+  label_en: "Business name",
+  description: "説明",
+};
 
 const PII_MODES = new Set<PiiMode>(["mask", "hash", "drop"]);
 const PII_KEYS = new Set(["mode", "saltPath"]);
@@ -114,6 +133,7 @@ export interface StructuralConfig {
   pii: PiiConfig;
   guard: GuardConfig;
   server: ServerConfig;
+  catalog: CatalogConfig;
   prompts: PromptConfig[];
   /** Plugin entries as written in config (relative paths or package names). */
   plugins: string[];
@@ -212,6 +232,107 @@ export function parseServerConfig(
     auditLog = resolvePath(baseDir, obj.audit_log);
   }
   return { auditLog };
+}
+
+function parseDefinitionMapping(raw: unknown): CatalogDefinitionMapping {
+  if (raw === undefined || raw === null) {
+    return { ...DEFAULT_DEFINITION_MAPPING };
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ConfigError('"catalog.definition_mapping" must be an object.');
+  }
+  const obj = raw as Record<string, unknown>;
+  const allowed = new Set([
+    "sheet",
+    "physical",
+    "label_ja",
+    "label_vi",
+    "label_en",
+    "description",
+  ]);
+  for (const key of Object.keys(obj)) {
+    if (!allowed.has(key)) {
+      throw new ConfigError(
+        `Unknown key "${key}" under "catalog.definition_mapping". ` +
+          `Allowed keys: sheet, physical, label_ja, label_vi, label_en, description.`,
+      );
+    }
+    if (obj[key] !== undefined && typeof obj[key] !== "string") {
+      throw new ConfigError(`"catalog.definition_mapping.${key}" must be a string.`);
+    }
+  }
+  const physical =
+    typeof obj.physical === "string" && obj.physical.trim() !== ""
+      ? obj.physical
+      : DEFAULT_DEFINITION_MAPPING.physical;
+  return {
+    sheet: typeof obj.sheet === "string" ? obj.sheet : DEFAULT_DEFINITION_MAPPING.sheet,
+    physical,
+    label_ja:
+      typeof obj.label_ja === "string" ? obj.label_ja : DEFAULT_DEFINITION_MAPPING.label_ja,
+    label_vi:
+      typeof obj.label_vi === "string" ? obj.label_vi : DEFAULT_DEFINITION_MAPPING.label_vi,
+    label_en:
+      typeof obj.label_en === "string" ? obj.label_en : DEFAULT_DEFINITION_MAPPING.label_en,
+    description:
+      typeof obj.description === "string"
+        ? obj.description
+        : DEFAULT_DEFINITION_MAPPING.description,
+  };
+}
+
+/** Parse optional `catalog:` section. `defaultPath` is absolute. */
+export function parseCatalogConfig(
+  raw: unknown,
+  defaultPath: string,
+  baseDir: string,
+): CatalogConfig {
+  if (raw === undefined || raw === null) {
+    return {
+      path: defaultPath,
+      definitionMapping: { ...DEFAULT_DEFINITION_MAPPING },
+    };
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ConfigError(
+      '"catalog" must be an object (e.g. { path: ./knot-sync.catalog.yaml }).',
+    );
+  }
+  const obj = raw as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    if (!CATALOG_KEYS.has(key)) {
+      throw new ConfigError(
+        `Unknown key "${key}" under "catalog". Allowed keys: path, dictionary, definition_excel, definition_mapping.`,
+      );
+    }
+  }
+  let path = defaultPath;
+  if (obj.path !== undefined) {
+    if (typeof obj.path !== "string" || obj.path.trim() === "") {
+      throw new ConfigError('"catalog.path" must be a non-empty string.');
+    }
+    path = resolvePath(baseDir, obj.path);
+  }
+  let dictionary: string | undefined;
+  if (obj.dictionary !== undefined) {
+    if (typeof obj.dictionary !== "string" || obj.dictionary.trim() === "") {
+      throw new ConfigError('"catalog.dictionary" must be a non-empty string.');
+    }
+    dictionary = resolvePath(baseDir, obj.dictionary);
+  }
+  let definitionExcel: string | undefined;
+  if (obj.definition_excel !== undefined) {
+    if (typeof obj.definition_excel !== "string" || obj.definition_excel.trim() === "") {
+      throw new ConfigError('"catalog.definition_excel" must be a non-empty string.');
+    }
+    definitionExcel = resolvePath(baseDir, obj.definition_excel);
+  }
+  return {
+    path,
+    dictionary,
+    definitionExcel,
+    definitionMapping: parseDefinitionMapping(obj.definition_mapping),
+  };
 }
 
 /** Parse optional `prompts:` list. */
@@ -388,6 +509,8 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
   const guard = parseGuardConfig(c.guard);
   const defaultAuditLog = resolve(dirname(storePath), DEFAULT_AUDIT_LOG_NAME);
   const server = parseServerConfig(c.server, defaultAuditLog, baseDir);
+  const defaultCatalogPath = resolve(baseDir, DEFAULT_CATALOG_FILE);
+  const catalog = parseCatalogConfig(c.catalog, defaultCatalogPath, baseDir);
   const prompts = parsePromptsConfig(c.prompts);
 
   const pluginSettings: Record<string, unknown> = Object.create(null);
@@ -409,6 +532,7 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
     pii,
     guard,
     server,
+    catalog,
     prompts,
     plugins,
     pluginSettings,
@@ -439,6 +563,7 @@ export function resolveConfig(structural: StructuralConfig, host: PluginHost): A
     pii: structural.pii,
     guard: structural.guard,
     server: structural.server,
+    catalog: structural.catalog,
     prompts: structural.prompts,
     plugins: structural.plugins,
     pluginSettings: structural.pluginSettings,

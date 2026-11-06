@@ -464,4 +464,23 @@ test("helpful errors", async () => {
   io = capture();
   assert.equal(await main(["plugins", "--help"], io), 0);
   assert.match(io.stdout.join("\n"), /full trust/);
+
+  io = capture();
+  assert.equal(await main(["--help"], io), 0);
+  assert.match(io.stdout.join("\n"), /describe/);
+});
+
+test("describe without SQL sources exits 1 with guidance", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-"));
+  try {
+    const config = join(root, "cfg.yaml");
+    const io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], io), 0);
+    await mkdir(join(root, "share"), { recursive: true });
+    const io2 = capture();
+    assert.equal(await main(["describe", "-c", config], io2), 1);
+    assert.match(io2.stderr.join("\n"), /No postgres\/mysql sources/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
