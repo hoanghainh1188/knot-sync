@@ -33,7 +33,7 @@ Work through the changes **in order**, one at a time:
 | 3 | `add-ja-vi-cleaning` | ✅ done |
 | 4 | `add-pii-masking` | ✅ done |
 | 5 | `add-injection-guard` | ✅ done |
-| 6 | `add-html-scan-report` | ⏳ |
+| 6 | `add-html-scan-report` | ✅ done |
 | 7 | `add-mcp-server` | ⏳ |
 | 8 | `add-sql-source` | ⏳ |
 | 9 | `add-semantic-catalog` | ⏳ needs sample テーブル定義書 |

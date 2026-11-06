@@ -59,7 +59,9 @@ Example output:
       - 営業/見積書_最新_本当に最新.xlsx
 ```
 
-Use `scan --json` for machine-readable output.
+Use `scan --json` for machine-readable output. Use `scan --report [file]` to write
+one self-contained HTML health report (offline, light/dark, EN/日本語/Tiếng Việt
+labels). Default path: `./knot-sync-scan-report.html` (never inside a source folder).
 
 ## Roadmap
 
@@ -72,7 +74,8 @@ cryptic fields (`TKSK_CD`, `ma_kh`…) so AI agents call tools correctly.
 - ✅ JP/VN cleaning (`cleaner-ja-vi`, config `cleaning:`)
 - ✅ PII masking (`pii-basic`, config `pii:`, `scan --pii`)
 - ✅ Prompt-injection guard (`guard`, config `guard:`)
-- ⏳ `scan --report` (one-file HTML), MCP server (`serve`), PostgreSQL / MySQL
+- ✅ HTML scan report (`scan --report`, `report-html`)
+- ⏳ MCP server (`serve`), PostgreSQL / MySQL
 - ⏳ Semantic Catalog (`describe`, reads テーブル定義書)
 
 Details and order: [docs/ROADMAP.md](./docs/ROADMAP.md). Development uses
@@ -97,6 +100,7 @@ Packages:
 | `packages/cleaner-ja-vi` | Built-in JP/VN text cleaner (NFKC, wareki, ISO dates, TCVN3/VNI, token reduce) |
 | `packages/pii-basic` | Built-in PII detection/masking (email, phones, CCCD, My Number, Luhn) |
 | `packages/guard` | Built-in prompt-injection guard (EN/JP/VN phrases, controls, hidden text) |
+| `packages/report-html` | Self-contained HTML scan health report (`scan --report`) |
 | `packages/store-sqlite` | `node:sqlite` store, FTS5 trigram search (works for 日本語 / Tiếng Việt) |
 | `packages/cli` | `knot-sync` command |
 
