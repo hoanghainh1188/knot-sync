@@ -367,6 +367,57 @@ test("cleaning.wareki false skips era conversion", async () => {
   }
 });
 
+test("scan --report writes HTML with JP paths outside source", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-report-"));
+  try {
+    const share = join(root, "share");
+    await mkdir(join(share, "営業"), { recursive: true });
+    await writeFile(join(share, "営業", "見積書.xlsx"), "dup");
+    await writeFile(join(share, "見積書 (1).xlsx"), "dup");
+    const config = join(root, "cfg.yaml");
+    let io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], io), 0);
+
+    const reportPath = join(root, "health.html");
+    io = capture();
+    assert.equal(await main(["scan", "-c", config, "--report", reportPath], io), 0);
+    assert.match(io.stdout.join("\n"), /HTML report written/);
+    const html = await readFile(reportPath, "utf8");
+    assert.match(html, /営業\/見積書\.xlsx/);
+    assert.match(html, /data-lang="ja"/);
+    assert.doesNotMatch(html, /<script src=/);
+
+    // Refuse writing inside the source folder
+    io = capture();
+    const inside = join(share, "inside-report.html");
+    assert.equal(await main(["scan", "-c", config, "--report", inside], io), 1);
+    assert.match(io.stderr.join("\n"), /Refusing to write HTML report inside source/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("scan --report bare flag uses default path under cwd", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-report-def-"));
+  const prev = process.cwd();
+  try {
+    const share = join(root, "share");
+    await mkdir(share, { recursive: true });
+    await writeFile(join(share, "a.txt"), "hello\n", "utf8");
+    const config = join(root, "cfg.yaml");
+    let io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], io), 0);
+    process.chdir(root);
+    io = capture();
+    assert.equal(await main(["scan", "-c", config, "--report"], io), 0);
+    const html = await readFile(join(root, "knot-sync-scan-report.html"), "utf8");
+    assert.match(html, /<!DOCTYPE html>/i);
+  } finally {
+    process.chdir(prev);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("unknown source type fails clearly", async () => {
   const root = await mkdtemp(join(tmpdir(), "mcpn-cli-"));
   try {

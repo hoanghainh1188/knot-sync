@@ -15,6 +15,11 @@ import { applyPiiToDocument, textHasPii } from "@hoanghainh/knot-sync-pii-basic"
 import { Store, type SourceStats } from "@hoanghainh/knot-sync-store-sqlite";
 import { formatBytes, formatCount, table } from "./format.js";
 import { findExtractor, loadAppPlugins } from "./plugins.js";
+import {
+  assertReportPathOutsideSources,
+  normalizeReportArgv,
+  writeScanReportHtml,
+} from "./report.js";
 
 const PII_SAMPLE_EXTS = new Set([".txt", ".md", ".csv", ".tsv"]);
 const PII_SAMPLE_MAX_BYTES = 256 * 1024;
@@ -60,7 +65,7 @@ init options:
 scan options:
   --json                Print results as JSON
   --pii                 Estimate how many text files look like they contain PII
-  --report              (coming soon) Also write an HTML report
+  --report [file]       Write a self-contained HTML report (default: ./knot-sync-scan-report.html)
 
 plugins:
   Plugins run in-process with full trust. Install only plugins you trust.
@@ -71,7 +76,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
   let parsed;
   try {
     parsed = parseArgs({
-      args: argv,
+      args: normalizeReportArgv(argv),
       allowPositionals: true,
       options: {
         config: { type: "string", short: "c" },
@@ -81,7 +86,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         force: { type: "boolean" },
         json: { type: "boolean" },
         pii: { type: "boolean" },
-        report: { type: "boolean" },
+        report: { type: "string" },
       },
     });
   } catch (err) {
@@ -111,7 +116,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         return await cmdScan(
           configPath,
           Boolean(values.json),
-          Boolean(values.report),
+          typeof values.report === "string" ? values.report : undefined,
           Boolean(values.pii),
           io,
         );
@@ -195,7 +200,7 @@ async function estimatePiiLikelyFiles(
 async function cmdScan(
   configPath: string,
   json: boolean,
-  report: boolean,
+  reportPath: string | undefined,
   piiEstimate: boolean,
   io: Io,
 ): Promise<number> {
@@ -252,8 +257,31 @@ async function cmdScan(
     for (const r of results) printStats(r, config.scan.oldFileYears, io);
     io.out(`Inventory saved to ${config.store.path}`);
   }
-  if (report) {
-    io.err('Note: "--report" (HTML report) is not available yet. It is planned for week 6.');
+  if (reportPath !== undefined) {
+    const abs = assertReportPathOutsideSources(
+      reportPath,
+      config.sources.map((s) => ("path" in s ? String(s.path) : "")).filter(Boolean),
+    );
+    const written = await writeScanReportHtml(abs, {
+      version: VERSION,
+      storePath: config.store.path,
+      generatedAt: new Date().toISOString(),
+      oldFileYears: config.scan.oldFileYears,
+      sources: results.map((r) => ({
+        stats: r.stats,
+        issues: r.issues.map((i) => ({
+          path: i.path,
+          code: i.code,
+          message: i.message,
+        })),
+        topDuplicates: r.topDuplicates.map((g) => ({
+          size: g.size,
+          paths: g.paths,
+        })),
+        ...(r.piiLikelyFiles !== undefined ? { piiLikelyFiles: r.piiLikelyFiles } : {}),
+      })),
+    });
+    io.out(`HTML report written to ${written}`);
   }
   return 0;
 }

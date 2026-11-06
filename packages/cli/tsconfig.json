@@ -12,6 +12,7 @@
     { "path": "../cleaner-ja-vi" },
     { "path": "../pii-basic" },
     { "path": "../guard" },
+    { "path": "../report-html" },
     { "path": "../store-sqlite" }
   ]
 }
