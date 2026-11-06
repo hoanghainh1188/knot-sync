@@ -10,7 +10,10 @@ import type {
   GuardMode,
   PiiConfig,
   PiiMode,
+  PromptArgumentConfig,
+  PromptConfig,
   ScanConfig,
+  ServerConfig,
   SourceConfig,
   StoreConfig,
 } from "./types.js";
@@ -40,7 +43,11 @@ const CORE_TOP_LEVEL_KEYS = new Set([
   "cleaning",
   "pii",
   "guard",
+  "server",
+  "prompts",
 ]);
+
+const SERVER_KEYS = new Set(["audit_log"]);
 
 const PII_MODES = new Set<PiiMode>(["mask", "hash", "drop"]);
 const PII_KEYS = new Set(["mode", "saltPath"]);
@@ -51,6 +58,9 @@ const GUARD_MODES = new Set<GuardMode>(["flag", "strip", "block"]);
 const GUARD_KEYS = new Set(["mode"]);
 
 export const DEFAULT_GUARD_MODE: GuardMode = "flag";
+
+/** Default audit log filename beside the store file. */
+export const DEFAULT_AUDIT_LOG_NAME = "mcp-audit.jsonl";
 
 const CLEANING_KEYS = [
   "nfkc",
@@ -103,6 +113,8 @@ export interface StructuralConfig {
   cleaning: CleaningConfig;
   pii: PiiConfig;
   guard: GuardConfig;
+  server: ServerConfig;
+  prompts: PromptConfig[];
   /** Plugin entries as written in config (relative paths or package names). */
   plugins: string[];
   /** Opaque top-level keys for plugins, keyed by plugin name. */
@@ -170,6 +182,104 @@ export function parsePiiConfig(raw: unknown, defaultSaltPath: string, baseDir: s
     saltPath = resolvePath(baseDir, obj.saltPath);
   }
   return { mode, saltPath };
+}
+
+/** Parse optional `server:` section. `defaultAuditLog` is absolute. */
+export function parseServerConfig(
+  raw: unknown,
+  defaultAuditLog: string,
+  baseDir: string,
+): ServerConfig {
+  if (raw === undefined || raw === null) {
+    return { auditLog: defaultAuditLog };
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ConfigError('"server" must be an object (e.g. { audit_log: ./.data/mcp-audit.jsonl }).');
+  }
+  const obj = raw as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    if (!SERVER_KEYS.has(key)) {
+      throw new ConfigError(
+        `Unknown key "${key}" under "server". Allowed keys: audit_log.`,
+      );
+    }
+  }
+  let auditLog = defaultAuditLog;
+  if (obj.audit_log !== undefined) {
+    if (typeof obj.audit_log !== "string" || obj.audit_log.trim() === "") {
+      throw new ConfigError('"server.audit_log" must be a non-empty string.');
+    }
+    auditLog = resolvePath(baseDir, obj.audit_log);
+  }
+  return { auditLog };
+}
+
+/** Parse optional `prompts:` list. */
+export function parsePromptsConfig(raw: unknown): PromptConfig[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) {
+    throw new ConfigError('"prompts" must be a list of prompt objects.');
+  }
+  const prompts: PromptConfig[] = [];
+  const names = new Set<string>();
+  for (let i = 0; i < raw.length; i++) {
+    const item = raw[i];
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      throw new ConfigError(`prompts[${i}] must be an object.`);
+    }
+    const obj = item as Record<string, unknown>;
+    const name = obj.name;
+    const description = obj.description;
+    const template = obj.template;
+    if (typeof name !== "string" || name.trim() === "") {
+      throw new ConfigError(
+        `prompts[${i}].name must be a non-empty string (required fields: name, description, template).`,
+      );
+    }
+    if (typeof description !== "string" || description.trim() === "") {
+      throw new ConfigError(
+        `prompts[${i}].description must be a non-empty string (required fields: name, description, template).`,
+      );
+    }
+    if (typeof template !== "string" || template.trim() === "") {
+      throw new ConfigError(
+        `prompts[${i}].template must be a non-empty string (required fields: name, description, template).`,
+      );
+    }
+    if (names.has(name)) {
+      throw new ConfigError(`Duplicate prompt name "${name}".`);
+    }
+    names.add(name);
+    const args = parsePromptArguments(obj.arguments, i);
+    prompts.push({ name, description, template, arguments: args });
+  }
+  return prompts;
+}
+
+function parsePromptArguments(raw: unknown, promptIndex: number): PromptArgumentConfig[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) {
+    throw new ConfigError(`prompts[${promptIndex}].arguments must be a list.`);
+  }
+  const out: PromptArgumentConfig[] = [];
+  for (let j = 0; j < raw.length; j++) {
+    const item = raw[j];
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      throw new ConfigError(`prompts[${promptIndex}].arguments[${j}] must be an object.`);
+    }
+    const obj = item as Record<string, unknown>;
+    if (typeof obj.name !== "string" || obj.name.trim() === "") {
+      throw new ConfigError(`prompts[${promptIndex}].arguments[${j}].name must be a non-empty string.`);
+    }
+    if (typeof obj.description !== "string" || obj.description.trim() === "") {
+      throw new ConfigError(
+        `prompts[${promptIndex}].arguments[${j}].description must be a non-empty string.`,
+      );
+    }
+    const required = obj.required === undefined ? false : Boolean(obj.required);
+    out.push({ name: obj.name, description: obj.description, required });
+  }
+  return out;
 }
 
 /** Parse optional `cleaning:` section; omitted keys default to true. */
@@ -276,6 +386,9 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
   const defaultSaltPath = resolve(dirname(storePath), "pii-salt");
   const pii = parsePiiConfig(c.pii, defaultSaltPath, baseDir);
   const guard = parseGuardConfig(c.guard);
+  const defaultAuditLog = resolve(dirname(storePath), DEFAULT_AUDIT_LOG_NAME);
+  const server = parseServerConfig(c.server, defaultAuditLog, baseDir);
+  const prompts = parsePromptsConfig(c.prompts);
 
   const pluginSettings: Record<string, unknown> = Object.create(null);
   for (const [key, value] of Object.entries(c)) {
@@ -295,6 +408,8 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
     cleaning,
     pii,
     guard,
+    server,
+    prompts,
     plugins,
     pluginSettings,
   };
@@ -323,6 +438,8 @@ export function resolveConfig(structural: StructuralConfig, host: PluginHost): A
     cleaning: structural.cleaning,
     pii: structural.pii,
     guard: structural.guard,
+    server: structural.server,
+    prompts: structural.prompts,
     plugins: structural.plugins,
     pluginSettings: structural.pluginSettings,
   };
@@ -384,5 +501,20 @@ scan:
 # Optional prompt-injection guard applied by "knot-sync run" after PII (default mode: flag).
 # guard:
 #   mode: flag   # flag | strip | block
+
+# Optional MCP server settings for "knot-sync serve".
+# server:
+#   audit_log: ./.data/mcp-audit.jsonl
+
+# Optional MCP prompts (name must be unique).
+# prompts:
+#   - name: find-invoice
+#     description: Find invoice-like documents
+#     arguments:
+#       - name: query
+#         description: Search terms
+#         required: true
+#     template: |
+#       Search KnotSync for invoices matching: {{query}}
 `;
 }

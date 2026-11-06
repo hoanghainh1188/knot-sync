@@ -119,6 +119,54 @@ test("rejects guard-rule without find()", () => {
   );
 });
 
+test("registers executable mcp-tool and mcp-prompt", () => {
+  const host = createPluginHost();
+  host.registerPlugin(
+    makePlugin({
+      name: "mcp-demo",
+      onRegister: (api) => {
+        api.registerMcpTool({
+          id: "search_documents",
+          description: "Search documents",
+          inputSchema: { type: "object", properties: { query: { type: "string" } } },
+          handler: () => ({ content: "ok" }),
+        });
+        api.registerMcpPrompt({
+          id: "find-invoice",
+          description: "Find invoices",
+          template: "Search for {{query}}",
+        });
+      },
+    }),
+  );
+  assert.ok(host.mcpTools.has("search_documents"));
+  assert.ok(host.mcpPrompts.has("find-invoice"));
+  assert.deepEqual(host.loaded[0]?.extensions, [
+    { point: "mcp-tool", id: "search_documents" },
+    { point: "mcp-prompt", id: "find-invoice" },
+  ]);
+});
+
+test("rejects mcp-tool without handler", () => {
+  const host = createPluginHost();
+  assert.throws(
+    () =>
+      host.registerPlugin(
+        makePlugin({
+          name: "bad-mcp",
+          onRegister: (api) => {
+            api.registerMcpTool({
+              id: "broken",
+              description: "x",
+              inputSchema: { type: "object" },
+            } as never);
+          },
+        }),
+      ),
+    /must provide handler/,
+  );
+});
+
 test("rejects incompatible apiVersion", () => {
   const host = createPluginHost();
   assert.throws(

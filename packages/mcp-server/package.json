@@ -1,0 +1,33 @@
+{
+  "name": "@hoanghainh/knot-sync-mcp-server",
+  "version": "0.0.1",
+  "description": "Stdio MCP server for KnotSync: search and fetch local documents read-only.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@hoanghainh/knot-sync-core": "workspace:*",
+    "@hoanghainh/knot-sync-store-sqlite": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^3.25.0"
+  },
+  "author": "hoanghainh",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

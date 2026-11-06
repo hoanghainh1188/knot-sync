@@ -83,6 +83,9 @@ test("plugins lists built-in fs connector", async () => {
     assert.match(text, /pii-rule:email/);
     assert.match(text, /guard@/);
     assert.match(text, /guard-rule:instruction-en/);
+    assert.match(text, /mcp-tools@/);
+    assert.match(text, /mcp-tool:search_documents/);
+    assert.match(text, /mcp-tool:get_document/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -445,8 +448,9 @@ test("helpful errors", async () => {
   assert.match(io.stderr.join("\n"), /Unknown command/);
 
   io = capture();
-  assert.equal(await main(["serve"], io), 2);
-  assert.match(io.stderr.join("\n"), /not available yet/);
+  assert.equal(await main(["serve", "-c", "/no/such/config.yaml"], io), 1);
+  assert.match(io.stderr.join("\n"), /Config file not found/);
+  assert.doesNotMatch(io.stderr.join("\n"), /not available yet/);
 
   io = capture();
   assert.equal(await main(["--version"], io), 0);

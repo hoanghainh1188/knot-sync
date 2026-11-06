@@ -9,6 +9,8 @@ import {
   parseConfig,
   parseGuardConfig,
   parsePiiConfig,
+  parsePromptsConfig,
+  parseServerConfig,
   resolveConfig,
   resolvePath,
   starterConfigYaml,
@@ -111,6 +113,46 @@ test("guard rejects bad mode and unknown keys", () => {
     /guard\.mode.*flag, strip, block/,
   );
   assert.throws(() => parseGuardConfig({ foo: true }), /Unknown key "foo".*guard/);
+});
+
+test("server defaults audit_log beside store when omitted", () => {
+  const structural = parseConfig("sources:\n  - id: a\n    type: fs\n    path: /x\n", "/work");
+  assert.equal(structural.server.auditLog, "/work/.data/mcp-audit.jsonl");
+  assert.deepEqual(structural.prompts, []);
+});
+
+test("server rejects unknown keys", () => {
+  assert.throws(
+    () => parseServerConfig({ port: 8080 }, "/default.jsonl", "/base"),
+    /Unknown key "port".*server/,
+  );
+});
+
+test("prompts accept valid entry and reject duplicates / missing template", () => {
+  const prompts = parsePromptsConfig([
+    {
+      name: "find-invoice",
+      description: "Find invoices",
+      template: "Search for {{query}}",
+      arguments: [{ name: "query", description: "Terms", required: true }],
+    },
+  ]);
+  assert.equal(prompts.length, 1);
+  assert.equal(prompts[0]!.name, "find-invoice");
+  assert.equal(prompts[0]!.arguments[0]!.required, true);
+
+  assert.throws(
+    () =>
+      parsePromptsConfig([
+        { name: "a", description: "d", template: "t" },
+        { name: "a", description: "d2", template: "t2" },
+      ]),
+    /Duplicate prompt name "a"/,
+  );
+  assert.throws(
+    () => parsePromptsConfig([{ name: "a", description: "d" }]),
+    /template.*required fields/,
+  );
 });
 
 test("cleaning defaults to all true when omitted", () => {
