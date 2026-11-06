@@ -36,7 +36,7 @@ Work through the changes **in order**, one at a time:
 | 6 | `add-html-scan-report` | ✅ done |
 | 7 | `add-mcp-server` | ✅ done |
 | 8 | `add-sql-source` | ✅ done |
-| 9 | `add-semantic-catalog` | ⏳ needs sample テーブル定義書 |
+| 9 | `add-semantic-catalog` | ✅ done |
 | 10 | `prepare-npm-release` | ⏳ |
 
 From change 2 on, every new connector, extractor, cleaner, rule, catalog source,
@@ -147,20 +147,11 @@ columns only (equals, in, range, contains), parameterized queries, max rows, no 
 `scan` reports table counts and row estimates. Libraries: pg (MIT), mysql2 (MIT).
 ```
 
-### 9. add-semantic-catalog
+### 9. add-semantic-catalog — ✅ done
 
-```
-/opsx:propose add-semantic-catalog: New package catalog and the `knot-sync describe` command.
-Generates knot-sync.catalog.yaml for SQL sources: per table and column a business label
-(ja/vi/en), description, type, valid values (enums), pii tag, expose flag, reviewed flag.
-Inputs: DB introspection, sampled values, an optional テーブル定義書/項目定義書 Excel file
-(column mapping configurable), and dictionaries for romaji abbreviations (CD→コード, NM→名称,
-KBN→区分, KIN→金額, YMD→年月日, TKSK→得意先, URI→売上…) and unaccented Vietnamese (ma→mã,
-ten→tên, kh→khách hàng, nv→nhân viên, hd→hóa đơn, sl→số lượng…), plus a customer dictionary
-file. Re-running describe never overwrites reviewed entries. The MCP server uses the catalog
-for tool descriptions, business-name parameters in query_table, and enum validation.
-Out of scope: local LLM suggestions (paid).
-```
+`packages/catalog`, `knot-sync describe`, dictionaries, optional definition Excel
+(fixture-built in tests), MCP enrichment / business-name filters / enum checks.
+Reviewed entries preserved across re-runs. Out of scope: local LLM (paid).
 
 ### 10. prepare-npm-release
 

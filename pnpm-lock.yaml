@@ -15,6 +15,18 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  packages/catalog:
+    dependencies:
+      '@hoanghainh/knot-sync-core':
+        specifier: workspace:*
+        version: link:../core
+      exceljs:
+        specifier: ^4.4.0
+        version: 4.4.0
+      yaml:
+        specifier: ^2.6.0
+        version: 2.9.1
+
   packages/cleaner-ja-vi:
     dependencies:
       '@hoanghainh/knot-sync-core':
@@ -23,6 +35,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@hoanghainh/knot-sync-catalog':
+        specifier: workspace:*
+        version: link:../catalog
       '@hoanghainh/knot-sync-cleaner-ja-vi':
         specifier: workspace:*
         version: link:../cleaner-ja-vi
@@ -62,6 +77,9 @@ importers:
 
   packages/connector-sql:
     dependencies:
+      '@hoanghainh/knot-sync-catalog':
+        specifier: workspace:*
+        version: link:../catalog
       '@hoanghainh/knot-sync-core':
         specifier: workspace:*
         version: link:../core
@@ -105,6 +123,9 @@ importers:
 
   packages/mcp-server:
     dependencies:
+      '@hoanghainh/knot-sync-catalog':
+        specifier: workspace:*
+        version: link:../catalog
       '@hoanghainh/knot-sync-connector-sql':
         specifier: workspace:*
         version: link:../connector-sql

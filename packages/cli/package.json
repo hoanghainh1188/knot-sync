@@ -26,6 +26,7 @@
     "vietnamese"
   ],
   "dependencies": {
+    "@hoanghainh/knot-sync-catalog": "workspace:*",
     "@hoanghainh/knot-sync-cleaner-ja-vi": "workspace:*",
     "@hoanghainh/knot-sync-connector-fs": "workspace:*",
     "@hoanghainh/knot-sync-connector-sql": "workspace:*",

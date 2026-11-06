@@ -20,6 +20,7 @@
     "node": ">=22.13.0"
   },
   "dependencies": {
+    "@hoanghainh/knot-sync-catalog": "workspace:*",
     "@hoanghainh/knot-sync-connector-sql": "workspace:*",
     "@hoanghainh/knot-sync-core": "workspace:*",
     "@hoanghainh/knot-sync-store-sqlite": "workspace:*",

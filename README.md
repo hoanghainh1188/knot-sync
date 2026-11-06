@@ -3,7 +3,7 @@
 > Scan, clean and serve legacy enterprise data to AI agents via the
 > [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
 
-**Status: pre-alpha.** `init`, `scan`, `run`, `plugins` and `serve` work today.
+**Status: pre-alpha.** `init`, `scan`, `run`, `describe`, `plugins` and `serve` work today.
 
 - Runs **fully on your own machine**. Nothing is sent to the Internet.
 - Sources are **read-only**. The tool never changes your files or databases.
@@ -20,6 +20,7 @@ Requires Node.js 22.13 or newer.
 npx @hoanghainh/knot-sync init --path /path/to/shared/folder
 npx @hoanghainh/knot-sync scan
 npx @hoanghainh/knot-sync run
+npx @hoanghainh/knot-sync describe   # SQL sources: build Semantic Catalog
 npx @hoanghainh/knot-sync plugins
 npx @hoanghainh/knot-sync serve
 ```
@@ -143,6 +144,49 @@ npx @hoanghainh/knot-sync scan -c knot-sync.config.yaml
 `query_table` supports filters `eq` / `in` / `range` / `contains` with a max of
 200 rows (default 50). Cell values are framed as untrusted content.
 
+## Semantic Catalog (`describe`)
+
+For SQL sources, `knot-sync describe` writes `knot-sync.catalog.yaml` (path
+overridable via `catalog.path`) with business labels (ja/vi/en), descriptions,
+types, sampled distinct values, PII/expose flags, and a `reviewed` flag.
+
+Inputs (all local, read-only):
+
+- DB introspection of allow-listed tables/columns
+- Bounded distinct sampling
+- Built-in romaji (e.g. `TKSK_CD` → 得意先コード) and Vietnamese abbreviations
+  (e.g. `ma_kh` → mã khách hàng)
+- Optional customer dictionary (`catalog.dictionary`)
+- Optional テーブル定義書 / 項目定義書 Excel (`catalog.definition_excel` +
+  `catalog.definition_mapping`)
+
+Re-running `describe` **never overwrites** entries with `reviewed: true`.
+
+When the catalog file exists, `serve` loads it so `describe_table` / schema
+resources show business labels, and `query_table` accepts unique business-name
+filter columns and validates `eq`/`in` against catalog `values` when set.
+
+```yaml
+catalog:
+  path: ./knot-sync.catalog.yaml
+  # dictionary: ./customer-dict.yaml
+  # definition_excel: ./defs/項目定義.xlsx
+```
+
+```yaml
+# knot-sync.catalog.yaml (excerpt)
+version: 1
+sources:
+  erp:
+    tables:
+      受注:
+        columns:
+          TKSK_CD:
+            label: { ja: "得意先コード", vi: "", en: "customer code" }
+            values: []
+            reviewed: false
+```
+
 ## Roadmap
 
 KnotSync is a **semantic layer for legacy data**: it does not only clean files, it explains
@@ -157,7 +201,7 @@ cryptic fields (`TKSK_CD`, `ma_kh`…) so AI agents call tools correctly.
 - ✅ HTML scan report (`scan --report`, `report-html`)
 - ✅ MCP server (`serve`, stdio, `mcp-server`)
 - ✅ PostgreSQL / MySQL (`connector-sql`, allow-list, `query_table`)
-- ⏳ Semantic Catalog (`describe`, reads テーブル定義書)
+- ✅ Semantic Catalog (`describe`, `catalog` package, MCP business names/enums)
 
 Details and order: [docs/ROADMAP.md](./docs/ROADMAP.md). Development uses
 [OpenSpec](https://github.com/Fission-AI/OpenSpec): specs live in `openspec/specs/`.
@@ -183,6 +227,7 @@ Packages:
 | `packages/pii-basic` | Built-in PII detection/masking (email, phones, CCCD, My Number, Luhn) |
 | `packages/guard` | Built-in prompt-injection guard (EN/JP/VN phrases, controls, hidden text) |
 | `packages/report-html` | Self-contained HTML scan health report (`scan --report`) |
+| `packages/catalog` | Semantic Catalog YAML, dictionaries, Excel defs, `describe` helpers |
 | `packages/mcp-server` | Stdio MCP server (resources, search/get tools, audit log) |
 | `packages/store-sqlite` | `node:sqlite` store, FTS5 trigram search (works for 日本語 / Tiếng Việt) |
 | `packages/cli` | `knot-sync` command |
@@ -193,7 +238,7 @@ relative to the config file). Example: `examples/plugins/mask-company-id.mjs`.
 Design notes:
 
 - **No native dependencies.** Storage uses the built-in `node:sqlite`, so `npx` installs fast and works offline-friendly.
-- **Few dependencies on purpose** (`yaml`; MCP adds `@modelcontextprotocol/sdk` + `zod`; SQL adds `pg` + `mysql2` — all MIT). Less supply-chain risk for enterprise users.
+- **Few dependencies on purpose** (`yaml`; MCP adds `@modelcontextprotocol/sdk` + `zod`; SQL adds `pg` + `mysql2`; catalog/Excel reuse `exceljs` — all MIT). Less supply-chain risk for enterprise users.
 - Search terms shorter than 3 characters (e.g. `請求`) fall back to `LIKE`, because trigram FTS needs 3+ characters.
 - **Plugins are never auto-discovered** — only built-ins plus entries in `plugins:`.
 

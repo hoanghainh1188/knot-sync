@@ -20,6 +20,7 @@
     "node": ">=22.13.0"
   },
   "dependencies": {
+    "@hoanghainh/knot-sync-catalog": "workspace:*",
     "@hoanghainh/knot-sync-core": "workspace:*",
     "mysql2": "^3.14.0",
     "pg": "^8.14.0"

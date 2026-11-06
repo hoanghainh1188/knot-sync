@@ -1,6 +1,7 @@
 import { access, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { loadCatalogFile } from "@hoanghainh/knot-sync-catalog";
 import {
   ConfigError,
   DEFAULT_CONFIG_FILE,
@@ -14,6 +15,7 @@ import { applyGuardToDocument } from "@hoanghainh/knot-sync-guard";
 import { serveStdio } from "@hoanghainh/knot-sync-mcp-server";
 import { applyPiiToDocument, textHasPii } from "@hoanghainh/knot-sync-pii-basic";
 import { Store, type SourceStats } from "@hoanghainh/knot-sync-store-sqlite";
+import { CatalogError, cmdDescribe } from "./describe.js";
 import { formatBytes, formatCount, table } from "./format.js";
 import { findExtractor, loadAppPlugins } from "./plugins.js";
 import {
@@ -51,6 +53,7 @@ Commands:
   init      Create a config file in the current folder
   scan      Inventory all sources: file types, sizes, duplicates, old files
   run       Extract text/tables from the last scan into the document store
+  describe  Generate/update knot-sync.catalog.yaml for SQL sources
   plugins   List loaded plugins and their extension points
   serve     Start the MCP server (stdio only; for Claude Desktop / Cursor / Claude Code)
 
@@ -123,6 +126,8 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         );
       case "run":
         return await cmdRun(configPath, io);
+      case "describe":
+        return await cmdDescribeEntry(configPath, io);
       case "plugins":
         return await cmdPlugins(configPath, io);
       case "serve":
@@ -137,9 +142,20 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
       io.err(`Config error: ${err.message}`);
       return 1;
     }
+    if (err instanceof CatalogError) {
+      io.err(`Catalog error: ${err.message}`);
+      return 1;
+    }
     io.err(`Error: ${(err as Error).message}`);
     return 1;
   }
+}
+
+async function cmdDescribeEntry(configPath: string, io: Io): Promise<number> {
+  const structural = await loadConfig(configPath);
+  const host = await loadAppPlugins(structural);
+  const config = resolveConfig(structural, host);
+  return cmdDescribe(structural, config, io);
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -516,16 +532,27 @@ async function cmdPlugins(configPath: string, io: Io): Promise<number> {
  * Start the MCP server on stdio. Human diagnostics go to stderr only —
  * stdout belongs to the MCP JSON-RPC transport.
  */
+async function loadCatalogIfPresent(path: string) {
+  try {
+    await access(path);
+  } catch {
+    return undefined;
+  }
+  return loadCatalogFile(path);
+}
+
 async function cmdServe(configPath: string, io: Io): Promise<number> {
   const structural = await loadConfig(configPath);
   const host = await loadAppPlugins(structural);
   const config = resolveConfig(structural, host);
+  const catalog = await loadCatalogIfPresent(config.catalog.path);
   const store = new Store(config.store.path);
   io.err(
-    `KnotSync MCP server on stdio. Store: ${config.store.path}. Audit: ${config.server.auditLog}.`,
+    `KnotSync MCP server on stdio. Store: ${config.store.path}. Audit: ${config.server.auditLog}.` +
+      (catalog ? ` Catalog: ${config.catalog.path}.` : ""),
   );
   try {
-    await serveStdio({ store, config, host });
+    await serveStdio({ store, config, host, catalog });
   } finally {
     store.close();
   }
