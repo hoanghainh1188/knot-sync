@@ -31,7 +31,7 @@ Work through the changes **in order**, one at a time:
 | 1 | `add-plugin-system` | ✅ done |
 | 2 | `add-office-extraction` | ✅ done |
 | 3 | `add-ja-vi-cleaning` | ✅ done |
-| 4 | `add-pii-masking` | ⏳ |
+| 4 | `add-pii-masking` | ✅ done |
 | 5 | `add-injection-guard` | ⏳ |
 | 6 | `add-html-scan-report` | ⏳ |
 | 7 | `add-mcp-server` | ⏳ |

@@ -56,9 +56,10 @@ export interface Cleaner {
   clean(document: Document): Document | Promise<Document>;
 }
 
-/** Stub until a later change fills in behavior. */
+/** Detects PII spans in a plain-text string (no network, no source writes). */
 export interface PiiRule {
   id: string;
+  find(text: string): Array<{ start: number; end: number }>;
 }
 
 /** Stub until a later change fills in behavior. */
@@ -267,7 +268,14 @@ export function createPluginHost(options: CreatePluginHostOptions = {}): PluginH
         }
         registerInMap(cleaners, "cleaner", c, plugin.name, extensions);
       },
-      registerPiiRule: (r) => registerInMap(piiRules, "pii-rule", r, plugin.name, extensions),
+      registerPiiRule: (r) => {
+        if (typeof r.find !== "function") {
+          throw new ConfigError(
+            `Plugin "${plugin.name}" pii-rule "${r.id}" must provide find(text).`,
+          );
+        }
+        registerInMap(piiRules, "pii-rule", r, plugin.name, extensions);
+      },
       registerGuardRule: (r) => registerInMap(guardRules, "guard-rule", r, plugin.name, extensions),
       registerCatalogSource: (s) =>
         registerInMap(catalogSources, "catalog-source", s, plugin.name, extensions),

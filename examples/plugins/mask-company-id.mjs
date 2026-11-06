@@ -1,5 +1,5 @@
 /**
- * Example KnotSync plugin: registers a stub PII rule id.
+ * Example KnotSync plugin: registers a PII rule that finds company-id-like spans.
  * Plugins run in-process with full trust — only load modules you trust.
  *
  * Config:
@@ -14,10 +14,28 @@ const plugin = {
   apiVersion: 1,
   register(api) {
     const settings = api.getPluginSettings();
-    // Stub rule for the plugin system demo. Real masking lands in add-pii-masking.
+    const pattern =
+      settings && typeof settings === "object" && typeof settings.pattern === "string"
+        ? settings.pattern
+        : "ACME-\\d+";
+    let re;
+    try {
+      re = new RegExp(pattern, "g");
+    } catch {
+      re = /ACME-\d+/g;
+    }
     api.registerPiiRule({
       id: "mask-company-id",
-      settings: settings ?? {},
+      find(text) {
+        const hits = [];
+        re.lastIndex = 0;
+        let m;
+        while ((m = re.exec(text)) !== null) {
+          hits.push({ start: m.index, end: m.index + m[0].length });
+          if (m[0].length === 0) re.lastIndex += 1;
+        }
+        return hits;
+      },
     });
   },
 };

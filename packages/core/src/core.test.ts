@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import {
   ConfigError,
   DEFAULT_CLEANING_CONFIG,
+  DEFAULT_PII_MODE,
   parseCleaningConfig,
   parseConfig,
+  parsePiiConfig,
   resolveConfig,
   resolvePath,
   starterConfigYaml,
@@ -77,6 +79,22 @@ test("starter config parses", () => {
   assert.equal(cfg.scan.oldFileYears, 5);
   assert.equal(cfg.scan.hash, true);
   assert.deepEqual(cfg.cleaning, DEFAULT_CLEANING_CONFIG);
+  assert.equal(cfg.pii.mode, DEFAULT_PII_MODE);
+  assert.match(cfg.pii.saltPath, /pii-salt$/);
+});
+
+test("pii defaults to mask when omitted", () => {
+  const structural = parseConfig("sources:\n  - id: a\n    type: fs\n    path: /x\n", "/work");
+  assert.equal(structural.pii.mode, "mask");
+  assert.equal(structural.pii.saltPath, "/work/.data/pii-salt");
+});
+
+test("pii rejects bad mode and unknown keys", () => {
+  assert.throws(
+    () => parsePiiConfig({ mode: "redact" }, "/salt", "/base"),
+    /pii\.mode.*mask, hash, drop/,
+  );
+  assert.throws(() => parsePiiConfig({ foo: true }, "/salt", "/base"), /Unknown key "foo".*pii/);
 });
 
 test("cleaning defaults to all true when omitted", () => {

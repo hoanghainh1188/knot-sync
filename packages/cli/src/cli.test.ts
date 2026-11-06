@@ -79,6 +79,8 @@ test("plugins lists built-in fs connector", async () => {
     assert.match(text, /extractor:office/);
     assert.match(text, /cleaner-ja-vi@/);
     assert.match(text, /cleaner:cleaner-ja-vi/);
+    assert.match(text, /pii-basic@/);
+    assert.match(text, /pii-rule:email/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -191,6 +193,63 @@ test("run cleans JP/VN text and retains original plus tokens", async () => {
     assert.equal(typeof doc!.metadata.tokensBefore, "number");
     assert.equal(typeof doc!.metadata.tokensAfter, "number");
     store.close();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("run masks PII and records findings", async () => {
+  const { Store } = await import("@hoanghainh/knot-sync-store-sqlite");
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-pii-"));
+  try {
+    const share = join(root, "share");
+    await mkdir(share, { recursive: true });
+    await writeFile(join(share, "note.txt"), "contact secret@example.com please\n", "utf8");
+    const config = join(root, "cfg.yaml");
+    let io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], io), 0);
+    io = capture();
+    assert.equal(await main(["scan", "-c", config], io), 0);
+    io = capture();
+    assert.equal(await main(["run", "-c", config], io), 0);
+
+    const store = new Store(join(root, ".data/store.sqlite"));
+    const hits = store.search("contact");
+    assert.ok(hits.length >= 1);
+    const doc = store.getDocument(hits[0]!.id);
+    assert.ok(doc);
+    assert.doesNotMatch(doc!.content, /secret@example.com/);
+    assert.match(doc!.content, /\*\*\*/);
+    assert.ok(doc!.pii.some((p) => p.rule === "email"));
+    assert.doesNotMatch(JSON.stringify(doc!.metadata), /secret@example.com/);
+    store.close();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("scan --pii estimates without printing matches", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-pii-scan-"));
+  try {
+    const share = join(root, "share");
+    await mkdir(share, { recursive: true });
+    await writeFile(join(share, "a.txt"), "mail secret@example.com\n", "utf8");
+    await writeFile(join(share, "b.txt"), "no pii here\n", "utf8");
+    const config = join(root, "cfg.yaml");
+    let io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], io), 0);
+
+    io = capture();
+    assert.equal(await main(["scan", "-c", config, "--json", "--pii"], io), 0);
+    const out = io.stdout.join("\n");
+    assert.doesNotMatch(out, /secret@example.com/);
+    const result = JSON.parse(out);
+    assert.equal(result.sources[0].piiLikelyFiles, 1);
+
+    io = capture();
+    assert.equal(await main(["scan", "-c", config, "--json"], io), 0);
+    const plain = JSON.parse(io.stdout.join("\n"));
+    assert.equal(plain.sources[0].piiLikelyFiles, undefined);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

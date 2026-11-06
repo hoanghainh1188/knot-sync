@@ -1,4 +1,4 @@
-import { access, writeFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import {
@@ -10,9 +10,13 @@ import {
   type FileEntry,
   type ScanIssue,
 } from "@hoanghainh/knot-sync-core";
+import { applyPiiToDocument, textHasPii } from "@hoanghainh/knot-sync-pii-basic";
 import { Store, type SourceStats } from "@hoanghainh/knot-sync-store-sqlite";
 import { formatBytes, formatCount, table } from "./format.js";
 import { findExtractor, loadAppPlugins } from "./plugins.js";
+
+const PII_SAMPLE_EXTS = new Set([".txt", ".md", ".csv", ".tsv"]);
+const PII_SAMPLE_MAX_BYTES = 256 * 1024;
 
 export const VERSION = "0.0.1";
 
@@ -54,6 +58,7 @@ init options:
 
 scan options:
   --json                Print results as JSON
+  --pii                 Estimate how many text files look like they contain PII
   --report              (coming soon) Also write an HTML report
 
 plugins:
@@ -74,6 +79,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         path: { type: "string" },
         force: { type: "boolean" },
         json: { type: "boolean" },
+        pii: { type: "boolean" },
         report: { type: "boolean" },
       },
     });
@@ -101,7 +107,13 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
       case "init":
         return await cmdInit(configPath, values.path, Boolean(values.force), io);
       case "scan":
-        return await cmdScan(configPath, Boolean(values.json), Boolean(values.report), io);
+        return await cmdScan(
+          configPath,
+          Boolean(values.json),
+          Boolean(values.report),
+          Boolean(values.pii),
+          io,
+        );
       case "run":
         return await cmdRun(configPath, io);
       case "plugins":
@@ -153,9 +165,39 @@ interface ScanResult {
   stats: SourceStats;
   issues: ScanIssue[];
   topDuplicates: { size: number; paths: string[] }[];
+  /** Present only when scan --pii was used. */
+  piiLikelyFiles?: number;
 }
 
-async function cmdScan(configPath: string, json: boolean, report: boolean, io: Io): Promise<number> {
+async function estimatePiiLikelyFiles(
+  files: FileEntry[],
+  host: Awaited<ReturnType<typeof loadAppPlugins>>,
+): Promise<number> {
+  let count = 0;
+  const rules = host.piiRules.values();
+  const ruleList = [...rules];
+  for (const file of files) {
+    if (!PII_SAMPLE_EXTS.has(file.ext) || file.size <= 0 || file.size > PII_SAMPLE_MAX_BYTES) {
+      continue;
+    }
+    try {
+      const buf = await readFile(file.absPath);
+      const text = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+      if (textHasPii(text, ruleList)) count += 1;
+    } catch {
+      // Skip unreadable / non-UTF-8; do not print contents.
+    }
+  }
+  return count;
+}
+
+async function cmdScan(
+  configPath: string,
+  json: boolean,
+  report: boolean,
+  piiEstimate: boolean,
+  io: Io,
+): Promise<number> {
   const structural = await loadConfig(configPath);
   const host = await loadAppPlugins(structural);
   const config = resolveConfig(structural, host);
@@ -189,11 +231,15 @@ async function cmdScan(configPath: string, json: boolean, report: boolean, io: I
       if (io.progress && lastShown > 0) process.stderr.write("\r\x1b[K");
 
       store.replaceScan(source.id, files, issues);
-      results.push({
+      const row: ScanResult = {
         stats: store.stats(source.id, config.scan.oldFileYears),
         issues,
         topDuplicates: store.duplicateGroups(source.id, 5),
-      });
+      };
+      if (piiEstimate) {
+        row.piiLikelyFiles = await estimatePiiLikelyFiles(files, host);
+      }
+      results.push(row);
     }
   } finally {
     store.close();
@@ -264,27 +310,75 @@ async function cmdRun(configPath: string, io: Io): Promise<number> {
             currentCleanerId = cleaner.id;
             document = await cleaner.clean(document);
           }
-          store.upsertDocument(document);
-          extracted += 1;
         } catch (err) {
           const message =
             `Cleaner "${currentCleanerId}" failed (${(err as Error).message || String(err)}). ` +
             `Disable steps under cleaning: or fix the input, then retry "knot-sync run".`;
-          // Drop sourceFileHash so the next run retries instead of treating this as unchanged.
-          const { sourceFileHash: _drop, ...restMeta } = result.document.metadata;
+          const {
+            sourceFileHash: _drop,
+            originalContent: _oc,
+            originalTables: _ot,
+            ...restMeta
+          } = result.document.metadata;
           void _drop;
+          void _oc;
+          void _ot;
+          // Never persist unmasked PII on error — omit originals when rules are active.
           store.upsertDocument({
             ...result.document,
+            content: "",
+            tables: [],
+            pii: [],
             metadata: {
               ...restMeta,
               status: "error",
               errorMessage: message,
-              originalContent:
-                result.document.metadata.originalContent ?? result.document.content,
+              ...(host.piiRules.size === 0
+                ? {
+                    originalContent:
+                      result.document.metadata.originalContent ??
+                      result.document.content,
+                  }
+                : {}),
             },
           });
           failed += 1;
           issues.push({ path: file.relPath, code: "CLEAN", message });
+          continue;
+        }
+
+        try {
+          if (host.piiRules.size > 0) {
+            document = applyPiiToDocument(document, host.piiRules.values(), structural.pii);
+          }
+          store.upsertDocument(document);
+          extracted += 1;
+        } catch (err) {
+          const message =
+            `PII masking failed (${(err as Error).message || String(err)}). ` +
+            `Check pii: settings or disable rules, then retry "knot-sync run".`;
+          const {
+            sourceFileHash: _drop,
+            originalContent: _oc,
+            originalTables: _ot,
+            ...restMeta
+          } = document.metadata;
+          void _drop;
+          void _oc;
+          void _ot;
+          store.upsertDocument({
+            ...document,
+            content: "",
+            tables: [],
+            pii: [],
+            metadata: {
+              ...restMeta,
+              status: "error",
+              errorMessage: message,
+            },
+          });
+          failed += 1;
+          issues.push({ path: file.relPath, code: "PII", message });
         }
       } catch (err) {
         failed += 1;
@@ -348,17 +442,16 @@ function printStats(r: ScanResult, oldYears: number, io: Io): void {
   }
 
   io.out("\n  Health:");
-  io.out(
-    table(
-      [
-        ["Duplicate copies", formatCount(s.duplicateFiles), `${formatBytes(s.duplicateBytes)} wasted`],
-        [`Older than ${oldYears} years`, formatCount(s.oldFiles), ""],
-        ["Empty files", formatCount(s.emptyFiles), ""],
-        ["Unreadable", formatCount(s.issues), ""],
-      ],
-      "    ",
-    ),
-  );
+  const healthRows: string[][] = [
+    ["Duplicate copies", formatCount(s.duplicateFiles), `${formatBytes(s.duplicateBytes)} wasted`],
+    [`Older than ${oldYears} years`, formatCount(s.oldFiles), ""],
+    ["Empty files", formatCount(s.emptyFiles), ""],
+    ["Unreadable", formatCount(s.issues), ""],
+  ];
+  if (r.piiLikelyFiles !== undefined) {
+    healthRows.push(["Likely PII (sample)", formatCount(r.piiLikelyFiles), ""]);
+  }
+  io.out(table(healthRows, "    "));
 
   if (r.topDuplicates.length > 0) {
     io.out("\n  Biggest duplicates:");

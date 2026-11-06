@@ -107,6 +107,15 @@ export interface CleaningConfig {
   tokenReduce: boolean;
 }
 
+export type PiiMode = "mask" | "hash" | "drop";
+
+/** PII masking settings for the built-in pii-basic plugin. */
+export interface PiiConfig {
+  mode: PiiMode;
+  /** Absolute path to the hash salt file after config loading. */
+  saltPath: string;
+}
+
 export interface AppConfig {
   /** Directory of the config file. Relative paths resolve from here. */
   baseDir: string;
@@ -114,6 +123,7 @@ export interface AppConfig {
   store: StoreConfig;
   scan: ScanConfig;
   cleaning: CleaningConfig;
+  pii: PiiConfig;
   /** Extra plugins listed in config (built-ins are separate). */
   plugins: string[];
   /** Opaque top-level settings keyed by plugin name. */
