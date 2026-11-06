@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import {
   DEFAULT_EXCLUDES,
   createPluginHost,
@@ -86,7 +86,7 @@ test("parseFsSource normalizes extensions and excludes", () => {
     { id: "a", type: "fs", path: "./share", extensions: ["XLSX", ".Pdf"], exclude: ["tmp"] },
     { baseDir: "/work", index: 0 },
   );
-  assert.equal(src.path, "/work/share");
+  assert.equal(src.path, resolve("/work", "share"));
   assert.deepEqual(src.extensions, [".xlsx", ".pdf"]);
   assert.ok(src.exclude.includes("node_modules"));
   assert.ok(src.exclude.includes("tmp"));
