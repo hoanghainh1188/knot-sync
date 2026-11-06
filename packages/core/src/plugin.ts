@@ -50,9 +50,10 @@ export interface Extractor {
   extract(file: FileEntry, ctx?: ExtractContext): Promise<ExtractResult>;
 }
 
-/** Stub until a later change fills in behavior. */
+/** Transforms an extracted Document in-memory (no source writes, no network). */
 export interface Cleaner {
   id: string;
+  clean(document: Document): Document | Promise<Document>;
 }
 
 /** Stub until a later change fills in behavior. */
@@ -258,7 +259,14 @@ export function createPluginHost(options: CreatePluginHostOptions = {}): PluginH
         }
         registerInMap(extractors, "extractor", e, plugin.name, extensions);
       },
-      registerCleaner: (c) => registerInMap(cleaners, "cleaner", c, plugin.name, extensions),
+      registerCleaner: (c) => {
+        if (typeof c.clean !== "function") {
+          throw new ConfigError(
+            `Plugin "${plugin.name}" cleaner "${c.id}" must provide clean(document).`,
+          );
+        }
+        registerInMap(cleaners, "cleaner", c, plugin.name, extensions);
+      },
       registerPiiRule: (r) => registerInMap(piiRules, "pii-rule", r, plugin.name, extensions),
       registerGuardRule: (r) => registerInMap(guardRules, "guard-rule", r, plugin.name, extensions),
       registerCatalogSource: (s) =>

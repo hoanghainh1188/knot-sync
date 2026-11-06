@@ -4,6 +4,7 @@
     { "path": "packages/core" },
     { "path": "packages/connector-fs" },
     { "path": "packages/extractor-office" },
+    { "path": "packages/cleaner-ja-vi" },
     { "path": "packages/store-sqlite" },
     { "path": "packages/cli" }
   ]

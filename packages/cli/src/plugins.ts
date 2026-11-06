@@ -1,3 +1,4 @@
+import { createCleanerJaViPlugin } from "@hoanghainh/knot-sync-cleaner-ja-vi";
 import fsPlugin from "@hoanghainh/knot-sync-connector-fs";
 import officePlugin from "@hoanghainh/knot-sync-extractor-office";
 import {
@@ -8,12 +9,13 @@ import {
   type StructuralConfig,
 } from "@hoanghainh/knot-sync-core";
 
-/** Built-in plugins always loaded before config `plugins:`. */
-export const BUILTIN_PLUGINS = [fsPlugin, officePlugin];
-
 export async function loadAppPlugins(structural: StructuralConfig): Promise<PluginHost> {
   return loadPlugins({
-    builtins: BUILTIN_PLUGINS,
+    builtins: [
+      fsPlugin,
+      officePlugin,
+      createCleanerJaViPlugin(structural.cleaning),
+    ],
     entries: structural.plugins,
     baseDir: structural.baseDir,
     pluginSettings: structural.pluginSettings,

@@ -42,17 +42,39 @@ test("createPluginHost registers extensions", () => {
           extensions: [".xlsx"],
           extract: async () => ({ ok: false, code: "SKIP", message: "stub" }),
         });
+        api.registerCleaner({
+          id: "noop",
+          clean: (doc) => doc,
+        });
       },
     }),
   );
   assert.equal(host.connectors.has("fs"), true);
   assert.equal(host.piiRules.has("email"), true);
   assert.equal(host.extractors.get("office")?.extensions.includes(".xlsx"), true);
+  assert.equal(typeof host.cleaners.get("noop")?.clean, "function");
   assert.deepEqual(host.loaded[0]?.extensions, [
     { point: "connector", id: "fs" },
     { point: "pii-rule", id: "email" },
     { point: "extractor", id: "office" },
+    { point: "cleaner", id: "noop" },
   ]);
+});
+
+test("rejects cleaner without clean()", () => {
+  const host = createPluginHost();
+  assert.throws(
+    () =>
+      host.registerPlugin(
+        makePlugin({
+          name: "bad-cleaner",
+          onRegister: (api) => {
+            api.registerCleaner({ id: "x" } as never);
+          },
+        }),
+      ),
+    /must provide clean/,
+  );
 });
 
 test("rejects incompatible apiVersion", () => {

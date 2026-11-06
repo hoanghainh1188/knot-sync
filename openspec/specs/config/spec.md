@@ -90,12 +90,33 @@ loading with a message naming the duplicate.
 - **THEN** loading fails with a message naming the duplicate entry
 
 ### Requirement: Reserved plugin config keys
-Top-level config keys other than `sources`, `store`, `scan`, and `plugins`
-SHALL be treated as plugin-owned settings and left as opaque objects for the
-matching plugin. The core config loader MUST NOT reject unknown top-level keys
-that are valid YAML objects or omit them.
+Top-level config keys other than `sources`, `store`, `scan`, `plugins`, and
+`cleaning` SHALL be treated as plugin-owned settings and left as opaque objects
+for the matching plugin. The core config loader MUST NOT reject unknown
+top-level keys that are valid YAML objects or omit them.
 
 #### Scenario: Plugin settings preserved
 - **GIVEN** a config with a top-level key `mask-company-id: { pattern: "ACME-.*" }`
 - **WHEN** the config is loaded
 - **THEN** that object is available to the plugin named `mask-company-id` after plugins load
+
+### Requirement: Optional cleaning section
+
+Config MAY include a `cleaning` object. Valid boolean keys are: `nfkc`,
+`wareki`, `datesIso`, `legacyVietnamese`, `tokenReduce`. Additional unknown
+keys under `cleaning` SHALL cause config load to fail with a message that
+lists allowed keys.
+
+When `cleaning` is absent, loaders SHALL treat all steps as enabled (`true`).
+
+#### Scenario: Reject unknown cleaning key
+
+- **WHEN** config contains `cleaning: { foo: true }`
+- **THEN** config load fails
+- **AND** the error mentions that `foo` is not allowed under `cleaning`
+
+#### Scenario: Type check
+
+- **WHEN** config contains `cleaning: { nfkc: "yes" }`
+- **THEN** config load fails
+- **AND** the error states that boolean values are required

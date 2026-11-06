@@ -9,6 +9,7 @@
     { "path": "../core" },
     { "path": "../connector-fs" },
     { "path": "../extractor-office" },
+    { "path": "../cleaner-ja-vi" },
     { "path": "../store-sqlite" }
   ]
 }

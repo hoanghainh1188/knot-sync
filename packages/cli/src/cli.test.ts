@@ -77,6 +77,8 @@ test("plugins lists built-in fs connector", async () => {
     assert.match(text, /connector:fs/);
     assert.match(text, /extractor-office@/);
     assert.match(text, /extractor:office/);
+    assert.match(text, /cleaner-ja-vi@/);
+    assert.match(text, /cleaner:cleaner-ja-vi/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -152,6 +154,86 @@ test("plugins loads example mask-company-id plugin", async () => {
     const text = io.stdout.join("\n");
     assert.match(text, /mask-company-id@/);
     assert.match(text, /pii-rule:mask-company-id/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("run cleans JP/VN text and retains original plus tokens", async () => {
+  const { Store } = await import("@hoanghainh/knot-sync-store-sqlite");
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-clean-"));
+  try {
+    const share = join(root, "share");
+    await mkdir(share, { recursive: true });
+    await writeFile(
+      join(share, "note.txt"),
+      "契約 令和5年4月1日 金額２０２４円\n",
+      "utf8",
+    );
+
+    const config = join(root, "cfg.yaml");
+    let io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], io), 0);
+    io = capture();
+    assert.equal(await main(["scan", "-c", config], io), 0);
+    io = capture();
+    assert.equal(await main(["run", "-c", config], io), 0);
+
+    const store = new Store(join(root, ".data/store.sqlite"));
+    const hits = store.search("2023-04-01");
+    assert.ok(hits.length >= 1, "cleaned ISO date is searchable");
+    const doc = store.getDocument(hits[0]!.id);
+    assert.ok(doc);
+    assert.match(doc!.content, /2023-04-01/);
+    assert.match(doc!.content, /2024/);
+    assert.match(String(doc!.metadata.originalContent), /令和5年4月1日/);
+    assert.match(String(doc!.metadata.originalContent), /２０２４/);
+    assert.equal(typeof doc!.metadata.tokensBefore, "number");
+    assert.equal(typeof doc!.metadata.tokensAfter, "number");
+    store.close();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("cleaning.wareki false skips era conversion", async () => {
+  const { Store } = await import("@hoanghainh/knot-sync-store-sqlite");
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-wareki-off-"));
+  try {
+    const share = join(root, "share");
+    await mkdir(share, { recursive: true });
+    await writeFile(join(share, "note.txt"), "契約 令和5年4月1日\n", "utf8");
+    const config = join(root, "cfg.yaml");
+    await writeFile(
+      config,
+      [
+        "sources:",
+        "  - id: shared-folder",
+        "    type: fs",
+        "    path: ./share",
+        "    extensions: [.txt]",
+        "store:",
+        "  path: ./.data/store.sqlite",
+        "cleaning:",
+        "  wareki: false",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    let io = capture();
+    assert.equal(await main(["scan", "-c", config], io), 0);
+    io = capture();
+    assert.equal(await main(["run", "-c", config], io), 0);
+
+    const store = new Store(join(root, ".data/store.sqlite"));
+    const hits = store.search("令和");
+    assert.ok(hits.length >= 1);
+    const doc = store.getDocument(hits[0]!.id);
+    assert.ok(doc);
+    assert.match(doc!.content, /令和5年4月1日|令和5年4月1/);
+    assert.doesNotMatch(doc!.content, /2023-04-01/);
+    store.close();
   } finally {
     await rm(root, { recursive: true, force: true });
   }
