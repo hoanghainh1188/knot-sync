@@ -83,6 +83,23 @@ export async function buildXlsx(rows: string[][]): Promise<Buffer> {
   return Buffer.from(buf);
 }
 
+/** XLSX with a white-on-white cell for guardHiddenText tests. */
+export async function buildXlsxWithHiddenText(hidden: string): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  const sheet = wb.addWorksheet("Sheet1");
+  sheet.addRow(["visible", "secret"]);
+  const cell = sheet.getCell(1, 2);
+  cell.value = hidden;
+  cell.font = { color: { argb: "FFFFFFFF" }, size: 11 };
+  cell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFFFFFFF" },
+  };
+  const buf = await wb.xlsx.writeBuffer();
+  return Buffer.from(buf);
+}
+
 export function buildDocx(paragraph: string): Buffer {
   const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

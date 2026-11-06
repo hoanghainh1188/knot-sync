@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import {
   ConfigError,
   DEFAULT_CLEANING_CONFIG,
+  DEFAULT_GUARD_MODE,
   DEFAULT_PII_MODE,
   parseCleaningConfig,
   parseConfig,
+  parseGuardConfig,
   parsePiiConfig,
   resolveConfig,
   resolvePath,
@@ -81,6 +83,7 @@ test("starter config parses", () => {
   assert.deepEqual(cfg.cleaning, DEFAULT_CLEANING_CONFIG);
   assert.equal(cfg.pii.mode, DEFAULT_PII_MODE);
   assert.match(cfg.pii.saltPath, /pii-salt$/);
+  assert.equal(cfg.guard.mode, DEFAULT_GUARD_MODE);
 });
 
 test("pii defaults to mask when omitted", () => {
@@ -95,6 +98,19 @@ test("pii rejects bad mode and unknown keys", () => {
     /pii\.mode.*mask, hash, drop/,
   );
   assert.throws(() => parsePiiConfig({ foo: true }, "/salt", "/base"), /Unknown key "foo".*pii/);
+});
+
+test("guard defaults to flag when omitted", () => {
+  const structural = parseConfig("sources:\n  - id: a\n    type: fs\n    path: /x\n", "/work");
+  assert.equal(structural.guard.mode, "flag");
+});
+
+test("guard rejects bad mode and unknown keys", () => {
+  assert.throws(
+    () => parseGuardConfig({ mode: "quarantine" }),
+    /guard\.mode.*flag, strip, block/,
+  );
+  assert.throws(() => parseGuardConfig({ foo: true }), /Unknown key "foo".*guard/);
 });
 
 test("cleaning defaults to all true when omitted", () => {

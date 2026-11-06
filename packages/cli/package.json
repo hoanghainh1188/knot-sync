@@ -30,6 +30,7 @@
     "@hoanghainh/knot-sync-connector-fs": "workspace:*",
     "@hoanghainh/knot-sync-core": "workspace:*",
     "@hoanghainh/knot-sync-extractor-office": "workspace:*",
+    "@hoanghainh/knot-sync-guard": "workspace:*",
     "@hoanghainh/knot-sync-pii-basic": "workspace:*",
     "@hoanghainh/knot-sync-store-sqlite": "workspace:*"
   },

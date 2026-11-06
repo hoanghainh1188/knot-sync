@@ -11,6 +11,7 @@
     { "path": "../extractor-office" },
     { "path": "../cleaner-ja-vi" },
     { "path": "../pii-basic" },
+    { "path": "../guard" },
     { "path": "../store-sqlite" }
   ]
 }

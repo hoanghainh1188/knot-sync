@@ -13,6 +13,7 @@ function doc(sourceId: string, loc: string, title: string, content: string): Doc
     tables: [],
     metadata: { dept: "経理" },
     pii: [],
+    guard: [],
     hash: sha256(content),
   };
 }

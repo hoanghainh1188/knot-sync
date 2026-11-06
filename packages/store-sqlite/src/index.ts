@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS documents (
   tables_json   TEXT NOT NULL,
   metadata_json TEXT NOT NULL,
   pii_json      TEXT NOT NULL,
+  guard_json    TEXT NOT NULL DEFAULT '[]',
   hash          TEXT NOT NULL,
   updated_at    TEXT NOT NULL
 );
@@ -132,9 +133,21 @@ export class Store {
     this.db = new DatabaseSync(path);
     this.db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     this.db.exec(SCHEMA);
+    this.ensureGuardColumn();
     this.db
       .prepare("INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', ?)")
       .run(String(SCHEMA_VERSION));
+  }
+
+  /** Older stores created before guard_json need an ALTER. */
+  private ensureGuardColumn(): void {
+    const cols = this.db.prepare("PRAGMA table_info(documents)").all() as Array<{
+      name: string;
+    }>;
+    if (cols.some((c) => c.name === "guard_json")) return;
+    this.db.exec(
+      "ALTER TABLE documents ADD COLUMN guard_json TEXT NOT NULL DEFAULT '[]'",
+    );
   }
 
   close(): void {
@@ -294,12 +307,13 @@ export class Store {
   upsertDocument(doc: Document): void {
     this.db
       .prepare(
-        `INSERT INTO documents (id, source_id, type, title, content, tables_json, metadata_json, pii_json, hash, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO documents (id, source_id, type, title, content, tables_json, metadata_json, pii_json, guard_json, hash, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            source_id = excluded.source_id, type = excluded.type, title = excluded.title,
            content = excluded.content, tables_json = excluded.tables_json,
            metadata_json = excluded.metadata_json, pii_json = excluded.pii_json,
+           guard_json = excluded.guard_json,
            hash = excluded.hash, updated_at = excluded.updated_at`,
       )
       .run(
@@ -311,6 +325,7 @@ export class Store {
         JSON.stringify(doc.tables),
         JSON.stringify(doc.metadata),
         JSON.stringify(doc.pii),
+        JSON.stringify(doc.guard ?? []),
         doc.hash,
         new Date().toISOString(),
       );
@@ -330,6 +345,7 @@ export class Store {
       tables: JSON.parse(row.tables_json!),
       metadata: JSON.parse(row.metadata_json!),
       pii: JSON.parse(row.pii_json!),
+      guard: row.guard_json ? JSON.parse(row.guard_json) : [],
       hash: row.hash!,
     };
   }

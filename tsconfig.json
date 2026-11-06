@@ -6,6 +6,7 @@
     { "path": "packages/extractor-office" },
     { "path": "packages/cleaner-ja-vi" },
     { "path": "packages/pii-basic" },
+    { "path": "packages/guard" },
     { "path": "packages/store-sqlite" },
     { "path": "packages/cli" }
   ]

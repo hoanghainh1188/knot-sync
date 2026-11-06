@@ -10,6 +10,7 @@ import {
   type FileEntry,
   type ScanIssue,
 } from "@hoanghainh/knot-sync-core";
+import { applyGuardToDocument } from "@hoanghainh/knot-sync-guard";
 import { applyPiiToDocument, textHasPii } from "@hoanghainh/knot-sync-pii-basic";
 import { Store, type SourceStats } from "@hoanghainh/knot-sync-store-sqlite";
 import { formatBytes, formatCount, table } from "./format.js";
@@ -318,17 +319,20 @@ async function cmdRun(configPath: string, io: Io): Promise<number> {
             sourceFileHash: _drop,
             originalContent: _oc,
             originalTables: _ot,
+            guardHiddenText: _ht,
             ...restMeta
           } = result.document.metadata;
           void _drop;
           void _oc;
           void _ot;
+          void _ht;
           // Never persist unmasked PII on error — omit originals when rules are active.
           store.upsertDocument({
             ...result.document,
             content: "",
             tables: [],
             pii: [],
+            guard: [],
             metadata: {
               ...restMeta,
               status: "error",
@@ -351,8 +355,6 @@ async function cmdRun(configPath: string, io: Io): Promise<number> {
           if (host.piiRules.size > 0) {
             document = applyPiiToDocument(document, host.piiRules.values(), structural.pii);
           }
-          store.upsertDocument(document);
-          extracted += 1;
         } catch (err) {
           const message =
             `PII masking failed (${(err as Error).message || String(err)}). ` +
@@ -361,16 +363,19 @@ async function cmdRun(configPath: string, io: Io): Promise<number> {
             sourceFileHash: _drop,
             originalContent: _oc,
             originalTables: _ot,
+            guardHiddenText: _ht,
             ...restMeta
           } = document.metadata;
           void _drop;
           void _oc;
           void _ot;
+          void _ht;
           store.upsertDocument({
             ...document,
             content: "",
             tables: [],
             pii: [],
+            guard: [],
             metadata: {
               ...restMeta,
               status: "error",
@@ -379,6 +384,58 @@ async function cmdRun(configPath: string, io: Io): Promise<number> {
           });
           failed += 1;
           issues.push({ path: file.relPath, code: "PII", message });
+          continue;
+        }
+
+        try {
+          if (host.guardRules.size > 0) {
+            document = applyGuardToDocument(
+              document,
+              host.guardRules.values(),
+              structural.guard,
+            );
+            if (document.metadata.status === "error") {
+              store.upsertDocument(document);
+              failed += 1;
+              issues.push({
+                path: file.relPath,
+                code: "GUARD",
+                message: String(document.metadata.errorMessage ?? "blocked by guard"),
+              });
+              continue;
+            }
+          }
+          store.upsertDocument(document);
+          extracted += 1;
+        } catch (err) {
+          const message =
+            `Prompt-injection guard failed (${(err as Error).message || String(err)}). ` +
+            `Check guard: settings or disable rules, then retry "knot-sync run".`;
+          const {
+            sourceFileHash: _drop,
+            originalContent: _oc,
+            originalTables: _ot,
+            guardHiddenText: _ht,
+            ...restMeta
+          } = document.metadata;
+          void _drop;
+          void _oc;
+          void _ot;
+          void _ht;
+          store.upsertDocument({
+            ...document,
+            content: "",
+            tables: [],
+            pii: document.pii,
+            guard: document.guard ?? [],
+            metadata: {
+              ...restMeta,
+              status: "error",
+              errorMessage: message,
+            },
+          });
+          failed += 1;
+          issues.push({ path: file.relPath, code: "GUARD", message });
         }
       } catch (err) {
         failed += 1;

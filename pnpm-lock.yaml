@@ -35,6 +35,9 @@ importers:
       '@hoanghainh/knot-sync-extractor-office':
         specifier: workspace:*
         version: link:../extractor-office
+      '@hoanghainh/knot-sync-guard':
+        specifier: workspace:*
+        version: link:../guard
       '@hoanghainh/knot-sync-pii-basic':
         specifier: workspace:*
         version: link:../pii-basic
@@ -68,6 +71,12 @@ importers:
       unpdf:
         specifier: ^1.1.0
         version: 1.9.1
+
+  packages/guard:
+    dependencies:
+      '@hoanghainh/knot-sync-core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/pii-basic:
     dependencies:

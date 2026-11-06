@@ -173,6 +173,15 @@ function scrubMetadataPii(
       delete metadata.originalTables;
     }
   }
+  if (typeof metadata.guardHiddenText === "string") {
+    const spans = collectFindings(metadata.guardHiddenText, rules);
+    metadata.guardHiddenText = applyModeToText(
+      metadata.guardHiddenText,
+      spans,
+      mode,
+      salt,
+    );
+  }
   return metadata;
 }
 

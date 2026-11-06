@@ -103,6 +103,22 @@ test("rejects pii-rule without find()", () => {
   );
 });
 
+test("rejects guard-rule without find()", () => {
+  const host = createPluginHost();
+  assert.throws(
+    () =>
+      host.registerPlugin(
+        makePlugin({
+          name: "bad-guard",
+          onRegister: (api) => {
+            api.registerGuardRule({ id: "instruction-en" } as never);
+          },
+        }),
+      ),
+    /must provide find/,
+  );
+});
+
 test("rejects incompatible apiVersion", () => {
   const host = createPluginHost();
   assert.throws(
