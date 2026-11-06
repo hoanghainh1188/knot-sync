@@ -18,7 +18,7 @@ import {
 import { extOf, isJunkFile, typeFromExt } from "./filetype.js";
 import { documentId, sha256 } from "./hash.js";
 import { PLUGIN_API_VERSION, createPluginHost, type KnotSyncPlugin } from "./plugin.js";
-import type { FsSourceConfig } from "./types.js";
+import { isFsSource, type FsSourceConfig } from "./types.js";
 
 function fsPlugin(): KnotSyncPlugin {
   return {
@@ -78,7 +78,10 @@ test("hash helpers are stable", () => {
 test("starter config parses", () => {
   const cfg = withFs(starterConfigYaml("./share"), "/base");
   assert.equal(cfg.sources.length, 1);
-  assert.equal(cfg.sources[0]?.path, "/base/share");
+  const first = cfg.sources[0];
+  assert.ok(first);
+  assert.ok(isFsSource(first));
+  assert.equal(first.path, "/base/share");
   assert.equal(cfg.store.path, "/base/.data/store.sqlite");
   assert.equal(cfg.scan.oldFileYears, 5);
   assert.equal(cfg.scan.hash, true);

@@ -75,6 +75,11 @@ test("plugins lists built-in fs connector", async () => {
     assert.match(text, /full trust/);
     assert.match(text, /fs@/);
     assert.match(text, /connector:fs/);
+    assert.match(text, /connector-sql@/);
+    assert.match(text, /connector:postgres/);
+    assert.match(text, /connector:mysql/);
+    assert.match(text, /mcp-tool:describe_table/);
+    assert.match(text, /mcp-tool:query_table/);
     assert.match(text, /extractor-office@/);
     assert.match(text, /extractor:office/);
     assert.match(text, /cleaner-ja-vi@/);

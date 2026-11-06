@@ -1,5 +1,6 @@
 import { createCleanerJaViPlugin } from "@hoanghainh/knot-sync-cleaner-ja-vi";
 import fsPlugin from "@hoanghainh/knot-sync-connector-fs";
+import { createSqlPlugin } from "@hoanghainh/knot-sync-connector-sql";
 import officePlugin from "@hoanghainh/knot-sync-extractor-office";
 import { createGuardPlugin } from "@hoanghainh/knot-sync-guard";
 import { createMcpToolsPlugin } from "@hoanghainh/knot-sync-mcp-server";
@@ -16,6 +17,7 @@ export async function loadAppPlugins(structural: StructuralConfig): Promise<Plug
   return loadPlugins({
     builtins: [
       fsPlugin,
+      createSqlPlugin(),
       officePlugin,
       createCleanerJaViPlugin(structural.cleaning),
       createPiiBasicPlugin(structural.pii),

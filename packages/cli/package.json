@@ -28,6 +28,7 @@
   "dependencies": {
     "@hoanghainh/knot-sync-cleaner-ja-vi": "workspace:*",
     "@hoanghainh/knot-sync-connector-fs": "workspace:*",
+    "@hoanghainh/knot-sync-connector-sql": "workspace:*",
     "@hoanghainh/knot-sync-core": "workspace:*",
     "@hoanghainh/knot-sync-extractor-office": "workspace:*",
     "@hoanghainh/knot-sync-guard": "workspace:*",
