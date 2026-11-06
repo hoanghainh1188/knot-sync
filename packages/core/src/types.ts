@@ -27,6 +27,14 @@ export interface PiiFinding {
   end: number;
 }
 
+export interface GuardFinding {
+  /** Rule that matched, e.g. "instruction-en", "controls". */
+  rule: string;
+  /** Character offsets in the pre-transform text (content or hidden channel). */
+  start: number;
+  end: number;
+}
+
 export interface TableData {
   name?: string;
   headers: string[];
@@ -44,6 +52,8 @@ export interface Document {
   tables: TableData[];
   metadata: Record<string, MetadataValue>;
   pii: PiiFinding[];
+  /** Prompt-injection / guard findings (offsets into pre-transform text). */
+  guard: GuardFinding[];
   /** Hash of the normalized content, for change / duplicate detection. */
   hash: string;
 }
@@ -116,6 +126,14 @@ export interface PiiConfig {
   saltPath: string;
 }
 
+export type GuardMode = "flag" | "strip" | "block";
+export type GuardRisk = "none" | "low" | "medium" | "high";
+
+/** Prompt-injection guard settings for the built-in guard plugin. */
+export interface GuardConfig {
+  mode: GuardMode;
+}
+
 export interface AppConfig {
   /** Directory of the config file. Relative paths resolve from here. */
   baseDir: string;
@@ -124,6 +142,7 @@ export interface AppConfig {
   scan: ScanConfig;
   cleaning: CleaningConfig;
   pii: PiiConfig;
+  guard: GuardConfig;
   /** Extra plugins listed in config (built-ins are separate). */
   plugins: string[];
   /** Opaque top-level settings keyed by plugin name. */

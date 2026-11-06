@@ -31,7 +31,10 @@ document metadata. Toggle steps under config `cleaning:` (all enabled by
 default). Then built-in PII rules mask emails, JP/VN phones, CCCD, My Number,
 and card numbers (`pii.mode`: `mask` | `hash` | `drop`); findings are stored
 without raw values. `scan --pii` estimates how many small text files look like
-they contain PII without storing matches. Unchanged files (same content hash)
+they contain PII without storing matches. After PII, the built-in guard
+(`guard.mode`: `flag` | `strip` | `block`) detects instruction-like phrases
+(EN/JP/VN), zero-width/bidi controls, and extractor-exposed hidden text; risk
+and spans are stored on `Document.guard`. Unchanged files (same content hash)
 are skipped. Unsupported or broken files are reported as issues; the run
 continues.
 
@@ -68,7 +71,7 @@ cryptic fields (`TKSK_CD`, `ma_kh`…) so AI agents call tools correctly.
 - ✅ Office extraction (`run`, built-in `extractor-office` plugin)
 - ✅ JP/VN cleaning (`cleaner-ja-vi`, config `cleaning:`)
 - ✅ PII masking (`pii-basic`, config `pii:`, `scan --pii`)
-- ⏳ Prompt-injection guard
+- ✅ Prompt-injection guard (`guard`, config `guard:`)
 - ⏳ `scan --report` (one-file HTML), MCP server (`serve`), PostgreSQL / MySQL
 - ⏳ Semantic Catalog (`describe`, reads テーブル定義書)
 
@@ -93,6 +96,7 @@ Packages:
 | `packages/extractor-office` | Built-in extractor for Office/text files (`run`) |
 | `packages/cleaner-ja-vi` | Built-in JP/VN text cleaner (NFKC, wareki, ISO dates, TCVN3/VNI, token reduce) |
 | `packages/pii-basic` | Built-in PII detection/masking (email, phones, CCCD, My Number, Luhn) |
+| `packages/guard` | Built-in prompt-injection guard (EN/JP/VN phrases, controls, hidden text) |
 | `packages/store-sqlite` | `node:sqlite` store, FTS5 trigram search (works for 日本語 / Tiếng Việt) |
 | `packages/cli` | `knot-sync` command |
 

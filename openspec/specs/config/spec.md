@@ -91,9 +91,9 @@ loading with a message naming the duplicate.
 
 ### Requirement: Reserved plugin config keys
 Top-level config keys other than `sources`, `store`, `scan`, `plugins`,
-`cleaning`, and `pii` SHALL be treated as plugin-owned settings and left as
-opaque objects for the matching plugin. The core config loader MUST NOT reject
-unknown top-level keys that are valid YAML objects or omit them.
+`cleaning`, `pii`, and `guard` SHALL be treated as plugin-owned settings and
+left as opaque objects for the matching plugin. The core config loader MUST NOT
+reject unknown top-level keys that are valid YAML objects or omit them.
 
 #### Scenario: Plugin settings preserved
 - **GIVEN** a config with a top-level key `mask-company-id: { pattern: "ACME-.*" }`
@@ -140,4 +140,24 @@ allowed keys. Invalid `mode` values SHALL fail similarly.
 #### Scenario: Reject bad mode
 
 - **WHEN** config contains `pii: { mode: redact }`
+- **THEN** config load fails and the error lists allowed modes
+
+### Requirement: Optional guard section
+
+Config MAY include a `guard` object. Allowed keys:
+
+- `mode` — string enum: `flag` | `strip` | `block` (default `flag` when `guard`
+  omitted or `mode` omitted)
+
+Unknown keys under `guard` SHALL fail config load with an actionable error
+listing allowed keys. Invalid `mode` values SHALL fail similarly.
+
+#### Scenario: Default mode
+
+- **WHEN** config has no `guard` key
+- **THEN** effective mode is `flag`
+
+#### Scenario: Reject bad mode
+
+- **WHEN** config contains `guard: { mode: quarantine }`
 - **THEN** config load fails and the error lists allowed modes

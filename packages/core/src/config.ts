@@ -6,6 +6,8 @@ import type { PluginHost } from "./plugin.js";
 import type {
   AppConfig,
   CleaningConfig,
+  GuardConfig,
+  GuardMode,
   PiiConfig,
   PiiMode,
   ScanConfig,
@@ -37,12 +39,18 @@ const CORE_TOP_LEVEL_KEYS = new Set([
   "plugins",
   "cleaning",
   "pii",
+  "guard",
 ]);
 
 const PII_MODES = new Set<PiiMode>(["mask", "hash", "drop"]);
 const PII_KEYS = new Set(["mode", "saltPath"]);
 
 export const DEFAULT_PII_MODE: PiiMode = "mask";
+
+const GUARD_MODES = new Set<GuardMode>(["flag", "strip", "block"]);
+const GUARD_KEYS = new Set(["mode"]);
+
+export const DEFAULT_GUARD_MODE: GuardMode = "flag";
 
 const CLEANING_KEYS = [
   "nfkc",
@@ -94,10 +102,39 @@ export interface StructuralConfig {
   scan: ScanConfig;
   cleaning: CleaningConfig;
   pii: PiiConfig;
+  guard: GuardConfig;
   /** Plugin entries as written in config (relative paths or package names). */
   plugins: string[];
   /** Opaque top-level keys for plugins, keyed by plugin name. */
   pluginSettings: Record<string, unknown>;
+}
+
+/** Parse optional `guard:` section. */
+export function parseGuardConfig(raw: unknown): GuardConfig {
+  if (raw === undefined || raw === null) {
+    return { mode: DEFAULT_GUARD_MODE };
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ConfigError('"guard" must be an object (e.g. { mode: flag }).');
+  }
+  const obj = raw as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    if (!GUARD_KEYS.has(key)) {
+      throw new ConfigError(
+        `Unknown key "${key}" under "guard". Allowed keys: mode.`,
+      );
+    }
+  }
+  let mode: GuardMode = DEFAULT_GUARD_MODE;
+  if (obj.mode !== undefined) {
+    if (typeof obj.mode !== "string" || !GUARD_MODES.has(obj.mode as GuardMode)) {
+      throw new ConfigError(
+        `"guard.mode" must be one of: flag, strip, block (got ${JSON.stringify(obj.mode)}).`,
+      );
+    }
+    mode = obj.mode as GuardMode;
+  }
+  return { mode };
 }
 
 /** Parse optional `pii:` section. `defaultSaltPath` is absolute. */
@@ -238,6 +275,7 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
   );
   const defaultSaltPath = resolve(dirname(storePath), "pii-salt");
   const pii = parsePiiConfig(c.pii, defaultSaltPath, baseDir);
+  const guard = parseGuardConfig(c.guard);
 
   const pluginSettings: Record<string, unknown> = Object.create(null);
   for (const [key, value] of Object.entries(c)) {
@@ -256,6 +294,7 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
     },
     cleaning,
     pii,
+    guard,
     plugins,
     pluginSettings,
   };
@@ -283,6 +322,7 @@ export function resolveConfig(structural: StructuralConfig, host: PluginHost): A
     scan: structural.scan,
     cleaning: structural.cleaning,
     pii: structural.pii,
+    guard: structural.guard,
     plugins: structural.plugins,
     pluginSettings: structural.pluginSettings,
   };
@@ -340,5 +380,9 @@ scan:
 # pii:
 #   mode: mask   # mask | hash | drop
 #   # saltPath: ./.data/pii-salt
+
+# Optional prompt-injection guard applied by "knot-sync run" after PII (default mode: flag).
+# guard:
+#   mode: flag   # flag | strip | block
 `;
 }

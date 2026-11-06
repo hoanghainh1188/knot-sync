@@ -29,6 +29,7 @@ function doc(content: string): Document {
     tables: [],
     metadata: {},
     pii: [],
+    guard: [],
     hash: sha256(content),
   };
 }

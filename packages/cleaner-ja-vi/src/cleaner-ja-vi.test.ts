@@ -27,6 +27,7 @@ function doc(content: string, tables: Document["tables"] = []): Document {
     tables,
     metadata: {},
     pii: [],
+    guard: [],
     hash: sha256(content),
   };
 }

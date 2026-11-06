@@ -40,6 +40,7 @@ function toDocument(
       ...extraMeta,
     },
     pii: [],
+    guard: [],
     hash: sha256(normalized),
   };
 }
@@ -66,12 +67,36 @@ function escapeMdCell(s: string): string {
   return s.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
 }
 
+function argbNearWhite(argb: unknown): boolean {
+  if (typeof argb !== "string" || argb.length < 6) return false;
+  const hex = argb.replace(/^#/, "").slice(-6);
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return false;
+  const r = Number.parseInt(hex.slice(0, 2), 16);
+  const g = Number.parseInt(hex.slice(2, 4), 16);
+  const b = Number.parseInt(hex.slice(4, 6), 16);
+  return r >= 250 && g >= 250 && b >= 250;
+}
+
+/** Best-effort: font.hidden or white-on-white cells for the injection guard. */
+function isLikelyHiddenCell(cell: ExcelJS.Cell): boolean {
+  const font = cell.font as { hidden?: boolean; color?: { argb?: string } } | undefined;
+  if (font?.hidden === true) return true;
+  const fill = cell.fill as
+    | { type?: string; fgColor?: { argb?: string }; bgColor?: { argb?: string } }
+    | undefined;
+  const fontWhite = argbNearWhite(font?.color?.argb);
+  const fillWhite =
+    argbNearWhite(fill?.fgColor?.argb) || argbNearWhite(fill?.bgColor?.argb);
+  return fontWhite && fillWhite;
+}
+
 async function extractXlsx(file: FileEntry, bytes: Buffer): Promise<ExtractResult> {
   const workbook = new ExcelJS.Workbook();
   // exceljs typings disagree with Node's Buffer; runtime accepts Node Buffer.
   await workbook.xlsx.load(bytes as never);
   const tables: TableData[] = [];
   const parts: string[] = [];
+  const hiddenParts: string[] = [];
 
   for (const sheet of workbook.worksheets) {
     const rows: string[][] = [];
@@ -83,7 +108,10 @@ async function extractXlsx(file: FileEntry, bytes: Buffer): Promise<ExtractResul
     sheet.eachRow({ includeEmpty: false }, (row) => {
       const cells: string[] = [];
       for (let c = 1; c <= maxCol; c++) {
-        cells.push(cellToString(row.getCell(c).value));
+        const cell = row.getCell(c);
+        const text = cellToString(cell.value);
+        cells.push(text);
+        if (text && isLikelyHiddenCell(cell)) hiddenParts.push(text);
       }
       rows.push(cells);
     });
@@ -103,7 +131,11 @@ async function extractXlsx(file: FileEntry, bytes: Buffer): Promise<ExtractResul
   if (tables.length === 0 && parts.length === 0) {
     return fail("EMPTY", `Spreadsheet "${file.relPath}" has no rows.`);
   }
-  return { ok: true, document: toDocument(file, parts.join("\n"), tables) };
+  const extra: Record<string, string | number | boolean | null> = {};
+  if (hiddenParts.length > 0) {
+    extra.guardHiddenText = hiddenParts.join("\n");
+  }
+  return { ok: true, document: toDocument(file, parts.join("\n"), tables, extra) };
 }
 
 async function extractDocx(file: FileEntry, bytes: Buffer): Promise<ExtractResult> {

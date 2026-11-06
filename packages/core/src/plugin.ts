@@ -62,9 +62,10 @@ export interface PiiRule {
   find(text: string): Array<{ start: number; end: number }>;
 }
 
-/** Stub until a later change fills in behavior. */
+/** Detects prompt-injection / risky spans in a plain-text string (no network, no source writes). */
 export interface GuardRule {
   id: string;
+  find(text: string): Array<{ start: number; end: number }>;
 }
 
 /** Stub until a later change fills in behavior. */
@@ -276,7 +277,14 @@ export function createPluginHost(options: CreatePluginHostOptions = {}): PluginH
         }
         registerInMap(piiRules, "pii-rule", r, plugin.name, extensions);
       },
-      registerGuardRule: (r) => registerInMap(guardRules, "guard-rule", r, plugin.name, extensions),
+      registerGuardRule: (r) => {
+        if (typeof r.find !== "function") {
+          throw new ConfigError(
+            `Plugin "${plugin.name}" guard-rule "${r.id}" must provide find(text).`,
+          );
+        }
+        registerInMap(guardRules, "guard-rule", r, plugin.name, extensions);
+      },
       registerCatalogSource: (s) =>
         registerInMap(catalogSources, "catalog-source", s, plugin.name, extensions),
       registerMcpTool: (t) => registerInMap(mcpTools, "mcp-tool", t, plugin.name, extensions),
