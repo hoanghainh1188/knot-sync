@@ -91,6 +91,7 @@ function minimalConfig(sourcePath: string, auditLog: string): AppConfig {
         template: "Search for {{query}}",
       },
     ],
+    cli: {},
     plugins: [],
     pluginSettings: {},
   };

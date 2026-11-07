@@ -227,6 +227,7 @@ test("describe and query handlers frame untrusted content", async () => {
       },
     },
     prompts: [],
+    cli: {},
     plugins: [],
     pluginSettings: {},
   };
@@ -325,6 +326,7 @@ test("query_table resolves catalog business labels and validates enums", async (
       },
     },
     prompts: [],
+    cli: {},
     plugins: [],
     pluginSettings: {},
   };

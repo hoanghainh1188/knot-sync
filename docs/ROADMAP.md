@@ -160,11 +160,27 @@ CI matrix (Node 22/24 × Linux/macOS/Windows), license gate, tag publish with
 npm provenance. After merge: tag `v0.1.0` when ready, then
 `npx @hoanghainh/knot-sync@0.1.0 --version`.
 
+## v0.2 changes
+
+| # | Change | Status |
+|---|---|---|
+| 1 | `add-cli-i18n` — CLI messages en/ja/vi (`--lang`, `cli.locale`) | ✅ done |
+| 2 | `add-catalog-review-ui` — `knot-sync ui` + Semantic Catalog review | planned |
+| 3 | `add-bench` — `knot-sync bench` (tokens / tool-call accuracy) | planned |
+
+### 1. add-cli-i18n
+
+```
+/opsx:propose add-cli-i18n: Localize CLI help, errors and progress for en/ja/vi.
+Resolve locale from --lang, then cli.locale, then env heuristic, else en.
+Keep command names, flags, --json keys and --version in English. No new deps.
+```
+
 ## Later
 
 | Version | Scope |
 |---|---|
-| v0.2 | Web UI (`knot-sync ui`, React, bundled in the npm package, 127.0.0.1 by default) with Semantic Catalog review screen; `knot-sync bench` (tokens and tool-call accuracy before/after, on the customer's own data); CLI messages in ja/vi |
+| v0.2 | See table above (CLI i18n → catalog review UI → bench) |
 | v0.3 | System logs (app log files of legacy systems), resource subscriptions |
 | Paid | OCR (Docling via Docker), 方眼紙 Excel, SQL Server / Oracle / Access / AS400, HTTP + OAuth 2.1 + scopes, local LLM for catalog, vector search, model-based guardrails |
 | After v1.0 | Write tools / stored procedures, always with human approval |

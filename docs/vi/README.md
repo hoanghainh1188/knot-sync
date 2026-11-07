@@ -37,5 +37,15 @@ npx @hoanghainh/knot-sync@0.1.0 --version
 | `plugins` | Liệt kê plugin đã nạp |
 | `serve` | Chạy MCP server (stdio) |
 
+### Ngôn ngữ thông báo
+
+Hiện trợ giúp / lỗi bằng tiếng Việt:
+
+```bash
+npx @hoanghainh/knot-sync --help --lang vi
+```
+
+Hoặc cấu hình `cli.locale: vi` (`--lang` được ưu tiên hơn). Tên lệnh và khóa `--json` vẫn là tiếng Anh.
+
 Chi tiết (tiếng Anh): [README.md](../../README.md) và
 [docs/ROADMAP.md](../ROADMAP.md).

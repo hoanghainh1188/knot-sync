@@ -18,9 +18,11 @@ import {
   isSqlSource,
   loadPlugins,
   type AppConfig,
+  type CliLocale,
   type SqlSourceConfig,
   type StructuralConfig,
 } from "@hoanghainh/knot-sync-core";
+import { t } from "./i18n/index.js";
 import type { Io } from "./main.js";
 import { loadAppPlugins } from "./plugins.js";
 
@@ -87,13 +89,12 @@ export async function cmdDescribe(
   structural: StructuralConfig,
   config: AppConfig,
   io: Io,
-  options?: { sqlDriverFactories?: Record<string, DriverFactory> },
+  options?: { sqlDriverFactories?: Record<string, DriverFactory>; locale?: CliLocale },
 ): Promise<number> {
+  const locale: CliLocale = options?.locale ?? "en";
   const sqlSources = config.sources.filter(isSqlSource);
   if (sqlSources.length === 0) {
-    io.err(
-      'No postgres/mysql sources found. Add a SQL source with an "allow" list, then re-run describe.',
-    );
+    io.err(t(locale, "describe.noSql"));
     return 1;
   }
 
@@ -144,11 +145,17 @@ export async function cmdDescribe(
   }
   for (const w of sampleWarnings.slice(0, 20)) io.err(w);
   if (sampleWarnings.length > 20) {
-    io.err(`…and ${sampleWarnings.length - 20} more sample skip warnings`);
+    io.err(t(locale, "describe.moreWarnings", { n: sampleWarnings.length - 20 }));
   }
-  io.out(`Wrote catalog ${config.catalog.path}`);
-  io.out(`Sources: ${sqlSources.length}, tables: ${tableCount}, columns: ${columnCount}`);
-  io.out(`Next: review labels, set reviewed: true on confirmed entries, then knot-sync serve`);
+  io.out(t(locale, "describe.wrote", { path: config.catalog.path }));
+  io.out(
+    t(locale, "describe.counts", {
+      sources: sqlSources.length,
+      tables: tableCount,
+      columns: columnCount,
+    }),
+  );
+  io.out(t(locale, "describe.next"));
   return 0;
 }
 

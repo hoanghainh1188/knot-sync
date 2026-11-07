@@ -37,5 +37,15 @@ npx @hoanghainh/knot-sync@0.1.0 --version
 | `plugins` | 読み込み済みプラグインを表示 |
 | `serve` | MCP サーバー（stdio）を起動 |
 
+### メッセージ言語
+
+ヘルプやエラーを日本語にする例:
+
+```bash
+npx @hoanghainh/knot-sync --help --lang ja
+```
+
+設定の `cli.locale: ja` でも同様（`--lang` が優先）。コマンド名や `--json` のキーは英語のままです。
+
 詳細（英語）: リポジトリ直下の [README.md](../../README.md) と
 [docs/ROADMAP.md](../ROADMAP.md)。

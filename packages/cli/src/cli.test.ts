@@ -6,6 +6,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { main, type Io } from "./main.js";
 
+/** Keep default CLI assertions English regardless of CI host locale. */
+process.env.KNOT_SYNC_LANG = "en";
+
 const repoRoot = resolveRepoRoot();
 
 function resolveRepoRoot(): string {
@@ -483,4 +486,64 @@ test("describe without SQL sources exits 1 with guidance", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("CLI --lang ja localizes help with English command names", async () => {
+  const io = capture();
+  assert.equal(await main(["--help", "--lang", "ja"], io), 0);
+  const text = io.stdout.join("\n");
+  assert.match(text, /読み取り専用|変更しません/);
+  assert.match(text, /\bscan\b/);
+  assert.match(text, /\bserve\b/);
+});
+
+test("CLI --lang vi localizes unknown command", async () => {
+  const io = capture();
+  assert.equal(await main(["khong-ton-tai", "--lang", "vi"], io), 2);
+  const err = io.stderr.join("\n");
+  assert.match(err, /khong-ton-tai/);
+  assert.match(err, /không tồn tại|Lệnh không tồn tại/i);
+});
+
+test("CLI --lang ja run missing inventory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-"));
+  try {
+    const config = join(root, "cfg.yaml");
+    const io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share", "--lang", "en"], io), 0);
+    await mkdir(join(root, "share"), { recursive: true });
+    const io2 = capture();
+    assert.equal(await main(["run", "-c", config, "--lang", "ja"], io2), 1);
+    assert.match(io2.stderr.join("\n"), /knot-sync scan/);
+    assert.match(io2.stderr.join("\n"), /インベントリ|ありません/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("scan --json --lang ja keeps English keys", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-"));
+  try {
+    const share = join(root, "share");
+    await mkdir(share, { recursive: true });
+    await writeFile(join(share, "a.txt"), "hi");
+    const config = join(root, "cfg.yaml");
+    let io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], io), 0);
+    io = capture();
+    assert.equal(await main(["scan", "-c", config, "--json", "--lang", "ja"], io), 0);
+    const result = JSON.parse(io.stdout.join("\n"));
+    assert.ok(result.version);
+    assert.ok(result.store);
+    assert.ok(Array.isArray(result.sources));
+    assert.ok(result.sources[0].stats.fileCount >= 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("invalid --lang lists allowed locales", async () => {
+  const io = capture();
+  assert.equal(await main(["--help", "--lang", "fr"], io), 2);
+  assert.match(io.stderr.join("\n"), /en, ja, vi/);
 });

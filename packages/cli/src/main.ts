@@ -8,6 +8,7 @@ import {
   loadConfig,
   resolveConfig,
   starterConfigYaml,
+  type CliLocale,
   type FileEntry,
   type ScanIssue,
 } from "@hoanghainh/knot-sync-core";
@@ -17,6 +18,7 @@ import { applyPiiToDocument, textHasPii } from "@hoanghainh/knot-sync-pii-basic"
 import { Store, type SourceStats } from "@hoanghainh/knot-sync-store-sqlite";
 import { CatalogError, cmdDescribe } from "./describe.js";
 import { formatBytes, formatCount, table } from "./format.js";
+import { resolveLocale, t } from "./i18n/index.js";
 import { findExtractor, loadAppPlugins } from "./plugins.js";
 import {
   assertReportPathOutsideSources,
@@ -42,41 +44,25 @@ const defaultIo: Io = {
   progress: Boolean(process.stderr.isTTY),
 };
 
-const HELP = `KnotSync (knot-sync) ${VERSION}
-Scan, clean and serve legacy enterprise data to AI agents via MCP.
-Everything runs on this machine. Sources are only read, never changed.
+function helpText(locale: CliLocale): string {
+  return t(locale, "help", { version: VERSION, configFile: DEFAULT_CONFIG_FILE });
+}
 
-Usage:
-  knot-sync <command> [options]
-
-Commands:
-  init      Create a config file in the current folder
-  scan      Inventory all sources: file types, sizes, duplicates, old files
-  run       Extract text/tables from the last scan into the document store
-  describe  Generate/update knot-sync.catalog.yaml for SQL sources
-  plugins   List loaded plugins and their extension points
-  serve     Start the MCP server (stdio only; for Claude Desktop / Cursor / Claude Code)
-
-Options:
-  -c, --config <file>   Config file (default: ${DEFAULT_CONFIG_FILE})
-  -h, --help            Show help
-  -v, --version         Show version
-
-init options:
-  --path <folder>       Folder to scan (written into the config)
-  --force               Overwrite an existing config file
-
-scan options:
-  --json                Print results as JSON
-  --pii                 Estimate how many text files look like they contain PII
-  --report [file]       Write a self-contained HTML report (default: ./knot-sync-scan-report.html)
-
-plugins:
-  Plugins run in-process with full trust. Install only plugins you trust.
-  Paid plugins check their own license keys; the core never does.
-`;
+function peekLangFlag(argv: string[]): string | undefined {
+  const i = argv.indexOf("--lang");
+  if (i >= 0 && argv[i + 1] && !argv[i + 1]!.startsWith("-")) return argv[i + 1];
+  return undefined;
+}
 
 export async function main(argv: string[], io: Io = defaultIo): Promise<number> {
+  let earlyLocale: CliLocale = "en";
+  try {
+    earlyLocale = resolveLocale({ flag: peekLangFlag(argv), env: process.env });
+  } catch (err) {
+    io.err(t("en", "error.prefix", { message: (err as Error).message }));
+    return 2;
+  }
+
   let parsed;
   try {
     parsed = parseArgs({
@@ -86,6 +72,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         config: { type: "string", short: "c" },
         help: { type: "boolean", short: "h" },
         version: { type: "boolean", short: "v" },
+        lang: { type: "string" },
         path: { type: "string" },
         force: { type: "boolean" },
         json: { type: "boolean" },
@@ -94,28 +81,39 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
       },
     });
   } catch (err) {
-    io.err(`Error: ${(err as Error).message}\n`);
-    io.err(HELP);
+    io.err(t(earlyLocale, "error.prefix", { message: (err as Error).message }) + "\n");
+    io.err(helpText(earlyLocale));
     return 2;
   }
   const { values, positionals } = parsed;
   const command = positionals[0];
+
+  let locale = earlyLocale;
+  try {
+    locale = resolveLocale({ flag: values.lang, env: process.env });
+  } catch (err) {
+    io.err(t("en", "error.prefix", { message: (err as Error).message }));
+    return 2;
+  }
 
   if (values.version) {
     io.out(VERSION);
     return 0;
   }
   if (values.help || !command) {
-    io.out(HELP);
+    io.out(helpText(locale));
     return command || values.help ? 0 : 2;
   }
 
   const configPath = resolve(values.config ?? DEFAULT_CONFIG_FILE);
+  const langFlag = values.lang;
+  /** Updated when a command loads config so catch uses cli.locale. */
+  let activeLocale = locale;
 
   try {
     switch (command) {
       case "init":
-        return await cmdInit(configPath, values.path, Boolean(values.force), io);
+        return await cmdInit(configPath, values.path, Boolean(values.force), io, locale);
       case "scan":
         return await cmdScan(
           configPath,
@@ -123,39 +121,65 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
           typeof values.report === "string" ? values.report : undefined,
           Boolean(values.pii),
           io,
+          langFlag,
+          (l) => {
+            activeLocale = l;
+          },
         );
       case "run":
-        return await cmdRun(configPath, io);
+        return await cmdRun(configPath, io, langFlag, (l) => {
+          activeLocale = l;
+        });
       case "describe":
-        return await cmdDescribeEntry(configPath, io);
+        return await cmdDescribeEntry(configPath, io, langFlag, (l) => {
+          activeLocale = l;
+        });
       case "plugins":
-        return await cmdPlugins(configPath, io);
+        return await cmdPlugins(configPath, io, langFlag, (l) => {
+          activeLocale = l;
+        });
       case "serve":
-        return await cmdServe(configPath, io);
+        return await cmdServe(configPath, io, langFlag, (l) => {
+          activeLocale = l;
+        });
       default:
-        io.err(`Unknown command "${command}".\n`);
-        io.err(HELP);
+        io.err(t(locale, "error.unknownCommand", { command }) + "\n");
+        io.err(helpText(locale));
         return 2;
     }
   } catch (err) {
     if (err instanceof ConfigError) {
-      io.err(`Config error: ${err.message}`);
+      io.err(t(activeLocale, "error.configPrefix", { message: err.message }));
       return 1;
     }
     if (err instanceof CatalogError) {
-      io.err(`Catalog error: ${err.message}`);
+      io.err(t(activeLocale, "error.catalogPrefix", { message: err.message }));
       return 1;
     }
-    io.err(`Error: ${(err as Error).message}`);
+    io.err(t(activeLocale, "error.prefix", { message: (err as Error).message }));
     return 1;
   }
 }
 
-async function cmdDescribeEntry(configPath: string, io: Io): Promise<number> {
+function localeForConfig(
+  langFlag: string | undefined,
+  configLocale: CliLocale | undefined,
+): CliLocale {
+  return resolveLocale({ flag: langFlag, configLocale, env: process.env });
+}
+
+async function cmdDescribeEntry(
+  configPath: string,
+  io: Io,
+  langFlag: string | undefined,
+  onLocale: (locale: CliLocale) => void,
+): Promise<number> {
   const structural = await loadConfig(configPath);
+  const locale = localeForConfig(langFlag, structural.cli.locale);
+  onLocale(locale);
   const host = await loadAppPlugins(structural);
   const config = resolveConfig(structural, host);
-  return cmdDescribe(structural, config, io);
+  return cmdDescribe(structural, config, io, { locale });
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -172,14 +196,15 @@ async function cmdInit(
   folder: string | undefined,
   force: boolean,
   io: Io,
+  locale: CliLocale,
 ): Promise<number> {
   if ((await exists(configPath)) && !force) {
-    io.err(`${configPath} already exists. Use --force to overwrite.`);
+    io.err(t(locale, "init.exists", { path: configPath }));
     return 1;
   }
   await writeFile(configPath, starterConfigYaml(folder ?? "./data-to-scan"), "utf8");
-  io.out(`Created ${configPath}`);
-  io.out(`Next: edit "sources", then run: knot-sync scan`);
+  io.out(t(locale, "init.created", { path: configPath }));
+  io.out(t(locale, "init.next"));
   return 0;
 }
 
@@ -219,8 +244,12 @@ async function cmdScan(
   reportPath: string | undefined,
   piiEstimate: boolean,
   io: Io,
+  langFlag: string | undefined,
+  onLocale: (locale: CliLocale) => void,
 ): Promise<number> {
   const structural = await loadConfig(configPath);
+  const locale = localeForConfig(langFlag, structural.cli.locale);
+  onLocale(locale);
   const host = await loadAppPlugins(structural);
   const config = resolveConfig(structural, host);
   const store = new Store(config.store.path);
@@ -247,7 +276,13 @@ async function cmdScan(
         files.push(entry);
         if (io.progress && files.length - lastShown >= 200) {
           lastShown = files.length;
-          process.stderr.write(`\r  [${source.id}] ${formatCount(files.length)} files…`);
+          process.stderr.write(
+            "\r" +
+              t(locale, "scan.progressFiles", {
+                sourceId: source.id,
+                count: formatCount(files.length),
+              }),
+          );
         }
       }
       if (io.progress && lastShown > 0) process.stderr.write("\r\x1b[K");
@@ -270,8 +305,8 @@ async function cmdScan(
   if (json) {
     io.out(JSON.stringify({ version: VERSION, store: config.store.path, sources: results }, null, 2));
   } else {
-    for (const r of results) printStats(r, config.scan.oldFileYears, io);
-    io.out(`Inventory saved to ${config.store.path}`);
+    for (const r of results) printStats(r, config.scan.oldFileYears, io, locale);
+    io.out(t(locale, "scan.inventorySaved", { path: config.store.path }));
   }
   if (reportPath !== undefined) {
     const abs = assertReportPathOutsideSources(
@@ -297,13 +332,20 @@ async function cmdScan(
         ...(r.piiLikelyFiles !== undefined ? { piiLikelyFiles: r.piiLikelyFiles } : {}),
       })),
     });
-    io.out(`HTML report written to ${written}`);
+    io.out(t(locale, "scan.htmlReport", { path: written }));
   }
   return 0;
 }
 
-async function cmdRun(configPath: string, io: Io): Promise<number> {
+async function cmdRun(
+  configPath: string,
+  io: Io,
+  langFlag: string | undefined,
+  onLocale: (locale: CliLocale) => void,
+): Promise<number> {
   const structural = await loadConfig(configPath);
+  const locale = localeForConfig(langFlag, structural.cli.locale);
+  onLocale(locale);
   const host = await loadAppPlugins(structural);
   resolveConfig(structural, host); // validate sources even though run uses inventory
   const store = new Store(structural.store.path);
@@ -311,10 +353,7 @@ async function cmdRun(configPath: string, io: Io): Promise<number> {
   try {
     const files = store.listFiles();
     if (files.length === 0) {
-      io.err(
-        `No scan inventory found in ${structural.store.path}.\n` +
-          `Run "knot-sync scan" first, then "knot-sync run".`,
-      );
+      io.err(t(locale, "run.noInventory", { path: structural.store.path }));
       return 1;
     }
 
@@ -492,35 +531,48 @@ async function cmdRun(configPath: string, io: Io): Promise<number> {
     }
 
     io.out(
-      `Run complete: ${formatCount(extracted)} extracted, ${formatCount(skipped)} unchanged, ${formatCount(failed)} issues`,
+      t(locale, "run.complete", {
+        extracted: formatCount(extracted),
+        skipped: formatCount(skipped),
+        failed: formatCount(failed),
+      }),
     );
     if (issues.length > 0) {
-      io.out("\nIssues:");
+      io.out(t(locale, "run.issuesHeader"));
       for (const i of issues.slice(0, 20)) {
         io.out(`  [${i.code}] ${i.path}: ${i.message}`);
       }
-      if (issues.length > 20) io.out(`  … and ${issues.length - 20} more`);
+      if (issues.length > 20) {
+        io.out(t(locale, "run.andMoreIssues", { n: issues.length - 20 }));
+      }
     }
-    io.out(`Documents saved to ${structural.store.path}`);
+    io.out(t(locale, "run.documentsSaved", { path: structural.store.path }));
     return 0;
   } finally {
     store.close();
   }
 }
 
-async function cmdPlugins(configPath: string, io: Io): Promise<number> {
+async function cmdPlugins(
+  configPath: string,
+  io: Io,
+  langFlag: string | undefined,
+  onLocale: (locale: CliLocale) => void,
+): Promise<number> {
   const structural = await loadConfig(configPath);
+  const locale = localeForConfig(langFlag, structural.cli.locale);
+  onLocale(locale);
   const host = await loadAppPlugins(structural);
 
-  io.out("Loaded plugins (in-process, full trust — install only plugins you trust):");
+  io.out(t(locale, "plugins.header"));
   if (host.loaded.length === 0) {
-    io.out("  (none)");
+    io.out(t(locale, "plugins.none"));
     return 0;
   }
   for (const plugin of host.loaded) {
     const ext =
       plugin.extensions.length === 0
-        ? "(no extensions)"
+        ? t(locale, "plugins.noExtensions")
         : plugin.extensions.map((e) => `${e.point}:${e.id}`).join(", ");
     io.out(`  ${plugin.name}@${plugin.version}`);
     io.out(`    ${ext}`);
@@ -541,15 +593,22 @@ async function loadCatalogIfPresent(path: string) {
   return loadCatalogFile(path);
 }
 
-async function cmdServe(configPath: string, io: Io): Promise<number> {
+async function cmdServe(
+  configPath: string,
+  io: Io,
+  langFlag: string | undefined,
+  onLocale: (locale: CliLocale) => void,
+): Promise<number> {
   const structural = await loadConfig(configPath);
+  const locale = localeForConfig(langFlag, structural.cli.locale);
+  onLocale(locale);
   const host = await loadAppPlugins(structural);
   const config = resolveConfig(structural, host);
   const catalog = await loadCatalogIfPresent(config.catalog.path);
   const store = new Store(config.store.path);
   io.err(
-    `KnotSync MCP server on stdio. Store: ${config.store.path}. Audit: ${config.server.auditLog}.` +
-      (catalog ? ` Catalog: ${config.catalog.path}.` : ""),
+    t(locale, "serve.listening", { store: config.store.path, audit: config.server.auditLog }) +
+      (catalog ? t(locale, "serve.catalogSuffix", { path: config.catalog.path }) : ""),
   );
   try {
     await serveStdio({ store, config, host, catalog });
@@ -559,45 +618,59 @@ async function cmdServe(configPath: string, io: Io): Promise<number> {
   return 0;
 }
 
-function printStats(r: ScanResult, oldYears: number, io: Io): void {
+function printStats(r: ScanResult, oldYears: number, io: Io, locale: CliLocale): void {
   const s = r.stats;
-  io.out(`\n■ Source "${s.sourceId}": ${formatCount(s.fileCount)} files, ${formatBytes(s.totalBytes)}`);
+  io.out(
+    t(locale, "scan.sourceHeader", {
+      sourceId: s.sourceId,
+      files: formatCount(s.fileCount),
+      bytes: formatBytes(s.totalBytes),
+    }),
+  );
 
   if (s.byType.length > 0) {
-    io.out("\n  By type:");
+    io.out(t(locale, "scan.byType"));
     io.out(
       table(
-        s.byType.map((t) => [t.type, formatCount(t.count), formatBytes(t.bytes)]),
+        s.byType.map((row) => [row.type, formatCount(row.count), formatBytes(row.bytes)]),
         "    ",
       ),
     );
   }
 
-  io.out("\n  Health:");
+  io.out(t(locale, "scan.health"));
   const healthRows: string[][] = [
-    ["Duplicate copies", formatCount(s.duplicateFiles), `${formatBytes(s.duplicateBytes)} wasted`],
-    [`Older than ${oldYears} years`, formatCount(s.oldFiles), ""],
-    ["Empty files", formatCount(s.emptyFiles), ""],
-    ["Unreadable", formatCount(s.issues), ""],
+    [
+      t(locale, "scan.dupCopies"),
+      formatCount(s.duplicateFiles),
+      t(locale, "scan.wasted", { bytes: formatBytes(s.duplicateBytes) }),
+    ],
+    [t(locale, "scan.olderThan", { years: oldYears }), formatCount(s.oldFiles), ""],
+    [t(locale, "scan.emptyFiles"), formatCount(s.emptyFiles), ""],
+    [t(locale, "scan.unreadable"), formatCount(s.issues), ""],
   ];
   if (r.piiLikelyFiles !== undefined) {
-    healthRows.push(["Likely PII (sample)", formatCount(r.piiLikelyFiles), ""]);
+    healthRows.push([t(locale, "scan.likelyPii"), formatCount(r.piiLikelyFiles), ""]);
   }
   io.out(table(healthRows, "    "));
 
   if (r.topDuplicates.length > 0) {
-    io.out("\n  Biggest duplicates:");
+    io.out(t(locale, "scan.biggestDupes"));
     for (const g of r.topDuplicates) {
       io.out(`    ${formatBytes(g.size)} × ${g.paths.length}`);
       for (const p of g.paths.slice(0, 4)) io.out(`      - ${p}`);
-      if (g.paths.length > 4) io.out(`      … and ${g.paths.length - 4} more`);
+      if (g.paths.length > 4) {
+        io.out(t(locale, "scan.andMorePaths", { n: g.paths.length - 4 }));
+      }
     }
   }
 
   if (r.issues.length > 0) {
-    io.out("\n  Could not read:");
+    io.out(t(locale, "scan.couldNotRead"));
     for (const i of r.issues.slice(0, 5)) io.out(`    [${i.code}] ${i.path}`);
-    if (r.issues.length > 5) io.out(`    … and ${r.issues.length - 5} more`);
+    if (r.issues.length > 5) {
+      io.out(t(locale, "scan.andMoreIssues", { n: r.issues.length - 5 }));
+    }
   }
   io.out("");
 }
