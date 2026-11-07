@@ -1,6 +1,6 @@
 {
   "name": "@hoanghainh/knot-sync-store-sqlite",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "SQLite store (node:sqlite, FTS5 trigram) for KnotSync.",
   "license": "Apache-2.0",
   "type": "module",
@@ -14,7 +14,9 @@
   },
   "files": [
     "dist",
-    "!dist/**/*.test.*"
+    "!dist/**/*.test.*",
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=22.13.0"

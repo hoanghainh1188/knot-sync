@@ -3,7 +3,8 @@
 > Scan, clean and serve legacy enterprise data to AI agents via the
 > [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
 
-**Status: pre-alpha.** `init`, `scan`, `run`, `describe`, `plugins` and `serve` work today.
+**Status: v0.1.0 (open-core).** `init`, `scan`, `run`, `describe`, `plugins` and `serve`
+are ready to publish. See [CHANGELOG.md](./CHANGELOG.md).
 
 - Runs **fully on your own machine**. Nothing is sent to the Internet.
 - Sources are **read-only**. The tool never changes your files or databases.
@@ -202,9 +203,19 @@ cryptic fields (`TKSK_CD`, `ma_kh`…) so AI agents call tools correctly.
 - ✅ MCP server (`serve`, stdio, `mcp-server`)
 - ✅ PostgreSQL / MySQL (`connector-sql`, allow-list, `query_table`)
 - ✅ Semantic Catalog (`describe`, `catalog` package, MCP business names/enums)
+- ✅ npm release prep (0.1.0, CI, license gate, ja/vi docs)
 
 Details and order: [docs/ROADMAP.md](./docs/ROADMAP.md). Development uses
 [OpenSpec](https://github.com/Fission-AI/OpenSpec): specs live in `openspec/specs/`.
+
+### Verify after publish
+
+On a machine without a prior local install:
+
+```bash
+npx @hoanghainh/knot-sync@0.1.0 --version
+# expect: 0.1.0
+```
 
 ## Development
 
@@ -244,15 +255,22 @@ Design notes:
 
 ---
 
+## Languages / 言語 / Ngôn ngữ
+
+- 日本語: [docs/ja/README.md](./docs/ja/README.md)
+- Tiếng Việt: [docs/vi/README.md](./docs/vi/README.md)
+
 ## 日本語
 
 社内に散らばった古いデータ（Excel、Word、PDF、紙の書類、古いDB）を整理し、MCP 経由で AI エージェントに安全に渡すためのツールです。
 すべて自社のマシン内で動き、データは外部に送信されません。元データは読み取りのみで、変更しません。
+詳細は [docs/ja/README.md](./docs/ja/README.md)。
 
 ## Tiếng Việt
 
 Công cụ dọn dẹp dữ liệu cũ nằm rải rác trong công ty (Excel, Word, PDF, giấy tờ scan, database cũ), rồi đưa cho AI Agent qua MCP một cách an toàn.
 Mọi thứ chạy trên máy của bạn, không gửi dữ liệu ra ngoài. Dữ liệu gốc chỉ được đọc, không bị sửa.
+Chi tiết: [docs/vi/README.md](./docs/vi/README.md).
 
 ## License
 

@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { resolve } from "node:path";
 import {
   ConfigError,
   DEFAULT_CLEANING_CONFIG,
@@ -81,8 +82,8 @@ test("starter config parses", () => {
   const first = cfg.sources[0];
   assert.ok(first);
   assert.ok(isFsSource(first));
-  assert.equal(first.path, "/base/share");
-  assert.equal(cfg.store.path, "/base/.data/store.sqlite");
+  assert.equal(first.path, resolve("/base", "share"));
+  assert.equal(cfg.store.path, resolve("/base", ".data/store.sqlite"));
   assert.equal(cfg.scan.oldFileYears, 5);
   assert.equal(cfg.scan.hash, true);
   assert.deepEqual(cfg.cleaning, DEFAULT_CLEANING_CONFIG);
@@ -94,7 +95,7 @@ test("starter config parses", () => {
 test("pii defaults to mask when omitted", () => {
   const structural = parseConfig("sources:\n  - id: a\n    type: fs\n    path: /x\n", "/work");
   assert.equal(structural.pii.mode, "mask");
-  assert.equal(structural.pii.saltPath, "/work/.data/pii-salt");
+  assert.equal(structural.pii.saltPath, resolve("/work", ".data/pii-salt"));
 });
 
 test("pii rejects bad mode and unknown keys", () => {
@@ -120,13 +121,13 @@ test("guard rejects bad mode and unknown keys", () => {
 
 test("server defaults audit_log beside store when omitted", () => {
   const structural = parseConfig("sources:\n  - id: a\n    type: fs\n    path: /x\n", "/work");
-  assert.equal(structural.server.auditLog, "/work/.data/mcp-audit.jsonl");
+  assert.equal(structural.server.auditLog, resolve("/work", ".data/mcp-audit.jsonl"));
   assert.deepEqual(structural.prompts, []);
 });
 
 test("catalog defaults path beside config when omitted", () => {
   const structural = parseConfig("sources:\n  - id: a\n    type: fs\n    path: /x\n", "/work");
-  assert.equal(structural.catalog.path, "/work/knot-sync.catalog.yaml");
+  assert.equal(structural.catalog.path, resolve("/work", "knot-sync.catalog.yaml"));
   assert.equal(structural.catalog.definitionMapping.physical, "物理名");
 });
 
@@ -151,7 +152,10 @@ test("catalog rejects unknown keys and resolves relative definition_excel", () =
     ].join("\n"),
     "/work",
   );
-  assert.equal(structural.catalog.definitionExcel, "/work/defs/項目定義.xlsx");
+  assert.equal(
+    structural.catalog.definitionExcel,
+    resolve("/work", "defs/項目定義.xlsx"),
+  );
 });
 
 test("server rejects unknown keys", () => {

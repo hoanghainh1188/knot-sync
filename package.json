@@ -13,10 +13,12 @@
     "build": "tsc -b",
     "clean": "tsc -b --clean",
     "test": "pnpm build && node --test --no-warnings=ExperimentalWarning \"packages/*/dist/**/*.test.js\"",
+    "licenses:check": "node scripts/check-licenses.mjs",
     "scan:sample": "pnpm build && node packages/cli/dist/bin.js scan --config examples/sample.config.yaml"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "license-checker": "^25.0.1",
     "typescript": "^5.7.0"
   }
 }

@@ -27,7 +27,7 @@ import {
 const PII_SAMPLE_EXTS = new Set([".txt", ".md", ".csv", ".tsv"]);
 const PII_SAMPLE_MAX_BYTES = 256 * 1024;
 
-export const VERSION = "0.0.1";
+export const VERSION = "0.1.0";
 
 export interface Io {
   out: (text: string) => void;

@@ -1,0 +1,30 @@
+# Changelog
+
+All notable changes to KnotSync are documented in this file.
+
+## 0.1.0 — 2026-11-06
+
+First publishable open-core release.
+
+### Added
+
+- `knot-sync init` / `scan` / `run` / `plugins` / `serve` for local legacy data
+- Folder source connector (`fs`) and SQLite store with FTS5 trigram search (JP/VN)
+- Office/text extraction (`xlsx`, `docx`, PDF text, CSV/TSV, Markdown)
+- JP/VN cleaning (NFKC, wareki→Gregorian, ISO dates, TCVN3/VNI, token reduction)
+- PII masking (`mask` / `hash` / `drop`) and `scan --pii` estimate
+- Prompt-injection guard (`flag` / `strip` / `block`)
+- Self-contained HTML scan report (`scan --report`)
+- Stdio MCP server: document search/get, SQL schema resource, `describe_table` /
+  `query_table` (allow-listed, parameterized, no free SQL)
+- Read-only PostgreSQL / MySQL sources (`url: env:NAME`, `allow:`)
+- **Semantic Catalog**: `knot-sync describe`, `knot-sync.catalog.yaml`, romaji /
+  Vietnamese dictionaries, optional テーブル定義書 Excel; MCP business-name
+  filters and enum validation
+- Plugin system with built-in connectors, extractors, cleaners, and rules
+
+### Notes
+
+- Requires Node.js ≥ 22.13
+- Sources are read-only; no telemetry
+- After publish, verify: `npx @hoanghainh/knot-sync@0.1.0 --version`

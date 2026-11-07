@@ -1,6 +1,6 @@
 {
   "name": "@hoanghainh/knot-sync-connector-sql",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Read-only PostgreSQL and MySQL connectors for KnotSync.",
   "license": "Apache-2.0",
   "type": "module",
@@ -14,7 +14,9 @@
   },
   "files": [
     "dist",
-    "!dist/**/*.test.*"
+    "!dist/**/*.test.*",
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=22.13.0"
