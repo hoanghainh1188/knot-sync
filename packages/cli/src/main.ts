@@ -20,6 +20,8 @@ import {
   DEFAULT_UI_PORT,
   createUiServer,
 } from "@hoanghainh/knot-sync-ui";
+import { BenchSuiteError } from "./bench/suite.js";
+import { cmdBench } from "./bench/run.js";
 import { CatalogError, cmdDescribe } from "./describe.js";
 import { formatBytes, formatCount, table } from "./format.js";
 import { resolveLocale, t } from "./i18n/index.js";
@@ -83,6 +85,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         pii: { type: "boolean" },
         report: { type: "string" },
         port: { type: "string" },
+        suite: { type: "string" },
       },
     });
   } catch (err) {
@@ -143,6 +146,17 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         return await cmdUi(configPath, values.port, io, langFlag, (l) => {
           activeLocale = l;
         });
+      case "bench":
+        return await cmdBenchEntry(
+          configPath,
+          Boolean(values.json),
+          typeof values.suite === "string" ? values.suite : undefined,
+          io,
+          langFlag,
+          (l) => {
+            activeLocale = l;
+          },
+        );
       case "plugins":
         return await cmdPlugins(configPath, io, langFlag, (l) => {
           activeLocale = l;
@@ -163,6 +177,10 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
     }
     if (err instanceof CatalogError) {
       io.err(t(activeLocale, "error.catalogPrefix", { message: err.message }));
+      return 1;
+    }
+    if (err instanceof BenchSuiteError) {
+      io.err(t(activeLocale, "error.prefix", { message: err.message }));
       return 1;
     }
     io.err(t(activeLocale, "error.prefix", { message: (err as Error).message }));
@@ -189,6 +207,30 @@ async function cmdDescribeEntry(
   const host = await loadAppPlugins(structural);
   const config = resolveConfig(structural, host);
   return cmdDescribe(structural, config, io, { locale });
+}
+
+async function cmdBenchEntry(
+  configPath: string,
+  json: boolean,
+  suitePath: string | undefined,
+  io: Io,
+  langFlag: string | undefined,
+  onLocale: (locale: CliLocale) => void,
+): Promise<number> {
+  const structural = await loadConfig(configPath);
+  const locale = localeForConfig(langFlag, structural.cli.locale);
+  onLocale(locale);
+  return cmdBench(
+    {
+      configPath,
+      storePath: structural.store.path,
+      catalogPath: structural.catalog.path,
+      suitePathFlag: suitePath ? resolve(suitePath) : undefined,
+      json,
+      locale,
+    },
+    io,
+  );
 }
 
 async function exists(path: string): Promise<boolean> {

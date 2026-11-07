@@ -14,6 +14,7 @@ Lệnh:
   run       Trích xuất text/bảng từ lần scan gần nhất vào kho tài liệu
   describe  Tạo/cập nhật knot-sync.catalog.yaml cho nguồn SQL
   ui        Mở UI duyệt catalog cục bộ (chỉ 127.0.0.1)
+  bench     Đo giảm token và độ chính xác suite trên kho cục bộ
   plugins   Liệt kê plugin đã tải và điểm mở rộng
   serve     Khởi động MCP server (chỉ stdio; cho Claude Desktop / Cursor / Claude Code)
 
@@ -31,6 +32,10 @@ Tùy chọn scan:
   --json                In kết quả dạng JSON
   --pii                 Ước lượng số file text có vẻ chứa PII
   --report [file]       Ghi báo cáo HTML tự chứa (mặc định: ./knot-sync-scan-report.html)
+
+Tùy chọn bench:
+  --json                In kết quả dạng JSON (khóa tiếng Anh)
+  --suite <file>        Suite YAML (mặc định: knot-sync.bench.yaml cạnh config)
 
 Tùy chọn ui:
   --port <number>       Cổng loopback (mặc định: 8787)
@@ -88,4 +93,16 @@ plugins:
   "ui.listening":
     "UI duyệt catalog tại {url} (chỉ loopback). Nhấn Ctrl+C để dừng.",
   "ui.openHint": "Mở URL trên trình duyệt máy này. File catalog: {path}",
+  "bench.emptyStore":
+    "Không có tài liệu trong {path}.\nChạy \"knot-sync scan\" rồi \"knot-sync run\" trước khi bench.",
+  "bench.tokensHeader": "Ước lượng token (metadata cleaner)",
+  "bench.tokensLine":
+    "  before={before} after={after} saved={saved} ({pct}%) documents={documents} skipped={skipped}",
+  "bench.noSuite":
+    "Không có file suite (tuỳ chọn). Thêm knot-sync.bench.yaml cạnh config hoặc dùng --suite.",
+  "bench.suiteHeader": "Suite: {path}",
+  "bench.searchSummary": "Suite tìm kiếm (kho đã làm sạch): {passed} đạt, {failed} lỗi",
+  "bench.catalogSummary":
+    "Giải cột catalog: {passed} đạt, {failed} lỗi (before ok={before}, after ok={after})",
+  "bench.catalogSkipped": "Bỏ qua suite catalog: {reason}",
 };

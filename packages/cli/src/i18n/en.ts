@@ -14,6 +14,7 @@ Commands:
   run       Extract text/tables from the last scan into the document store
   describe  Generate/update knot-sync.catalog.yaml for SQL sources
   ui        Open local catalog review UI (127.0.0.1 only)
+  bench     Measure token reduction and suite accuracy on the local store
   plugins   List loaded plugins and their extension points
   serve     Start the MCP server (stdio only; for Claude Desktop / Cursor / Claude Code)
 
@@ -31,6 +32,10 @@ scan options:
   --json                Print results as JSON
   --pii                 Estimate how many text files look like they contain PII
   --report [file]       Write a self-contained HTML report (default: ./knot-sync-scan-report.html)
+
+bench options:
+  --json                Print results as JSON (English keys)
+  --suite <file>        Bench suite YAML (default: knot-sync.bench.yaml beside config)
 
 ui options:
   --port <number>       Loopback port (default: 8787)
@@ -87,4 +92,16 @@ plugins:
     "Next: review labels, set reviewed: true on confirmed entries, then knot-sync serve",
   "ui.listening": "Catalog review UI on {url} (loopback only). Press Ctrl+C to stop.",
   "ui.openHint": "Open the URL in a browser on this machine. Catalog file: {path}",
+  "bench.emptyStore":
+    'No documents in {path}.\nRun "knot-sync scan" then "knot-sync run" before bench.',
+  "bench.tokensHeader": "Token estimates (cleaner metadata)",
+  "bench.tokensLine":
+    "  before={before} after={after} saved={saved} ({pct}%) documents={documents} skipped={skipped}",
+  "bench.noSuite":
+    "No suite file found (optional). Add knot-sync.bench.yaml beside the config or pass --suite.",
+  "bench.suiteHeader": "Suite: {path}",
+  "bench.searchSummary": "Retrieval suite (cleaned store): {passed} passed, {failed} failed",
+  "bench.catalogSummary":
+    "Catalog resolve: {passed} passed, {failed} failed (before ok={before}, after ok={after})",
+  "bench.catalogSkipped": "Catalog suite skipped: {reason}",
 };

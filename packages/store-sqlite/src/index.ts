@@ -115,6 +115,21 @@ export interface SearchOptions {
   type?: DocumentType | string;
 }
 
+function rowToDocument(row: Record<string, string>): Document {
+  return {
+    id: row.id!,
+    sourceId: row.source_id!,
+    type: row.type as DocumentType,
+    title: row.title!,
+    content: row.content!,
+    tables: JSON.parse(row.tables_json!),
+    metadata: JSON.parse(row.metadata_json!),
+    pii: JSON.parse(row.pii_json!),
+    guard: row.guard_json ? JSON.parse(row.guard_json) : [],
+    hash: row.hash!,
+  };
+}
+
 function escapeLike(term: string): string {
   return term.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
@@ -343,18 +358,34 @@ export class Store {
       | Record<string, string>
       | undefined;
     if (!row) return null;
-    return {
-      id: row.id!,
-      sourceId: row.source_id!,
-      type: row.type as DocumentType,
-      title: row.title!,
-      content: row.content!,
-      tables: JSON.parse(row.tables_json!),
-      metadata: JSON.parse(row.metadata_json!),
-      pii: JSON.parse(row.pii_json!),
-      guard: row.guard_json ? JSON.parse(row.guard_json) : [],
-      hash: row.hash!,
-    };
+    return rowToDocument(row);
+  }
+
+  /** Number of documents in the store (for empty-store checks). */
+  documentCount(): number {
+    const row = this.db.prepare("SELECT COUNT(*) AS n FROM documents").get() as { n: number };
+    return Number(row.n);
+  }
+
+  /** All documents (order by updated_at). Used by `bench` for token aggregation. */
+  listDocuments(): Document[] {
+    const rows = this.db
+      .prepare("SELECT * FROM documents ORDER BY updated_at ASC, id ASC")
+      .all() as Record<string, string>[];
+    return rows.map(rowToDocument);
+  }
+
+  /**
+   * Inventory relative path for a document id, when the file is still in the
+   * last scan. Returns null when the inventory row is missing.
+   */
+  findRelPathForDocument(id: string): string | null {
+    const doc = this.getDocument(id);
+    if (!doc) return null;
+    for (const f of this.listFiles(doc.sourceId)) {
+      if (documentId(f.sourceId, f.relPath) === id) return f.relPath;
+    }
+    return null;
   }
 
   /**

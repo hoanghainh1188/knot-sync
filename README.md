@@ -3,8 +3,8 @@
 > Scan, clean and serve legacy enterprise data to AI agents via the
 > [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
 
-**Status: v0.1.0 (open-core).** `init`, `scan`, `run`, `describe`, `plugins` and `serve`
-are ready to publish. See [CHANGELOG.md](./CHANGELOG.md).
+**Status: v0.1.0 (open-core).** `init`, `scan`, `run`, `describe`, `ui`, `bench`,
+`plugins` and `serve` are ready to publish. See [CHANGELOG.md](./CHANGELOG.md).
 
 - Runs **fully on your own machine**. Nothing is sent to the Internet.
 - Sources are **read-only**. The tool never changes your files or databases.
@@ -23,9 +23,28 @@ npx @hoanghainh/knot-sync scan
 npx @hoanghainh/knot-sync run
 npx @hoanghainh/knot-sync describe   # SQL sources: build Semantic Catalog
 npx @hoanghainh/knot-sync ui         # Review catalog in a local browser (127.0.0.1)
+npx @hoanghainh/knot-sync bench      # Token reduction + suite accuracy on your store
 npx @hoanghainh/knot-sync plugins
 npx @hoanghainh/knot-sync serve
 ```
+
+### Bench (`bench`)
+
+`knot-sync bench` reads the local document store (after `scan` / `run`) and reports
+estimated token totals **before/after** cleaning (`tokensBefore` / `tokensAfter`
+from the JA/VN cleaner). Optionally run a customer-owned suite file
+(`knot-sync.bench.yaml` beside the config, or `--suite <path>`) with document-search
+cases and catalog column-resolution checks. Fully offline; never writes to sources.
+
+```bash
+npx @hoanghainh/knot-sync bench
+npx @hoanghainh/knot-sync bench --json
+npx @hoanghainh/knot-sync bench --suite ./examples/sample.bench.yaml
+```
+
+See [examples/sample.bench.yaml](./examples/sample.bench.yaml) for the suite shape.
+Search cases score the **cleaned** store (there is no parallel dirty FTS index).
+Catalog cases compare resolve **without** vs **with** the catalog file.
 
 ### Catalog review UI (`ui`)
 
@@ -235,6 +254,9 @@ cryptic fields (`TKSK_CD`, `ma_kh`…) so AI agents call tools correctly.
 - ✅ MCP server (`serve`, stdio, `mcp-server`)
 - ✅ PostgreSQL / MySQL (`connector-sql`, allow-list, `query_table`)
 - ✅ Semantic Catalog (`describe`, `catalog` package, MCP business names/enums)
+- ✅ Catalog review UI (`ui`, loopback-only)
+- ✅ CLI i18n (`--lang` / `cli.locale`)
+- ✅ Bench (`bench`, tokens + suite accuracy)
 - ✅ npm release prep (0.1.0, CI, license gate, ja/vi docs)
 
 Details and order: [docs/ROADMAP.md](./docs/ROADMAP.md). Development uses

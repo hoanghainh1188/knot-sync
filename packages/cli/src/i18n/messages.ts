@@ -41,6 +41,14 @@ export type MessageKey =
   | "describe.counts"
   | "describe.next"
   | "ui.listening"
-  | "ui.openHint";
+  | "ui.openHint"
+  | "bench.emptyStore"
+  | "bench.tokensHeader"
+  | "bench.tokensLine"
+  | "bench.noSuite"
+  | "bench.suiteHeader"
+  | "bench.searchSummary"
+  | "bench.catalogSummary"
+  | "bench.catalogSkipped";
 
 export type MessageCatalog = Record<MessageKey, string>;

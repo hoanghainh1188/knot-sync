@@ -94,6 +94,9 @@ test("listFiles and unchanged extraction helpers", () => {
   assert.equal(store.isUnchangedExtraction(file("経理/a.xlsx", 10, "abc")), true);
   assert.equal(store.isUnchangedExtraction(file("経理/a.xlsx", 10, "changed")), false);
   assert.equal(store.getDocumentByLocation("s", "経理/a.xlsx")?.title, "t");
+  assert.equal(store.documentCount(), 1);
+  assert.equal(store.listDocuments().length, 1);
+  assert.equal(store.findRelPathForDocument(d.id), "経理/a.xlsx");
   store.close();
 });
 
