@@ -13,6 +13,7 @@ Lệnh:
   scan      Kiểm kê nguồn: loại file, kích thước, trùng lặp, file cũ
   run       Trích xuất text/bảng từ lần scan gần nhất vào kho tài liệu
   describe  Tạo/cập nhật knot-sync.catalog.yaml cho nguồn SQL
+  ui        Mở UI duyệt catalog cục bộ (chỉ 127.0.0.1)
   plugins   Liệt kê plugin đã tải và điểm mở rộng
   serve     Khởi động MCP server (chỉ stdio; cho Claude Desktop / Cursor / Claude Code)
 
@@ -30,6 +31,9 @@ Tùy chọn scan:
   --json                In kết quả dạng JSON
   --pii                 Ước lượng số file text có vẻ chứa PII
   --report [file]       Ghi báo cáo HTML tự chứa (mặc định: ./knot-sync-scan-report.html)
+
+Tùy chọn ui:
+  --port <number>       Cổng loopback (mặc định: 8787)
 
 plugins:
   Plugin chạy in-process với toàn quyền. Chỉ cài plugin bạn tin tưởng.
@@ -81,4 +85,7 @@ plugins:
   "describe.counts": "Nguồn: {sources}, bảng: {tables}, cột: {columns}",
   "describe.next":
     "Tiếp theo: xem lại nhãn, đặt reviewed: true cho mục đã xác nhận, rồi knot-sync serve",
+  "ui.listening":
+    "UI duyệt catalog tại {url} (chỉ loopback). Nhấn Ctrl+C để dừng.",
+  "ui.openHint": "Mở URL trên trình duyệt máy này. File catalog: {path}",
 };

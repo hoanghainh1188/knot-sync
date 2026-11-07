@@ -13,6 +13,7 @@ export const ja: MessageCatalog = {
   scan      ソースを棚卸し（種類・サイズ・重複・古いファイル）
   run       直近の scan 結果からテキスト/表を抽出してドキュメントストアへ
   describe  SQL ソース向け knot-sync.catalog.yaml を生成/更新
+  ui        ローカルのカタログレビュー UI を開く（127.0.0.1 のみ）
   plugins   読み込み済みプラグインと拡張ポイントを一覧
   serve     MCP サーバーを開始（stdio のみ。Claude Desktop / Cursor / Claude Code 向け）
 
@@ -30,6 +31,9 @@ scan オプション:
   --json                結果を JSON で出力
   --pii                 テキストファイルに PII らしき内容がある件数を推定
   --report [file]       自己完結 HTML レポートを出力（既定: ./knot-sync-scan-report.html）
+
+ui オプション:
+  --port <number>       ループバックのポート（既定: 8787）
 
 plugins:
   プラグインはプロセス内でフル権限で動作します。信頼できるものだけ入れてください。
@@ -81,4 +85,7 @@ plugins:
   "describe.counts": "ソース: {sources}、テーブル: {tables}、列: {columns}",
   "describe.next":
     "次: ラベルを確認し、確定した項目に reviewed: true を付けてから knot-sync serve",
+  "ui.listening":
+    "カタログレビュー UI: {url}（ループバックのみ）。停止は Ctrl+C。",
+  "ui.openHint": "このマシンのブラウザで URL を開いてください。カタログ: {path}",
 };

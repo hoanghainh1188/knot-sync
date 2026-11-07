@@ -10,7 +10,7 @@
   },
   "packageManager": "pnpm@10.28.0",
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && pnpm --filter @hoanghainh/knot-sync-ui run build:client",
     "clean": "tsc -b --clean",
     "test": "pnpm build && node --test --no-warnings=ExperimentalWarning \"packages/*/dist/**/*.test.js\"",
     "licenses:check": "node scripts/check-licenses.mjs",

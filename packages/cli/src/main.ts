@@ -16,6 +16,10 @@ import { applyGuardToDocument } from "@hoanghainh/knot-sync-guard";
 import { serveStdio } from "@hoanghainh/knot-sync-mcp-server";
 import { applyPiiToDocument, textHasPii } from "@hoanghainh/knot-sync-pii-basic";
 import { Store, type SourceStats } from "@hoanghainh/knot-sync-store-sqlite";
+import {
+  DEFAULT_UI_PORT,
+  createUiServer,
+} from "@hoanghainh/knot-sync-ui";
 import { CatalogError, cmdDescribe } from "./describe.js";
 import { formatBytes, formatCount, table } from "./format.js";
 import { resolveLocale, t } from "./i18n/index.js";
@@ -78,6 +82,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         json: { type: "boolean" },
         pii: { type: "boolean" },
         report: { type: "string" },
+        port: { type: "string" },
       },
     });
   } catch (err) {
@@ -132,6 +137,10 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         });
       case "describe":
         return await cmdDescribeEntry(configPath, io, langFlag, (l) => {
+          activeLocale = l;
+        });
+      case "ui":
+        return await cmdUi(configPath, values.port, io, langFlag, (l) => {
           activeLocale = l;
         });
       case "plugins":
@@ -551,6 +560,48 @@ async function cmdRun(
   } finally {
     store.close();
   }
+}
+
+async function cmdUi(
+  configPath: string,
+  portRaw: string | undefined,
+  io: Io,
+  langFlag: string | undefined,
+  onLocale: (locale: CliLocale) => void,
+): Promise<number> {
+  const structural = await loadConfig(configPath);
+  const locale = localeForConfig(langFlag, structural.cli.locale);
+  onLocale(locale);
+  let port = DEFAULT_UI_PORT;
+  if (portRaw !== undefined) {
+    const n = Number(portRaw);
+    if (!Number.isInteger(n) || n < 0 || n > 65535) {
+      throw new ConfigError(
+        `"--port" must be an integer 0–65535 (0 = ephemeral; got ${JSON.stringify(portRaw)}).`,
+      );
+    }
+    port = n;
+  }
+  const catalogPath = structural.catalog.path;
+  const ui = await createUiServer({ catalogPath, port });
+  const pageUrl = `${ui.url}?lang=${locale}`;
+  io.err(t(locale, "ui.listening", { url: pageUrl }));
+  io.err(t(locale, "ui.openHint", { path: catalogPath }));
+
+  // Smoke tests can set KNOT_SYNC_UI_SMOKE=1 to exit after bind.
+  if (process.env.KNOT_SYNC_UI_SMOKE === "1") {
+    await ui.close();
+    return 0;
+  }
+
+  await new Promise<void>((resolve) => {
+    const stop = () => {
+      void ui.close().finally(() => resolve());
+    };
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+  });
+  return 0;
 }
 
 async function cmdPlugins(

@@ -70,3 +70,17 @@ test("root README links ja/vi docs and documents npx verification", () => {
   assert.match(readme, /docs\/vi/);
   assert.match(readme, /npx @hoanghainh\/knot-sync/);
 });
+
+test("ui package publishes static assets without CDN refs", () => {
+  const uiDir = join(packagesDir, "ui");
+  const pkg = JSON.parse(readFileSync(join(uiDir, "package.json"), "utf8")) as {
+    files?: string[];
+    dependencies?: Record<string, string>;
+  };
+  assert.ok(pkg.files?.includes("static"), "ui files must include static");
+  assert.ok(pkg.dependencies?.react, "ui depends on react");
+  const index = join(uiDir, "static", "index.html");
+  assert.ok(existsSync(index), "run vite build before test — missing static/index.html");
+  const html = readFileSync(index, "utf8");
+  assert.doesNotMatch(html, /cdn\.|unpkg\.com|jsdelivr/i);
+});

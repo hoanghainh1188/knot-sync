@@ -39,6 +39,8 @@ export type MessageKey =
   | "describe.moreWarnings"
   | "describe.wrote"
   | "describe.counts"
-  | "describe.next";
+  | "describe.next"
+  | "ui.listening"
+  | "ui.openHint";
 
 export type MessageCatalog = Record<MessageKey, string>;

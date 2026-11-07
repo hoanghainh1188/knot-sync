@@ -15,6 +15,7 @@
     { "path": "../guard" },
     { "path": "../report-html" },
     { "path": "../catalog" },
+    { "path": "../ui" },
     { "path": "../mcp-server" },
     { "path": "../store-sqlite" }
   ]

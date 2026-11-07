@@ -165,7 +165,7 @@ npm provenance. After merge: tag `v0.1.0` when ready, then
 | # | Change | Status |
 |---|---|---|
 | 1 | `add-cli-i18n` — CLI messages en/ja/vi (`--lang`, `cli.locale`) | ✅ done |
-| 2 | `add-catalog-review-ui` — `knot-sync ui` + Semantic Catalog review | planned |
+| 2 | `add-catalog-review-ui` — `knot-sync ui` + Semantic Catalog review | ✅ done |
 | 3 | `add-bench` — `knot-sync bench` (tokens / tool-call accuracy) | planned |
 
 ### 1. add-cli-i18n

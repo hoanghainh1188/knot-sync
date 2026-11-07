@@ -38,7 +38,8 @@
     "@hoanghainh/knot-sync-pii-basic": "workspace:*",
     "@hoanghainh/knot-sync-mcp-server": "workspace:*",
     "@hoanghainh/knot-sync-report-html": "workspace:*",
-    "@hoanghainh/knot-sync-store-sqlite": "workspace:*"
+    "@hoanghainh/knot-sync-store-sqlite": "workspace:*",
+    "@hoanghainh/knot-sync-ui": "workspace:*"
   },
   "author": "hoanghainh",
   "publishConfig": {
