@@ -2,13 +2,14 @@
 
 All notable changes to KnotSync are documented in this file.
 
-## 0.1.0 — 2026-11-06
+## 0.1.0 — 2026-11-07
 
 First publishable open-core release.
 
 ### Added
 
-- `knot-sync init` / `scan` / `run` / `plugins` / `serve` for local legacy data
+- `knot-sync init` / `scan` / `run` / `describe` / `ui` / `bench` / `plugins` /
+  `serve` for local legacy data
 - Folder source connector (`fs`) and SQLite store with FTS5 trigram search (JP/VN)
 - Office/text extraction (`xlsx`, `docx`, PDF text, CSV/TSV, Markdown)
 - JP/VN cleaning (NFKC, wareki→Gregorian, ISO dates, TCVN3/VNI, token reduction)
@@ -21,6 +22,9 @@ First publishable open-core release.
 - **Semantic Catalog**: `knot-sync describe`, `knot-sync.catalog.yaml`, romaji /
   Vietnamese dictionaries, optional テーブル定義書 Excel; MCP business-name
   filters and enum validation
+- Catalog review UI (`knot-sync ui`, loopback-only)
+- CLI messages in English, Japanese, and Vietnamese (`--lang` / `cli.locale`)
+- Local effectiveness bench (`knot-sync bench`: token before/after + suite)
 - Plugin system with built-in connectors, extractors, cleaners, and rules
 
 ### Notes
