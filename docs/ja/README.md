@@ -18,6 +18,7 @@ npx @hoanghainh/knot-sync scan
 npx @hoanghainh/knot-sync run
 npx @hoanghainh/knot-sync describe   # SQL ソースがある場合：Semantic Catalog
 npx @hoanghainh/knot-sync ui         # カタログレビュー（127.0.0.1 のみ）
+npx @hoanghainh/knot-sync bench      # トークン削減とスイート精度（ローカル）
 npx @hoanghainh/knot-sync serve      # MCP（stdio）
 ```
 
@@ -36,8 +37,12 @@ npx @hoanghainh/knot-sync@0.1.0 --version
 | `run` | テキスト／表を抽出してローカルストアへ |
 | `describe` | SQL 向け Semantic Catalog（`knot-sync.catalog.yaml`）を生成・更新 |
 | `ui` | ローカル UI でカタログを確認・`reviewed` を保存（127.0.0.1） |
+| `bench` | クリーニング前後のトークン見積もりとスイート（検索／カタログ）精度 |
 | `plugins` | 読み込み済みプラグインを表示 |
 | `serve` | MCP サーバー（stdio）を起動 |
+
+`bench` は `scan` / `run` 後のストアを読みます。任意で設定と同じ場所の
+`knot-sync.bench.yaml`（または `--suite`）を実行します。ソースへは書き込みません。
 
 ### メッセージ言語
 

@@ -14,6 +14,7 @@ export const ja: MessageCatalog = {
   run       直近の scan 結果からテキスト/表を抽出してドキュメントストアへ
   describe  SQL ソース向け knot-sync.catalog.yaml を生成/更新
   ui        ローカルのカタログレビュー UI を開く（127.0.0.1 のみ）
+  bench     ローカルストアでトークン削減とスイート精度を計測
   plugins   読み込み済みプラグインと拡張ポイントを一覧
   serve     MCP サーバーを開始（stdio のみ。Claude Desktop / Cursor / Claude Code 向け）
 
@@ -31,6 +32,10 @@ scan オプション:
   --json                結果を JSON で出力
   --pii                 テキストファイルに PII らしき内容がある件数を推定
   --report [file]       自己完結 HTML レポートを出力（既定: ./knot-sync-scan-report.html）
+
+bench オプション:
+  --json                結果を JSON で出力（キーは英語）
+  --suite <file>        ベンチスイート YAML（既定: 設定と同じ場所の knot-sync.bench.yaml）
 
 ui オプション:
   --port <number>       ループバックのポート（既定: 8787）
@@ -88,4 +93,16 @@ plugins:
   "ui.listening":
     "カタログレビュー UI: {url}（ループバックのみ）。停止は Ctrl+C。",
   "ui.openHint": "このマシンのブラウザで URL を開いてください。カタログ: {path}",
+  "bench.emptyStore":
+    "{path} にドキュメントがありません。\n先に knot-sync scan と knot-sync run を実行してください。",
+  "bench.tokensHeader": "トークン見積もり（cleaner のメタデータ）",
+  "bench.tokensLine":
+    "  before={before} after={after} saved={saved}（{pct}%）documents={documents} skipped={skipped}",
+  "bench.noSuite":
+    "スイートファイルはありません（任意）。設定と同じ場所に knot-sync.bench.yaml を置くか --suite を指定してください。",
+  "bench.suiteHeader": "スイート: {path}",
+  "bench.searchSummary": "検索スイート（クリーニング後ストア）: 成功 {passed} / 失敗 {failed}",
+  "bench.catalogSummary":
+    "カタログ解決: 成功 {passed} / 失敗 {failed}（before ok={before}, after ok={after}）",
+  "bench.catalogSkipped": "カタログスイートをスキップ: {reason}",
 };

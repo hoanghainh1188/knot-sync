@@ -39,7 +39,8 @@
     "@hoanghainh/knot-sync-mcp-server": "workspace:*",
     "@hoanghainh/knot-sync-report-html": "workspace:*",
     "@hoanghainh/knot-sync-store-sqlite": "workspace:*",
-    "@hoanghainh/knot-sync-ui": "workspace:*"
+    "@hoanghainh/knot-sync-ui": "workspace:*",
+    "yaml": "^2.6.0"
   },
   "author": "hoanghainh",
   "publishConfig": {

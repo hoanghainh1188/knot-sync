@@ -555,6 +555,87 @@ test("help lists ui command", async () => {
   assert.match(io.stdout.join("\n"), /127\.0\.0\.1/);
 });
 
+test("help lists bench command", async () => {
+  const io = capture();
+  assert.equal(await main(["--help", "--lang", "en"], io), 0);
+  assert.match(io.stdout.join("\n"), /\bbench\b/);
+});
+
+test("bench empty store exits 1 with guidance", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-bench-empty-"));
+  try {
+    const config = join(root, "cfg.yaml");
+    let io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], io), 0);
+    await mkdir(join(root, "share"), { recursive: true });
+    io = capture();
+    assert.equal(await main(["bench", "-c", config], io), 1);
+    assert.match(io.stderr.join("\n"), /scan|run/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("bench reports tokens and suite; JSON keys stay English with --lang ja", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-bench-"));
+  try {
+    const share = join(root, "share");
+    await mkdir(share, { recursive: true });
+    await writeFile(
+      join(share, "note.txt"),
+      "契約 令和5年4月1日 金額２０２４円\nHóa đơn tháng 5\n",
+      "utf8",
+    );
+    await writeFile(join(share, "hoa-don.txt"), "Hóa đơn tháng 5 cho khách ABC\n", "utf8");
+
+    const config = join(root, "cfg.yaml");
+    let io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], io), 0);
+    io = capture();
+    assert.equal(await main(["scan", "-c", config], io), 0);
+    io = capture();
+    assert.equal(await main(["run", "-c", config], io), 0);
+
+    await writeFile(
+      join(root, "knot-sync.bench.yaml"),
+      [
+        "version: 1",
+        "search:",
+        "  - id: invoice-vi",
+        "    query: hóa đơn",
+        "    expect:",
+        "      pathContains: hoa-don",
+        "  - id: missing",
+        "    query: hóa đơn",
+        "    expect:",
+        "      documentId: does-not-exist",
+        "catalog: []",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    io = capture();
+    assert.equal(await main(["bench", "-c", config, "--json", "--lang", "ja"], io), 0);
+    const report = JSON.parse(io.stdout.join("\n"));
+    assert.equal(typeof report.tokens, "object");
+    assert.equal(typeof report.suite, "object");
+    assert.equal(typeof report.tokens.before, "number");
+    assert.equal(typeof report.tokens.after, "number");
+    assert.equal(typeof report.tokens.reductionPct, "number");
+    assert.ok(report.tokens.documents >= 1);
+    assert.equal(report.suite.search.passed, 1);
+    assert.equal(report.suite.search.failed, 1);
+    assert.equal(Object.hasOwn(report, "tokens"), true);
+
+    io = capture();
+    assert.equal(await main(["bench", "-c", config, "--lang", "ja"], io), 0);
+    assert.match(io.stdout.join("\n"), /トークン|Token/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("ui missing config fails with guidance", async () => {
   const io = capture();
   assert.equal(await main(["ui", "-c", "/no/such/knot-ui-config.yaml"], io), 1);

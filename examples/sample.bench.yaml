@@ -1,0 +1,26 @@
+# Example KnotSync bench suite (version 1).
+# Place beside your config as knot-sync.bench.yaml, or pass --suite <path>.
+# Adjust queries and expects to match YOUR store and catalog.
+version: 1
+
+search:
+  - id: invoice-ja
+    query: 請求書
+    expect:
+      titleContains: 請求書
+  - id: invoice-vi
+    query: hóa đơn
+    expect:
+      titleContains: Hóa đơn
+  # Optional: match inventory relative path
+  # - id: by-path
+  #   query: 請求書
+  #   expect:
+  #     pathContains: 経理
+
+catalog:
+  - id: tksk
+    source: erp
+    table: 受注
+    name: 得意先コード
+    expectResolved: true
