@@ -1,0 +1,106 @@
+# cli-i18n Specification
+
+## Purpose
+
+Gives Japanese and Vietnamese operators localized CLI help, errors, and
+progress text while keeping command names and machine-readable output stable
+in English.
+
+## Requirements
+
+### Requirement: Supported CLI locales
+
+The CLI SHALL support locales `en`, `ja`, and `vi` for user-facing messages.
+Unsupported locale values from flags or config SHALL fail with an actionable
+error that lists the allowed values and suggests fixing `--lang` or
+`cli.locale`.
+
+#### Scenario: Japanese help text
+
+- **WHEN** the user runs `knot-sync --help --lang ja`
+- **THEN** the help text is Japanese (or predominantly Japanese prose)
+- **AND** command names such as `scan`, `run`, and `serve` remain English
+
+#### Scenario: Vietnamese unknown-command error
+
+- **WHEN** the user runs `knot-sync khong-ton-tai --lang vi`
+- **THEN** the process exits with code 2
+- **AND** stderr includes Vietnamese guidance naming the unknown command
+- **AND** stderr still shows the English command token that was typed
+
+#### Scenario: Invalid --lang value
+
+- **WHEN** the user runs `knot-sync scan --lang fr`
+- **THEN** the process exits with a non-zero code
+- **AND** the error lists allowed locales `en`, `ja`, and `vi`
+
+### Requirement: Locale resolution order
+
+The effective locale SHALL be the first available of: `--lang`, then
+`cli.locale` from a loaded config, then the environment heuristic, else `en`.
+
+#### Scenario: Flag overrides config
+
+- **GIVEN** a config with `cli.locale: ja`
+- **WHEN** the user runs `knot-sync init --lang en`
+- **THEN** English messages are used
+
+#### Scenario: Config used when flag omitted
+
+- **GIVEN** a config with `cli.locale: vi`
+- **WHEN** the user runs `knot-sync scan` without `--lang`
+- **THEN** Vietnamese user-facing messages are used
+
+#### Scenario: Default English
+
+- **WHEN** no `--lang`, no `cli.locale`, and no matching env locale is present
+- **THEN** English messages are used
+
+### Requirement: Environment locale heuristic
+
+When `--lang` and `cli.locale` are unset, the CLI SHALL use `KNOT_SYNC_LANG`
+if it is exactly `en`, `ja`, or `vi`; otherwise map `LANG` / `LC_ALL` prefixes
+`ja*` → `ja` and `vi*` → `vi`. Commands that skip config load (e.g. `--help`)
+SHALL still honor `--lang` and this heuristic, then default to `en`.
+
+#### Scenario: KNOT_SYNC_LANG selects Japanese
+
+- **WHEN** `KNOT_SYNC_LANG=ja` and no `--lang` / `cli.locale` is set
+- **THEN** Japanese user-facing messages are used
+
+#### Scenario: Help without config uses env
+
+- **WHEN** the user runs `knot-sync --help` with `KNOT_SYNC_LANG=vi` and no
+  `--lang`
+- **THEN** the help text is Vietnamese prose with English command names
+
+### Requirement: Machine interfaces stay English
+
+Command names, option/flag names, `--json` object keys and structure, exit
+codes, the version string from `--version`, source ids, plugin ids, and file
+paths printed as path values SHALL remain English / unchanged by locale.
+Dynamic customer data (paths, table names, issue codes from connectors) SHALL
+not be translated.
+
+#### Scenario: JSON scan output keys unchanged
+
+- **WHEN** the user runs `knot-sync scan --json --lang ja` successfully
+- **THEN** the JSON uses the same English field names as with `--lang en`
+
+#### Scenario: Version is locale-invariant
+
+- **WHEN** the user runs `knot-sync --version --lang vi`
+- **THEN** stdout is the version string only (same as English)
+
+### Requirement: Errors explain the next step in the active locale
+
+Localized error and failure messages that the CLI owns SHALL tell the user
+what to do next in the active locale (for example run `init`, fix config,
+or use `--force`), while preserving English command and flag tokens inside
+those messages.
+
+#### Scenario: Missing inventory message in Japanese
+
+- **WHEN** `knot-sync run --lang ja` finds no scan inventory
+- **THEN** stderr is Japanese prose that mentions running `knot-sync scan`
+  before `run`

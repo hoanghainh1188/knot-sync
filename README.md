@@ -26,6 +26,25 @@ npx @hoanghainh/knot-sync plugins
 npx @hoanghainh/knot-sync serve
 ```
 
+### CLI language (`--lang` / `cli.locale`)
+
+Help, errors, and human-readable progress can be shown in English, Japanese, or
+Vietnamese. Command names, flags, `--json` keys, and `--version` stay English.
+
+```bash
+npx @hoanghainh/knot-sync --help --lang ja
+npx @hoanghainh/knot-sync scan --lang vi
+```
+
+Optional config (overridden by `--lang`):
+
+```yaml
+cli:
+  locale: ja   # en | ja | vi
+```
+
+Resolution order: `--lang` → `cli.locale` → `KNOT_SYNC_LANG` / `LANG` heuristic → `en`.
+
 `run` extracts text and tables from the last scan (`.xlsx`, `.docx`, text PDF,
 `.csv`/`.tsv`, `.txt`, `.md`) into the local document store, then applies the
 built-in JP/VN cleaner (`cleaner-ja-vi`: NFKC, wareki→Gregorian, ISO dates,

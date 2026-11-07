@@ -1,0 +1,84 @@
+import type { MessageCatalog } from "./messages.js";
+
+export const ja: MessageCatalog = {
+  help: `KnotSync (knot-sync) {version}
+レガシー企業データを整理し、MCP 経由で AI エージェントに提供します。
+すべてこのマシン上で動作します。ソースは読み取り専用で、変更しません。
+
+使い方:
+  knot-sync <command> [options]
+
+コマンド:
+  init      カレントフォルダに設定ファイルを作成
+  scan      ソースを棚卸し（種類・サイズ・重複・古いファイル）
+  run       直近の scan 結果からテキスト/表を抽出してドキュメントストアへ
+  describe  SQL ソース向け knot-sync.catalog.yaml を生成/更新
+  plugins   読み込み済みプラグインと拡張ポイントを一覧
+  serve     MCP サーバーを開始（stdio のみ。Claude Desktop / Cursor / Claude Code 向け）
+
+オプション:
+  -c, --config <file>   設定ファイル（既定: {configFile}）
+  --lang <en|ja|vi>     CLI メッセージ言語（既定: en、または cli.locale / 環境変数）
+  -h, --help            ヘルプを表示
+  -v, --version         バージョンを表示
+
+init オプション:
+  --path <folder>       スキャン対象フォルダ（設定に書き込み）
+  --force               既存の設定ファイルを上書き
+
+scan オプション:
+  --json                結果を JSON で出力
+  --pii                 テキストファイルに PII らしき内容がある件数を推定
+  --report [file]       自己完結 HTML レポートを出力（既定: ./knot-sync-scan-report.html）
+
+plugins:
+  プラグインはプロセス内でフル権限で動作します。信頼できるものだけ入れてください。
+  有料プラグインは自身でライセンスを確認します。コアは確認しません。
+`,
+  "error.prefix": "エラー: {message}",
+  "error.configPrefix": "設定エラー: {message}",
+  "error.catalogPrefix": "カタログエラー: {message}",
+  "error.unknownCommand": '不明なコマンド "{command}" です。',
+  "error.invalidLang":
+    '不正な --lang "{value}" です。許可値: en, ja, vi。--lang または cli.locale を修正してください。',
+  "init.exists": "{path} は既に存在します。上書きするには --force を使ってください。",
+  "init.created": "{path} を作成しました",
+  "init.next": '次: "sources" を編集してから knot-sync scan を実行してください',
+  "scan.inventorySaved": "インベントリを {path} に保存しました",
+  "scan.htmlReport": "HTML レポートを {path} に書きました",
+  "scan.progressFiles": "  [{sourceId}] {count} ファイル…",
+  "scan.sourceHeader": '\n■ ソース "{sourceId}": {files} ファイル、{bytes}',
+  "scan.byType": "\n  種類別:",
+  "scan.health": "\n  健全性:",
+  "scan.dupCopies": "重複コピー",
+  "scan.olderThan": "{years} 年より古い",
+  "scan.emptyFiles": "空ファイル",
+  "scan.unreadable": "読めない",
+  "scan.likelyPii": "PII の可能性（サンプル）",
+  "scan.wasted": "{bytes} の無駄",
+  "scan.biggestDupes": "\n  最大の重複:",
+  "scan.andMorePaths": "      … ほか {n} 件",
+  "scan.couldNotRead": "\n  読めなかったもの:",
+  "scan.andMoreIssues": "    … ほか {n} 件",
+  "run.noInventory":
+    '{path} に scan インベントリがありません。\n先に "knot-sync scan" を実行してから "knot-sync run" してください。',
+  "run.complete":
+    "run 完了: 抽出 {extracted}、変更なし {skipped}、問題 {failed}",
+  "run.issuesHeader": "\n問題:",
+  "run.andMoreIssues": "  … ほか {n} 件",
+  "run.documentsSaved": "ドキュメントを {path} に保存しました",
+  "plugins.header":
+    "読み込み済みプラグイン（プロセス内・フル権限 — 信頼できるものだけインストール）:",
+  "plugins.none": "  （なし）",
+  "plugins.noExtensions": "（拡張なし）",
+  "serve.listening":
+    "KnotSync MCP サーバー（stdio）。ストア: {store}。監査: {audit}。",
+  "serve.catalogSuffix": " カタログ: {path}。",
+  "describe.noSql":
+    "postgres/mysql ソースがありません。allow リスト付きの SQL ソースを追加してから describe を再実行してください。",
+  "describe.moreWarnings": "…ほかサンプル省略警告 {n} 件",
+  "describe.wrote": "カタログを書きました {path}",
+  "describe.counts": "ソース: {sources}、テーブル: {tables}、列: {columns}",
+  "describe.next":
+    "次: ラベルを確認し、確定した項目に reviewed: true を付けてから knot-sync serve",
+};

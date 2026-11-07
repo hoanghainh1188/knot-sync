@@ -164,6 +164,15 @@ export interface ServerConfig {
   auditLog: string;
 }
 
+/** Supported CLI message locales (`cli.locale` in config). */
+export type CliLocale = "en" | "ja" | "vi";
+
+/** CLI preferences (`cli:` in config). */
+export interface CliConfig {
+  /** Preferred locale when set; omitted means unset (flag/env/default apply). */
+  locale?: CliLocale;
+}
+
 /** Excel column mapping for optional テーブル定義書 / 項目定義書. */
 export interface CatalogDefinitionMapping {
   sheet?: string;
@@ -212,6 +221,7 @@ export interface AppConfig {
   server: ServerConfig;
   catalog: CatalogConfig;
   prompts: PromptConfig[];
+  cli: CliConfig;
   /** Extra plugins listed in config (built-ins are separate). */
   plugins: string[];
   /** Opaque top-level settings keyed by plugin name. */

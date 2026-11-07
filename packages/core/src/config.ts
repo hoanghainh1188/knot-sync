@@ -8,6 +8,8 @@ import type {
   CatalogConfig,
   CatalogDefinitionMapping,
   CleaningConfig,
+  CliConfig,
+  CliLocale,
   GuardConfig,
   GuardMode,
   PiiConfig,
@@ -49,9 +51,12 @@ const CORE_TOP_LEVEL_KEYS = new Set([
   "server",
   "catalog",
   "prompts",
+  "cli",
 ]);
 
 const SERVER_KEYS = new Set(["audit_log"]);
+const CLI_KEYS = new Set(["locale"]);
+const CLI_LOCALES = new Set<CliLocale>(["en", "ja", "vi"]);
 const CATALOG_KEYS = new Set([
   "path",
   "dictionary",
@@ -135,10 +140,38 @@ export interface StructuralConfig {
   server: ServerConfig;
   catalog: CatalogConfig;
   prompts: PromptConfig[];
+  cli: CliConfig;
   /** Plugin entries as written in config (relative paths or package names). */
   plugins: string[];
   /** Opaque top-level keys for plugins, keyed by plugin name. */
   pluginSettings: Record<string, unknown>;
+}
+
+/** Parse optional `cli:` section. */
+export function parseCliConfig(raw: unknown): CliConfig {
+  if (raw === undefined || raw === null) {
+    return {};
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ConfigError('"cli" must be an object (e.g. { locale: ja }).');
+  }
+  const obj = raw as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    if (!CLI_KEYS.has(key)) {
+      throw new ConfigError(
+        `Unknown key "${key}" under "cli". Allowed keys: locale.`,
+      );
+    }
+  }
+  if (obj.locale === undefined) {
+    return {};
+  }
+  if (typeof obj.locale !== "string" || !CLI_LOCALES.has(obj.locale as CliLocale)) {
+    throw new ConfigError(
+      `"cli.locale" must be one of: en, ja, vi (got ${JSON.stringify(obj.locale)}).`,
+    );
+  }
+  return { locale: obj.locale as CliLocale };
 }
 
 /** Parse optional `guard:` section. */
@@ -512,6 +545,7 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
   const defaultCatalogPath = resolve(baseDir, DEFAULT_CATALOG_FILE);
   const catalog = parseCatalogConfig(c.catalog, defaultCatalogPath, baseDir);
   const prompts = parsePromptsConfig(c.prompts);
+  const cli = parseCliConfig(c.cli);
 
   const pluginSettings: Record<string, unknown> = Object.create(null);
   for (const [key, value] of Object.entries(c)) {
@@ -534,6 +568,7 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
     server,
     catalog,
     prompts,
+    cli,
     plugins,
     pluginSettings,
   };
@@ -565,6 +600,7 @@ export function resolveConfig(structural: StructuralConfig, host: PluginHost): A
     server: structural.server,
     catalog: structural.catalog,
     prompts: structural.prompts,
+    cli: structural.cli,
     plugins: structural.plugins,
     pluginSettings: structural.pluginSettings,
   };
@@ -630,6 +666,10 @@ scan:
 # Optional MCP server settings for "knot-sync serve".
 # server:
 #   audit_log: ./.data/mcp-audit.jsonl
+
+# Optional CLI locale for help/errors (en | ja | vi). Override with --lang.
+# cli:
+#   locale: ja
 
 # Optional MCP prompts (name must be unique).
 # prompts:

@@ -7,6 +7,7 @@ import {
   DEFAULT_GUARD_MODE,
   DEFAULT_PII_MODE,
   parseCleaningConfig,
+  parseCliConfig,
   parseConfig,
   parseGuardConfig,
   parsePiiConfig,
@@ -163,6 +164,31 @@ test("server rejects unknown keys", () => {
     () => parseServerConfig({ port: 8080 }, "/default.jsonl", "/base"),
     /Unknown key "port".*server/,
   );
+});
+
+test("cli defaults to empty when omitted", () => {
+  const structural = parseConfig("sources:\n  - id: a\n    type: fs\n    path: /x\n", "/work");
+  assert.deepEqual(structural.cli, {});
+  assert.equal(structural.pluginSettings.cli, undefined);
+});
+
+test("cli accepts locale ja and rejects bad values", () => {
+  const structural = parseConfig(
+    "sources:\n  - id: a\n    type: fs\n    path: /x\ncli:\n  locale: ja\n",
+    "/work",
+  );
+  assert.equal(structural.cli.locale, "ja");
+  assert.equal(parseCliConfig({ locale: "vi" }).locale, "vi");
+  assert.throws(() => parseCliConfig({ theme: "dark" }), /Unknown key "theme".*cli/);
+  assert.throws(() => parseCliConfig({ locale: "fr" }), /cli\.locale.*en, ja, vi/);
+});
+
+test("starter config mentions cli.locale", () => {
+  const yaml = starterConfigYaml("./share");
+  assert.match(yaml, /# cli:/);
+  assert.match(yaml, /#\s*locale:\s*ja/);
+  const cfg = withFs(yaml, "/base");
+  assert.deepEqual(cfg.cli, {});
 });
 
 test("prompts accept valid entry and reject duplicates / missing template", () => {
