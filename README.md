@@ -22,8 +22,21 @@ npx @hoanghainh/knot-sync init --path /path/to/shared/folder
 npx @hoanghainh/knot-sync scan
 npx @hoanghainh/knot-sync run
 npx @hoanghainh/knot-sync describe   # SQL sources: build Semantic Catalog
+npx @hoanghainh/knot-sync ui         # Review catalog in a local browser (127.0.0.1)
 npx @hoanghainh/knot-sync plugins
 npx @hoanghainh/knot-sync serve
+```
+
+### Catalog review UI (`ui`)
+
+`knot-sync ui` serves a bundled React review screen on **127.0.0.1** only
+(default port `8787`, override with `--port`). Edit ja/vi/en labels, mark
+`reviewed`, and save back to `knot-sync.catalog.yaml`. Customer source folders
+and databases are never written. UI chrome follows `--lang` / `cli.locale`.
+
+```bash
+npx @hoanghainh/knot-sync ui --lang ja
+# open http://127.0.0.1:8787/?lang=ja
 ```
 
 ### CLI language (`--lang` / `cli.locale`)

@@ -547,3 +547,36 @@ test("invalid --lang lists allowed locales", async () => {
   assert.equal(await main(["--help", "--lang", "fr"], io), 2);
   assert.match(io.stderr.join("\n"), /en, ja, vi/);
 });
+
+test("help lists ui command", async () => {
+  const io = capture();
+  assert.equal(await main(["--help", "--lang", "en"], io), 0);
+  assert.match(io.stdout.join("\n"), /\bui\b/);
+  assert.match(io.stdout.join("\n"), /127\.0\.0\.1/);
+});
+
+test("ui missing config fails with guidance", async () => {
+  const io = capture();
+  assert.equal(await main(["ui", "-c", "/no/such/knot-ui-config.yaml"], io), 1);
+  assert.match(io.stderr.join("\n"), /Config file not found|knot-sync init/i);
+});
+
+test("ui smoke starts on loopback then exits", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-"));
+  const prev = process.env.KNOT_SYNC_UI_SMOKE;
+  process.env.KNOT_SYNC_UI_SMOKE = "1";
+  try {
+    const config = join(root, "cfg.yaml");
+    let io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], io), 0);
+    await mkdir(join(root, "share"), { recursive: true });
+    io = capture();
+    assert.equal(await main(["ui", "-c", config, "--port", "0"], io), 0);
+    const err = io.stderr.join("\n");
+    assert.match(err, /http:\/\/127\.0\.0\.1:/);
+  } finally {
+    if (prev === undefined) delete process.env.KNOT_SYNC_UI_SMOKE;
+    else process.env.KNOT_SYNC_UI_SMOKE = prev;
+    await rm(root, { recursive: true, force: true });
+  }
+});

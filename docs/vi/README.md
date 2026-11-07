@@ -17,6 +17,7 @@ npx @hoanghainh/knot-sync init --path /path/to/shared/folder
 npx @hoanghainh/knot-sync scan
 npx @hoanghainh/knot-sync run
 npx @hoanghainh/knot-sync describe   # Nếu có SQL: tạo Semantic Catalog
+npx @hoanghainh/knot-sync ui         # Duyệt catalog (chỉ 127.0.0.1)
 npx @hoanghainh/knot-sync serve      # MCP (stdio)
 ```
 
@@ -34,6 +35,7 @@ npx @hoanghainh/knot-sync@0.1.0 --version
 | `scan` | Kiểm kê nguồn (loại file, trùng, file cũ…) |
 | `run` | Trích xuất văn bản/bảng vào store cục bộ |
 | `describe` | Sinh/cập nhật Semantic Catalog cho SQL (`knot-sync.catalog.yaml`) |
+| `ui` | UI cục bộ để duyệt catalog / lưu `reviewed` (127.0.0.1) |
 | `plugins` | Liệt kê plugin đã nạp |
 | `serve` | Chạy MCP server (stdio) |
 

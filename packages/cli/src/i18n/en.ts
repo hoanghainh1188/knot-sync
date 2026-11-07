@@ -13,6 +13,7 @@ Commands:
   scan      Inventory all sources: file types, sizes, duplicates, old files
   run       Extract text/tables from the last scan into the document store
   describe  Generate/update knot-sync.catalog.yaml for SQL sources
+  ui        Open local catalog review UI (127.0.0.1 only)
   plugins   List loaded plugins and their extension points
   serve     Start the MCP server (stdio only; for Claude Desktop / Cursor / Claude Code)
 
@@ -30,6 +31,9 @@ scan options:
   --json                Print results as JSON
   --pii                 Estimate how many text files look like they contain PII
   --report [file]       Write a self-contained HTML report (default: ./knot-sync-scan-report.html)
+
+ui options:
+  --port <number>       Loopback port (default: 8787)
 
 plugins:
   Plugins run in-process with full trust. Install only plugins you trust.
@@ -81,4 +85,6 @@ plugins:
   "describe.counts": "Sources: {sources}, tables: {tables}, columns: {columns}",
   "describe.next":
     "Next: review labels, set reviewed: true on confirmed entries, then knot-sync serve",
+  "ui.listening": "Catalog review UI on {url} (loopback only). Press Ctrl+C to stop.",
+  "ui.openHint": "Open the URL in a browser on this machine. Catalog file: {path}",
 };
