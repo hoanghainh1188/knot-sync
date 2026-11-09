@@ -1,7 +1,7 @@
 {
   "name": "@hoanghainh/knot-sync",
-  "version": "0.1.1",
-  "description": "Scan, clean and serve legacy enterprise data to AI agents via MCP. Runs fully on your own machine.",
+  "version": "0.1.2",
+  "description": "Local semantic layer for legacy JP/VN office files and SQL: clean, mask PII, catalog cryptic fields, serve AI agents via MCP.",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
@@ -23,6 +23,11 @@
     "bundle": "node ../../scripts/bundle-cli.mjs",
     "pack:publish": "pnpm run bundle && node ../../scripts/with-cli-publish-manifest.mjs npm pack"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hoanghainh1188/knot-sync.git"
+  },
+  "homepage": "https://github.com/hoanghainh1188/knot-sync#readme",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -30,7 +35,10 @@
     "data-cleaning",
     "legacy-data",
     "japanese",
-    "vietnamese"
+    "vietnamese",
+    "semantic-catalog",
+    "pii",
+    "office"
   ],
   "dependencies": {
     "@hoanghainh/knot-sync-catalog": "workspace:*",

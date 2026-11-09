@@ -9,7 +9,7 @@
  * Commands run with cwd = packages/cli.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { cpSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -36,6 +36,9 @@ pkg.files = [
 pkg.main = "dist/bin.js";
 delete pkg.types;
 pkg.bin = { "knot-sync": "dist/bin.js" };
+
+// Ensure npm packs the product README even if bundle was skipped.
+cpSync(join(root, "README.md"), join(cliDir, "README.md"));
 
 writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
 

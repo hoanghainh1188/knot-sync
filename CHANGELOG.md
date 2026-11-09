@@ -2,6 +2,19 @@
 
 All notable changes to KnotSync are documented in this file.
 
+## 0.1.2 — 2026-11-09
+
+### Changed
+
+- Publish the full product README on the npm package page (synced from the
+  repository root README at pack time)
+- Add `repository` and `homepage` metadata so npmjs links to GitHub
+- Prefer absolute GitHub links in the README so they work on npmjs
+
+### Notes
+
+- Verify after publish: `npx @hoanghainh/knot-sync@0.1.2 --version`
+
 ## 0.1.1 — 2026-11-09
 
 First registry publish of the single bundled package `@hoanghainh/knot-sync`
