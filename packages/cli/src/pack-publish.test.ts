@@ -35,7 +35,10 @@ test("bundle:cli produces runnable bin and copies UI static", () => {
   assert.ok(existsSync(binPath));
   assert.ok(existsSync(join(cliDir, "static/index.html")));
   // Executable bit so npm keeps bin mapping (0644 triggers "invalid and removed").
-  assert.equal(statSync(binPath).mode & 0o111, 0o111);
+  // Windows/NTFS does not surface Unix execute bits via fs.stat mode.
+  if (process.platform !== "win32") {
+    assert.equal(statSync(binPath).mode & 0o111, 0o111);
+  }
 
   const run = spawnSync(process.execPath, [binPath, "--version"], {
     cwd: repoRoot,
