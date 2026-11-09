@@ -32,9 +32,10 @@ pkg.files = [
   "README.md",
   "LICENSE",
 ];
-pkg.main = "./dist/bin.js";
+// npm publish strips/rejects "./" bin paths ("script name … invalid and removed").
+pkg.main = "dist/bin.js";
 delete pkg.types;
-pkg.bin = { "knot-sync": "./dist/bin.js" };
+pkg.bin = { "knot-sync": "dist/bin.js" };
 
 writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
 

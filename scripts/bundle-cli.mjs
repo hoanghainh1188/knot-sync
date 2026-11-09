@@ -3,7 +3,15 @@
  * Bundle the CLI + workspace packages into packages/cli/dist/bin.js for a
  * single npm publish. Third-party deps stay external (installed from npm).
  */
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
@@ -62,6 +70,7 @@ const outfile = join(distDir, "bin.js");
 const lines = readFileSync(outfile, "utf8").split("\n");
 while (lines[0]?.startsWith("#!")) lines.shift();
 writeFileSync(outfile, `#!/usr/bin/env node\n${lines.join("\n")}`);
+chmodSync(outfile, 0o755);
 
 rmSync(staticDest, { recursive: true, force: true });
 mkdirSync(staticDest, { recursive: true });

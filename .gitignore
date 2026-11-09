@@ -10,3 +10,5 @@ logs/
 *.sqlite
 *.sqlite-*
 .DS_Store
+.pnpm-store/
+knot-sync-catalog-ui-demo.png

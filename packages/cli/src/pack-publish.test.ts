@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -11,6 +11,9 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const cliDir = join(repoRoot, "packages/cli");
 const bundleScript = join(repoRoot, "scripts/bundle-cli.mjs");
 const packScript = join(repoRoot, "scripts/with-cli-publish-manifest.mjs");
+const cliVersion = (
+  JSON.parse(readFileSync(join(cliDir, "package.json"), "utf8")) as { version: string }
+).version;
 
 /**
  * Run pack helpers without `pnpm bundle:cli` (that re-runs `pnpm build` /
@@ -28,15 +31,21 @@ function runNode(script: string, args: string[] = []) {
 test("bundle:cli produces runnable bin and copies UI static", () => {
   const bundle = runNode(bundleScript);
   assert.equal(bundle.status, 0, bundle.stderr || bundle.stdout);
-  assert.ok(existsSync(join(cliDir, "dist/bin.js")));
+  const binPath = join(cliDir, "dist/bin.js");
+  assert.ok(existsSync(binPath));
   assert.ok(existsSync(join(cliDir, "static/index.html")));
+  // Executable bit so npm keeps bin mapping (0644 triggers "invalid and removed").
+  // Windows/NTFS does not surface Unix execute bits via fs.stat mode.
+  if (process.platform !== "win32") {
+    assert.equal(statSync(binPath).mode & 0o111, 0o111);
+  }
 
-  const run = spawnSync(process.execPath, [join(cliDir, "dist/bin.js"), "--version"], {
+  const run = spawnSync(process.execPath, [binPath, "--version"], {
     cwd: repoRoot,
     encoding: "utf8",
   });
   assert.equal(run.status, 0, run.stderr);
-  assert.match(run.stdout.trim(), /^0\.1\.1$/);
+  assert.equal(run.stdout.trim(), cliVersion);
 });
 
 test("pnpm pack:cli tarball has registry-safe package.json and required files", async () => {
@@ -46,7 +55,7 @@ test("pnpm pack:cli tarball has registry-safe package.json and required files", 
   const pack = runNode(packScript, ["npm", "pack"]);
   assert.equal(pack.status, 0, pack.stderr || pack.stdout);
 
-  const tgz = join(cliDir, "hoanghainh-knot-sync-0.1.1.tgz");
+  const tgz = join(cliDir, `hoanghainh-knot-sync-${cliVersion}.tgz`);
   assert.ok(existsSync(tgz), `missing ${tgz}\n${pack.stdout}\n${pack.stderr}`);
 
   const dir = await mkdtemp(join(tmpdir(), "knot-pack-"));
@@ -57,9 +66,16 @@ test("pnpm pack:cli tarball has registry-safe package.json and required files", 
     const pkgRoot = join(dir, "package");
     const pkg = JSON.parse(await readFile(join(pkgRoot, "package.json"), "utf8")) as {
       name: string;
+      version: string;
+      main?: string;
+      bin?: Record<string, string>;
       dependencies?: Record<string, string>;
     };
     assert.equal(pkg.name, "@hoanghainh/knot-sync");
+    assert.equal(pkg.version, cliVersion);
+    // No "./" prefix — npm publish treats "./dist/bin.js" as invalid and drops bin.
+    assert.equal(pkg.bin?.["knot-sync"], "dist/bin.js");
+    assert.equal(pkg.main, "dist/bin.js");
     for (const [name, range] of Object.entries(pkg.dependencies ?? {})) {
       assert.doesNotMatch(name, /^@hoanghainh\/knot-sync-/);
       assert.doesNotMatch(range, /^workspace:/);
