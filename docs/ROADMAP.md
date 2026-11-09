@@ -160,8 +160,8 @@ other workspace packages stay private and are bundled into the CLI.
 
 v0.1.0 metadata, per-package README/LICENSE, CHANGELOG, `docs/ja` + `docs/vi`,
 CI matrix (Node 22/24 × Linux/macOS/Windows), license gate, tag publish with
-npm provenance. After merge: tag `v0.1.0` when ready, then
-`npx @hoanghainh/knot-sync@0.1.0 --version`.
+npm provenance. After merge: tag `v0.1.1` when ready, then
+`npx @hoanghainh/knot-sync@0.1.1 --version`.
 
 ## v0.2 changes
 

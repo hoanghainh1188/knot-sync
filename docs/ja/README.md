@@ -25,7 +25,7 @@ npx @hoanghainh/knot-sync serve      # MCP（stdio）
 公開後の確認例:
 
 ```bash
-npx @hoanghainh/knot-sync@0.1.0 --version
+npx @hoanghainh/knot-sync@0.1.1 --version
 ```
 
 ## 主なコマンド

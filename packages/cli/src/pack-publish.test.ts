@@ -36,7 +36,7 @@ test("bundle:cli produces runnable bin and copies UI static", () => {
     encoding: "utf8",
   });
   assert.equal(run.status, 0, run.stderr);
-  assert.match(run.stdout.trim(), /^0\.1\.0$/);
+  assert.match(run.stdout.trim(), /^0\.1\.1$/);
 });
 
 test("pnpm pack:cli tarball has registry-safe package.json and required files", async () => {
@@ -46,7 +46,7 @@ test("pnpm pack:cli tarball has registry-safe package.json and required files", 
   const pack = runNode(packScript, ["npm", "pack"]);
   assert.equal(pack.status, 0, pack.stderr || pack.stdout);
 
-  const tgz = join(cliDir, "hoanghainh-knot-sync-0.1.0.tgz");
+  const tgz = join(cliDir, "hoanghainh-knot-sync-0.1.1.tgz");
   assert.ok(existsSync(tgz), `missing ${tgz}\n${pack.stdout}\n${pack.stderr}`);
 
   const dir = await mkdtemp(join(tmpdir(), "knot-pack-"));

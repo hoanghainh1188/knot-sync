@@ -2,6 +2,16 @@
 
 All notable changes to KnotSync are documented in this file.
 
+## 0.1.1 — 2026-11-09
+
+First registry publish of the single bundled package `@hoanghainh/knot-sync`
+(version `0.1.0` was unpublished earlier and cannot be reused on npm).
+
+### Notes
+
+- Same open-core surface as 0.1.0; publish-only version bump
+- Verify: `npx @hoanghainh/knot-sync@0.1.1 --version`
+
 ## 0.1.0 — 2026-11-07
 
 First publishable open-core release.
@@ -33,4 +43,4 @@ First publishable open-core release.
 - Sources are read-only; no telemetry
 - npm publishes **only** `@hoanghainh/knot-sync` (one package); other workspace
   packages are private and bundled into the CLI
-- After publish, verify: `npx @hoanghainh/knot-sync@0.1.0 --version`
+- After publish, verify: `npx @hoanghainh/knot-sync@0.1.1 --version`

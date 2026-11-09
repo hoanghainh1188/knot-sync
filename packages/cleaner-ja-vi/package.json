@@ -1,6 +1,6 @@
 {
   "name": "@hoanghainh/knot-sync-cleaner-ja-vi",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Built-in Japanese/Vietnamese text cleaner plugin for KnotSync.",
   "license": "Apache-2.0",
   "type": "module",

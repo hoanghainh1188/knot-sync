@@ -3,7 +3,7 @@
 > Scan, clean and serve legacy enterprise data to AI agents via the
 > [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
 
-**Status: v0.1.0 (open-core).** `init`, `scan`, `run`, `describe`, `ui`, `bench`,
+**Status: v0.1.1 (open-core).** `init`, `scan`, `run`, `describe`, `ui`, `bench`,
 `plugins` and `serve` are ready to publish. See [CHANGELOG.md](./CHANGELOG.md).
 
 npm exposes a **single npm package**: `@hoanghainh/knot-sync` (workspace packages
@@ -271,8 +271,8 @@ Details and order: [docs/ROADMAP.md](./docs/ROADMAP.md). Development uses
 On a machine without a prior local install:
 
 ```bash
-npx @hoanghainh/knot-sync@0.1.0 --version
-# expect: 0.1.0
+npx @hoanghainh/knot-sync@0.1.1 --version
+# expect: 0.1.1
 ```
 
 ## Development
