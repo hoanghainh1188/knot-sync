@@ -14,10 +14,26 @@ export interface TableMeta {
   rowEstimate: number | null;
 }
 
+/** Default max clients in the SQL connection pool. */
+export const DEFAULT_POOL_MAX = 4;
+
+/** Default statement / max-execution timeout in milliseconds. */
+export const DEFAULT_STATEMENT_TIMEOUT_MS = 5000;
+
+/** Default PostgreSQL schema when `schema` is omitted from config. */
+export const DEFAULT_POSTGRES_SCHEMA = "public";
+
+export interface DriverCreateOptions {
+  /** Postgres schema (ignored for MySQL). */
+  schema?: string;
+  /** Statement timeout in ms. */
+  statementTimeoutMs?: number;
+}
+
 /** Minimal read-only SQL driver used by scan and MCP query helpers. */
 export interface SqlDriver {
   dialect: SqlDialect;
-  /** Enable read-only session / transaction. */
+  /** Enable read-only session / transaction (may be a no-op when setup is per-checkout). */
   enableReadOnly(): Promise<void>;
   /** Introspect one table; return null if missing. */
   introspectTable(table: string): Promise<TableMeta | null>;
@@ -29,4 +45,7 @@ export interface SqlDriver {
   close(): Promise<void>;
 }
 
-export type DriverFactory = (url: string) => Promise<SqlDriver>;
+export type DriverFactory = (
+  url: string,
+  options?: DriverCreateOptions,
+) => Promise<SqlDriver>;

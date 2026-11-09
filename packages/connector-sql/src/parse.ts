@@ -4,6 +4,7 @@ import {
   type SqlAllowTable,
   type SqlSourceConfig,
 } from "@hoanghainh/knot-sync-core";
+import { DEFAULT_STATEMENT_TIMEOUT_MS } from "./driver.js";
 
 const ENV_URL = /^env:([A-Za-z_][A-Za-z0-9_]*)$/;
 
@@ -66,6 +67,28 @@ export function parseAllow(
   return allow;
 }
 
+function parseStatementTimeoutMs(raw: unknown, index: number): number | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0 || !Number.isInteger(raw)) {
+    throw new ConfigError(
+      `sources[${index}].statementTimeoutMs must be a positive integer (milliseconds). ` +
+        `Omit it to use the default ${DEFAULT_STATEMENT_TIMEOUT_MS}.`,
+    );
+  }
+  return raw;
+}
+
+function parsePostgresSchema(raw: unknown, index: number): string | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "string" || raw.trim() === "") {
+    throw new ConfigError(
+      `sources[${index}].schema must be a non-empty string (PostgreSQL schema name). ` +
+        `Omit it to use "public".`,
+    );
+  }
+  return raw.trim();
+}
+
 export function parseSqlSource(
   raw: Record<string, unknown>,
   ctx: { baseDir: string; index: number },
@@ -79,5 +102,18 @@ export function parseSqlSource(
   }
   const { url, urlEnv } = resolveEnvUrl(raw.url, ctx.index);
   const allow = parseAllow(raw.allow, ctx.index);
-  return { id, type: expectedType, url, urlEnv, allow };
+  const statementTimeoutMs = parseStatementTimeoutMs(raw.statementTimeoutMs, ctx.index);
+
+  if (expectedType === "mysql") {
+    if (raw.schema !== undefined) {
+      throw new ConfigError(
+        `sources[${ctx.index}].schema is only allowed for type "postgres" ` +
+          `(MySQL uses the connection database). Remove schema from this source.`,
+      );
+    }
+    return { id, type: "mysql", url, urlEnv, allow, statementTimeoutMs };
+  }
+
+  const schema = parsePostgresSchema(raw.schema, ctx.index);
+  return { id, type: "postgres", url, urlEnv, allow, schema, statementTimeoutMs };
 }

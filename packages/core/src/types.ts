@@ -108,6 +108,16 @@ export interface SqlSourceConfig {
   urlEnv: string;
   /** Table name → allowed columns. */
   allow: Record<string, SqlAllowTable>;
+  /**
+   * PostgreSQL schema for introspection and qualified table references.
+   * Defaults to `public` when omitted. Must not be set on mysql sources.
+   */
+  schema?: string;
+  /**
+   * Per-statement timeout in milliseconds (default 5000 when omitted).
+   * Applied on each pooled connection before introspection/query.
+   */
+  statementTimeoutMs?: number;
 }
 
 export type SourceConfig = FsSourceConfig | SqlSourceConfig;
