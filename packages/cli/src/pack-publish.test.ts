@@ -10,12 +10,18 @@ import { test } from "node:test";
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const cliDir = join(repoRoot, "packages/cli");
 
-test("bundle:cli produces runnable bin and copies UI static", () => {
-  const bundle = spawnSync("pnpm", ["bundle:cli"], {
+/** Windows resolves pnpm via pnpm.cmd; spawn without shell returns status null. */
+function runPnpm(args: string[]) {
+  return spawnSync("pnpm", args, {
     cwd: repoRoot,
     encoding: "utf8",
-    shell: false,
+    shell: process.platform === "win32",
+    env: process.env,
   });
+}
+
+test("bundle:cli produces runnable bin and copies UI static", () => {
+  const bundle = runPnpm(["bundle:cli"]);
   assert.equal(bundle.status, 0, bundle.stderr || bundle.stdout);
   assert.ok(existsSync(join(cliDir, "dist/bin.js")));
   assert.ok(existsSync(join(cliDir, "static/index.html")));
@@ -29,11 +35,7 @@ test("bundle:cli produces runnable bin and copies UI static", () => {
 });
 
 test("pnpm pack:cli tarball has registry-safe package.json and required files", async () => {
-  const pack = spawnSync("pnpm", ["pack:cli"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    shell: false,
-  });
+  const pack = runPnpm(["pack:cli"]);
   assert.equal(pack.status, 0, pack.stderr || pack.stdout);
 
   const tgz = join(cliDir, "hoanghainh-knot-sync-0.1.0.tgz");
