@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { access, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -35,7 +36,8 @@ import {
 const PII_SAMPLE_EXTS = new Set([".txt", ".md", ".csv", ".tsv"]);
 const PII_SAMPLE_MAX_BYTES = 256 * 1024;
 
-export const VERSION = "0.1.1";
+/** Keep in sync with packages/cli/package.json (bundled into dist/bin.js at publish). */
+export const VERSION = createRequire(import.meta.url)("../package.json").version as string;
 
 export interface Io {
   out: (text: string) => void;
