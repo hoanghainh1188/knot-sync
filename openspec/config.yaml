@@ -20,7 +20,8 @@ context: |
   - Distribution: npm (`@hoanghainh/knot-sync`, command `knot-sync`), Node.js
     >= 22.13, no native dependencies. Keep third-party dependencies minimal and
     license-compatible with Apache-2.0 (no GPL/AGPL).
-  - v0.1 MCP transport is stdio only. HTTP + OAuth 2.1 is a paid feature.
+  - MCP transport today is stdio only. Planned open-core v0.3: optional HTTP/SSE
+    with shared API key auth. OAuth 2.1 + scopes remain a paid feature.
   - Extensibility: once `add-plugin-system` is archived, every connector,
     extractor, cleaner, PII/guard rule, catalog source, MCP tool and prompt is
     a plugin registered through the plugin API; built-ins are default plugins.
