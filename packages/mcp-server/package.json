@@ -30,8 +30,5 @@
     "zod": "^3.25.0"
   },
   "author": "hoanghainh",
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  }
+  "private": true
 }

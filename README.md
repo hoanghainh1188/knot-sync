@@ -6,12 +6,16 @@
 **Status: v0.1.0 (open-core).** `init`, `scan`, `run`, `describe`, `ui`, `bench`,
 `plugins` and `serve` are ready to publish. See [CHANGELOG.md](./CHANGELOG.md).
 
+npm exposes a **single npm package**: `@hoanghainh/knot-sync` (workspace packages
+stay private in this monorepo and are bundled into the CLI for publish).
+
 - Runs **fully on your own machine**. Nothing is sent to the Internet.
 - Sources are **read-only**. The tool never changes your files or databases.
 - Built for **Japanese and Vietnamese** legacy data (和暦, 全角/半角, TCVN3/VNI fonts…).
 - Extensible via **plugins** (connectors, extractors, cleaners, rules…). Plugins run
   in-process with full trust — install only modules you trust. Paid plugins check
-  their own license keys; the core never does.
+  their own license keys; the core never does. (Publishing `@hoanghainh/knot-sync-core`
+  separately for paid plugins is deferred.)
 
 ## Quick start
 
@@ -280,7 +284,8 @@ pnpm test                # build + run all tests
 pnpm scan:sample         # scan examples/sample-data
 ```
 
-Packages:
+Packages (monorepo; **only** `packages/cli` is published to npm as
+`@hoanghainh/knot-sync`):
 
 | Package | Purpose |
 |---|---|

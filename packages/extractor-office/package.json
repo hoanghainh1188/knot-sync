@@ -32,8 +32,5 @@
     "unpdf": "^1.1.0"
   },
   "author": "hoanghainh",
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  }
+  "private": true
 }

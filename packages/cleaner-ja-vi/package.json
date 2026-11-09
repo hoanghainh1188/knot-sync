@@ -25,8 +25,5 @@
     "@hoanghainh/knot-sync-core": "workspace:*"
   },
   "author": "hoanghainh",
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  }
+  "private": true
 }
