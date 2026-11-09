@@ -47,9 +47,10 @@ if (args.length === 0) {
 
 let status = 1;
 try {
+  // Windows needs shell so npm.cmd / pnpm.cmd resolve (spawnSync npm → ENOENT).
   const result = spawnSync(args[0], args.slice(1), {
     stdio: "inherit",
-    shell: false,
+    shell: process.platform === "win32",
     cwd: cliDir,
     env: process.env,
   });
