@@ -198,7 +198,7 @@ npx @hoanghainh/knot-sync bench --suite ./examples/sample.bench.yaml
 | **Tool** | `search_documents` | Trigram full-text search (`query`, `source`, `type`, `limit`) |
 | **Tool** | `get_document` | Fetch document by its unique ID |
 | **Tool** | `describe_table` | Inspect allowed columns, data types, and business descriptions |
-| **Tool** | `query_table` | Parameterized SQL query with safe filters (`eq`, `in`, `range`, `contains`) |
+| **Tool** | `query_table` | Parameterized SQL query with safe filters (`eq`, `in`, `range`, `contains`, `starts_with`, `between_dates`, `is_null`) |
 
 ### Registering in Claude Desktop
 
@@ -234,7 +234,7 @@ Add to `.cursor/mcp.json`:
 
 ## SQL Sources (PostgreSQL & MySQL)
 
-KnotSync connects to SQL databases in **strict read-only transaction mode**. Database credentials must be provided via environment variables (`url: env:VAR_NAME`) — never stored in plain text. Only tables and columns explicitly declared in `allow:` are exposed.
+KnotSync connects to SQL databases in **strict read-only transaction mode** via a small connection pool (default max 4). Database credentials must be provided via environment variables (`url: env:VAR_NAME`) — never stored in plain text. Only tables and columns explicitly declared in `allow:` are exposed. Each session sets a statement timeout (default **5000ms**, override with `statementTimeoutMs`). Postgres sources may set `schema` (default **`public`**) for non-public business schemas such as `経理`.
 
 ```yaml
 # knot-sync.config.yaml
@@ -242,6 +242,8 @@ sources:
   - id: erp_database
     type: postgres
     url: env:KNOT_PG_URL
+    schema: public          # optional; e.g. 経理
+    statementTimeoutMs: 5000  # optional
     allow:
       受注:
         columns: [受注番号, TKSK_CD, 金額]

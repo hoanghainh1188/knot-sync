@@ -4,12 +4,35 @@ import type {
   ScanIssue,
   SqlSourceConfig,
 } from "@hoanghainh/knot-sync-core";
-import type { DriverFactory, SqlDriver } from "./driver.js";
+import {
+  DEFAULT_POSTGRES_SCHEMA,
+  DEFAULT_STATEMENT_TIMEOUT_MS,
+  type DriverCreateOptions,
+  type DriverFactory,
+  type SqlDriver,
+} from "./driver.js";
 import { createMysqlDriver } from "./mysql.js";
 import { createPostgresDriver } from "./postgres.js";
 
 export function defaultDriverFactory(type: "postgres" | "mysql"): DriverFactory {
   return type === "postgres" ? createPostgresDriver : createMysqlDriver;
+}
+
+/** Build pool/session options from a parsed SQL source. */
+export function driverOptionsFromSource(source: SqlSourceConfig): DriverCreateOptions {
+  return {
+    schema:
+      source.type === "postgres"
+        ? (source.schema?.trim() || DEFAULT_POSTGRES_SCHEMA)
+        : undefined,
+    statementTimeoutMs: source.statementTimeoutMs ?? DEFAULT_STATEMENT_TIMEOUT_MS,
+  };
+}
+
+/** Effective Postgres schema for query qualification (undefined for MySQL). */
+export function effectiveSchema(source: SqlSourceConfig): string | undefined {
+  if (source.type !== "postgres") return undefined;
+  return source.schema?.trim() || DEFAULT_POSTGRES_SCHEMA;
 }
 
 /** Map an allow-listed table into a FileEntry for the existing scan inventory. */
@@ -38,7 +61,7 @@ export async function* scanSql(
 ): AsyncGenerator<FileEntry> {
   let driver: SqlDriver | undefined;
   try {
-    driver = await createDriver(source.url);
+    driver = await createDriver(source.url, driverOptionsFromSource(source));
     await driver.enableReadOnly();
     for (const table of Object.keys(source.allow)) {
       try {

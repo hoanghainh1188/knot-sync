@@ -1,6 +1,6 @@
 import type { SqlSourceConfig } from "@hoanghainh/knot-sync-core";
 import type { DriverFactory, TableMeta } from "./driver.js";
-import { defaultDriverFactory } from "./scan.js";
+import { defaultDriverFactory, driverOptionsFromSource } from "./scan.js";
 
 export interface PublicColumnSchema {
   name: string;
@@ -29,7 +29,7 @@ export async function describeAllowedTable(
     );
   }
   const allowedSet = new Set(allow.columns);
-  const driver = await createDriver(source.url);
+  const driver = await createDriver(source.url, driverOptionsFromSource(source));
   try {
     await driver.enableReadOnly();
     const meta: TableMeta | null = await driver.introspectTable(table);

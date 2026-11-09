@@ -11,7 +11,10 @@ import {
 } from "@hoanghainh/knot-sync-catalog";
 import {
   defaultDriverFactory,
+  driverOptionsFromSource,
+  effectiveSchema,
   quoteIdent,
+  quoteTableRef,
   type DriverFactory,
 } from "@hoanghainh/knot-sync-connector-sql";
 import {
@@ -35,7 +38,10 @@ export function createDescribeSqlHooks(
 
   return {
     async introspectTable(source: SqlSourceConfig, table: string) {
-      const driver = await factoryFor(source)(source.url);
+      const driver = await factoryFor(source)(
+        source.url,
+        driverOptionsFromSource(source),
+      );
       try {
         await driver.enableReadOnly();
         const meta = await driver.introspectTable(table);
@@ -56,11 +62,14 @@ export function createDescribeSqlHooks(
     ) {
       const allow = source.allow[table];
       if (!allow || !allow.columns.includes(column)) return [];
-      const driver = await factoryFor(source)(source.url);
+      const driver = await factoryFor(source)(
+        source.url,
+        driverOptionsFromSource(source),
+      );
       try {
         await driver.enableReadOnly();
         const dialect = source.type;
-        const tableSql = quoteIdent(table, dialect);
+        const tableSql = quoteTableRef(table, dialect, effectiveSchema(source));
         const colSql = quoteIdent(column, dialect);
         const lim = Math.max(1, Math.min(200, Math.floor(limit)));
         const text = `SELECT DISTINCT ${colSql} AS v FROM ${tableSql} WHERE ${colSql} IS NOT NULL LIMIT ${lim}`;

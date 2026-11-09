@@ -5,14 +5,31 @@ import {
   createPluginHost,
   type SqlSourceConfig,
 } from "@hoanghainh/knot-sync-core";
-import type { SqlDriver, TableMeta } from "./driver.js";
+import {
+  DEFAULT_POOL_MAX,
+  DEFAULT_POSTGRES_SCHEMA,
+  DEFAULT_STATEMENT_TIMEOUT_MS,
+  type SqlDriver,
+  type TableMeta,
+} from "./driver.js";
 import { parseAllow, parseSqlSource, resolveEnvUrl } from "./parse.js";
 import { quoteIdent } from "./quote.js";
-import { buildSelectQuery } from "./query-build.js";
+import { buildSelectQuery, quoteTableRef } from "./query-build.js";
 import { createSqlPlugin } from "./plugin.js";
-import { scanSql, tableToFileEntry } from "./scan.js";
+import {
+  createSqlMcpToolsPlugin,
+  handleDescribeTable,
+  handleQueryTable,
+} from "./mcp-tools.js";
+import {
+  driverOptionsFromSource,
+  effectiveSchema,
+  scanSql,
+  tableToFileEntry,
+} from "./scan.js";
 import { describeAllowedTable } from "./schema.js";
-import { handleDescribeTable, handleQueryTable } from "./mcp-tools.js";
+import { postgresStatementTimeoutSql } from "./postgres.js";
+import { mysqlMaxExecutionTimeSql } from "./mysql.js";
 import { UNTRUSTED_SQL_BANNER } from "./sql-frame.js";
 
 function mockDriver(tables: Record<string, TableMeta>, rows: Record<string, unknown>[] = []): SqlDriver {
@@ -143,6 +160,19 @@ test("createSqlPlugin registers postgres/mysql connectors and mcp tools", () => 
   assert.ok(host.mcpTools.has("query_table"));
 });
 
+test("query_table tool schema documents new filter operators", () => {
+  const host = createPluginHost();
+  host.registerPlugin(createSqlMcpToolsPlugin());
+  const tool = host.mcpTools.get("query_table");
+  assert.ok(tool);
+  assert.match(tool.description, /starts_with/);
+  assert.match(tool.description, /between_dates/);
+  assert.match(tool.description, /is_null/);
+  const filters = (tool.inputSchema as { properties?: { filters?: { description?: string } } })
+    .properties?.filters;
+  assert.match(String(filters?.description ?? ""), /starts_with/);
+});
+
 test("parseSqlSource wires env url", () => {
   const key = "KNOT_PARSE_SQL_" + String(process.pid);
   process.env[key] = "postgres://localhost/app";
@@ -159,6 +189,10 @@ test("parseSqlSource wires env url", () => {
     );
     assert.equal(src.url, "postgres://localhost/app");
     assert.equal(src.urlEnv, key);
+    assert.equal(src.schema, undefined);
+    assert.equal(src.statementTimeoutMs, undefined);
+    assert.equal(effectiveSchema(src), DEFAULT_POSTGRES_SCHEMA);
+    assert.equal(driverOptionsFromSource(src).statementTimeoutMs, DEFAULT_STATEMENT_TIMEOUT_MS);
   } finally {
     delete process.env[key];
   }
@@ -170,6 +204,179 @@ test("parseSqlSource wires env url", () => {
         "postgres",
       ),
     (err: unknown) => err instanceof ConfigError,
+  );
+});
+
+test("parseSqlSource accepts Japanese schema and statementTimeoutMs", () => {
+  const key = "KNOT_PARSE_SQL_SCHEMA_" + String(process.pid);
+  process.env[key] = "postgres://localhost/app";
+  try {
+    const src = parseSqlSource(
+      {
+        id: "erp",
+        type: "postgres",
+        url: `env:${key}`,
+        schema: "経理",
+        statementTimeoutMs: 8000,
+        allow: { 請求: { columns: ["id"] } },
+      },
+      { baseDir: "/", index: 0 },
+      "postgres",
+    );
+    assert.equal(src.schema, "経理");
+    assert.equal(src.statementTimeoutMs, 8000);
+    assert.equal(effectiveSchema(src), "経理");
+    assert.deepEqual(driverOptionsFromSource(src), {
+      schema: "経理",
+      statementTimeoutMs: 8000,
+    });
+  } finally {
+    delete process.env[key];
+  }
+});
+
+test("parseSqlSource rejects empty schema, mysql schema, and bad timeout", () => {
+  const key = "KNOT_PARSE_SQL_BAD_" + String(process.pid);
+  process.env[key] = "postgres://localhost/app";
+  try {
+    assert.throws(
+      () =>
+        parseSqlSource(
+          {
+            id: "erp",
+            type: "postgres",
+            url: `env:${key}`,
+            schema: "  ",
+            allow: { t: { columns: ["a"] } },
+          },
+          { baseDir: "/", index: 0 },
+          "postgres",
+        ),
+      /schema must be a non-empty/,
+    );
+    assert.throws(
+      () =>
+        parseSqlSource(
+          {
+            id: "erp",
+            type: "mysql",
+            url: `env:${key}`,
+            schema: "anything",
+            allow: { t: { columns: ["a"] } },
+          },
+          { baseDir: "/", index: 0 },
+          "mysql",
+        ),
+      /schema is only allowed for type "postgres"/,
+    );
+    assert.throws(
+      () =>
+        parseSqlSource(
+          {
+            id: "erp",
+            type: "postgres",
+            url: `env:${key}`,
+            statementTimeoutMs: 0,
+            allow: { t: { columns: ["a"] } },
+          },
+          { baseDir: "/", index: 0 },
+          "postgres",
+        ),
+      /statementTimeoutMs must be a positive integer/,
+    );
+  } finally {
+    delete process.env[key];
+  }
+});
+
+test("pool and timeout helpers expose documented defaults", () => {
+  assert.equal(DEFAULT_POOL_MAX, 4);
+  assert.equal(DEFAULT_STATEMENT_TIMEOUT_MS, 5000);
+  assert.equal(postgresStatementTimeoutSql(5000), "SET statement_timeout = 5000");
+  assert.equal(mysqlMaxExecutionTimeSql(5000), "SET SESSION MAX_EXECUTION_TIME = 5000");
+  assert.equal(quoteTableRef("請求", "postgres", "経理"), `"経理"."請求"`);
+  assert.equal(quoteTableRef("hoa_don", "mysql"), "`hoa_don`");
+});
+
+test("buildSelectQuery supports starts_with, between_dates, and is_null", () => {
+  const allowed = new Set(["ten_kh", "計上日", "memo"]);
+  const prefix = buildSelectQuery({
+    dialect: "postgres",
+    table: "khach",
+    selectColumns: ["ten_kh"],
+    allowedColumns: allowed,
+    schema: "public",
+    filters: [{ op: "starts_with", column: "ten_kh", value: "Nguyễn" }],
+    limit: 5,
+  });
+  assert.match(prefix.text, /FROM "public"\."khach"/);
+  assert.match(prefix.text, /"ten_kh" LIKE \$1/);
+  assert.deepEqual(prefix.values, ["Nguyễn%", 5]);
+  assert.doesNotMatch(prefix.text, /Nguyễn/);
+
+  const dates = buildSelectQuery({
+    dialect: "postgres",
+    table: "受注",
+    selectColumns: ["計上日"],
+    allowedColumns: allowed,
+    filters: [{ op: "between_dates", column: "計上日", from: "2024-01-01", to: "2024-12-31" }],
+    limit: 10,
+  });
+  assert.match(dates.text, /"計上日" >= \$1/);
+  assert.match(dates.text, /"計上日" <= \$2/);
+  assert.deepEqual(dates.values, ["2024-01-01", "2024-12-31", 10]);
+
+  const nulls = buildSelectQuery({
+    dialect: "postgres",
+    table: "受注",
+    selectColumns: ["memo"],
+    allowedColumns: allowed,
+    filters: [{ op: "is_null", column: "memo", value: true }],
+  });
+  assert.match(nulls.text, /"memo" IS NULL/);
+  const notNull = buildSelectQuery({
+    dialect: "postgres",
+    table: "受注",
+    selectColumns: ["memo"],
+    allowedColumns: allowed,
+    filters: [{ op: "is_null", column: "memo", value: false }],
+  });
+  assert.match(notNull.text, /"memo" IS NOT NULL/);
+
+  assert.throws(
+    () =>
+      buildSelectQuery({
+        dialect: "postgres",
+        table: "受注",
+        selectColumns: ["ten_kh"],
+        allowedColumns: allowed,
+        filters: [{ op: "starts_with", column: "secret", value: "x" }],
+      }),
+    /not allow-listed/,
+  );
+  assert.throws(
+    () =>
+      buildSelectQuery({
+        dialect: "postgres",
+        table: "受注",
+        selectColumns: ["計上日"],
+        allowedColumns: allowed,
+        filters: [{ op: "between_dates", column: "計上日", from: "nope", to: "2024-01-01" }],
+      }),
+    /ISO date/,
+  );
+  assert.throws(
+    () =>
+      buildSelectQuery({
+        dialect: "postgres",
+        table: "受注",
+        selectColumns: ["計上日"],
+        allowedColumns: allowed,
+        filters: [
+          { op: "between_dates", column: "計上日", from: "2024-12-31", to: "2024-01-01" },
+        ],
+      }),
+    /from" <= "to/,
   );
 });
 
