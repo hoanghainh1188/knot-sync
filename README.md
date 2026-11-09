@@ -20,7 +20,7 @@ Legacy enterprise data is a goldmine for internal AI agents, but feeding it dire
 - **Legacy Japanese & Vietnamese Data**: Documents are riddled with old font encodings (TCVN3, VNI), Japanese era names (和暦 - Meiji/Taisho/Showa/Heisei/Reiwa), full-width digits, and non-standard dates that distort LLM reasoning.
 - **Cryptic Databases**: Legacy schemas use abbreviated column names (`TKSK_CD`, `ma_kh`) that lead agents to hallucinate incorrect queries.
 - **Security & Privacy Risks**: Sensitive PII (CCCD, My Number, credit cards) and prompt injection traps (hidden white-on-white text, zero-width instructions) slip unnoticed into AI prompts.
-- **Token Inefficiency**: Messy spreadsheets with repeated blank rows and unnormalized tables waste 30–50% of your LLM context budget.
+- **Token Inefficiency**: Messy spreadsheets with repeated blank rows and unnormalized tables waste a large share of your LLM context budget.
 
 **KnotSync acts as a local semantic shield and data adapter**: It ingests your legacy files and databases, normalizes text, strips PII, blocks prompt injections, enriches schemas with human business labels, and serves clean context via MCP — **100% on-premises, completely read-only, and zero internet required**.
 
@@ -31,19 +31,19 @@ Legacy enterprise data is a goldmine for internal AI agents, but feeding it dire
 ```mermaid
 flowchart LR
     subgraph Sources["Legacy Sources (Read-Only)"]
-        FS["📁 Shared Folders<br/>(.xlsx, .docx, .pdf, .csv, .txt)"]
-        DB["🗄️ SQL Databases<br/>(PostgreSQL, MySQL)"]
+        FS["Shared Folders<br/>(.xlsx, .docx, .pdf, .csv, .txt)"]
+        DB["SQL Databases<br/>(PostgreSQL, MySQL)"]
     end
 
-    subgraph KnotSync["KnotSync Pipeline (100% Local & Offline)"]
+    subgraph KnotSync["KnotSync (100% Local & Offline)"]
         direction TB
-        Ingest["1. Ingest & Inventory (scan)"]
-        Clean["2. JA/VI Cleaning & Token Reduction"]
-        Shield["3. PII Masking & Injection Guard"]
-        Catalog["4. Semantic Catalog & Business Labels"]
+        Scan["scan: inventory & health"]
+        Run["run: extract → JA/VI clean → PII → guard"]
         Store[("Local SQLite FTS5<br/>(Trigram Search)")]
-        
-        Ingest --> Clean --> Shield --> Catalog --> Store
+        Catalog["describe / ui:<br/>Semantic Catalog"]
+
+        Scan --> Run --> Store
+        Catalog -.->|"business labels<br/>for SQL / MCP"| Store
     end
 
     subgraph Agents["AI Agents & Workstations"]
@@ -52,11 +52,12 @@ flowchart LR
         Custom["Any MCP-Compliant Agent"]
     end
 
-    FS --> Ingest
-    DB --> Ingest
-    Store -->|"MCP Stdio / Tools & Resources"| Claude
-    Store -->|"MCP Stdio / Tools & Resources"| Cursor
-    Store -->|"MCP Stdio / Tools & Resources"| Custom
+    FS --> Scan
+    DB --> Scan
+    DB --> Catalog
+    Store -->|"MCP stdio / Tools & Resources"| Claude
+    Store -->|"MCP stdio / Tools & Resources"| Cursor
+    Store -->|"MCP stdio / Tools & Resources"| Custom
 ```
 
 ---
@@ -68,7 +69,7 @@ flowchart LR
   - Automatically converts Japanese imperial eras (和暦: 明治, 大正, 昭和, 平成, 令和 including 元年) to Gregorian dates.
   - Detects and converts legacy Vietnamese encodings (TCVN3, VNI-Windows) to clean UTF-8.
   - Normalizes full-width alphanumeric characters (NFKC) and unifies heterogeneous date formats to ISO 8601.
-  - Collapses empty spreadsheet rows/columns, reducing token usage by 30–50%.
+  - Collapses empty spreadsheet rows/columns and repeated headers/footers to reduce tokens (measure with `knot-sync bench`).
 - 🏷️ **Semantic Catalog (Explain Cryptic Fields)**:
   - Introspects SQL tables and maps cryptic column names (`TKSK_CD` → "得意先コード" / "customer code", `ma_kh` → "mã khách hàng").
   - Ingests company-specific dictionary files or legacy Excel table definitions (テーブル定義書 / 項目定義書).
@@ -323,7 +324,7 @@ Development follows the [OpenSpec](https://github.com/Fission-AI/OpenSpec) speci
 
 - [x] **v0.1**: Core pipeline, Office extractors, JA/VI cleaners, PII masking, Injection guard, MCP Server, SQL connectors, Semantic Catalog.
 - [x] **v0.2**: CLI i18n (EN/JA/VI), Catalog Review UI, Token/accuracy Benchmarking suite.
-- [ ] **v0.3**: Production Hardening (OOM/timeout protection, custom SQL schemas, HTTP/SSE MCP transport, expanded regional PII).
+- [ ] **v0.3**: Production Hardening (OOM/timeout protection, custom SQL schemas, HTTP/SSE MCP with API key auth, expanded regional PII). OAuth 2.1 remains paid.
 
 ---
 

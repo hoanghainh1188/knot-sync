@@ -155,13 +155,13 @@ Reviewed entries preserved across re-runs. Out of scope: local LLM (paid).
 
 ### 10. prepare-npm-release — ✅ done
 
-Follow-up: publish **only** `@hoanghainh/knot-sync` (see change `single-npm-package`);
+Follow-up `single-npm-package`: publish **only** `@hoanghainh/knot-sync`;
 other workspace packages stay private and are bundled into the CLI.
 
-v0.1.0 metadata, per-package README/LICENSE, CHANGELOG, `docs/ja` + `docs/vi`,
+Release tooling: per-package README/LICENSE, CHANGELOG, `docs/ja` + `docs/vi`,
 CI matrix (Node 22/24 × Linux/macOS/Windows), license gate, tag publish with
-npm provenance. After merge: tag `v0.1.1` when ready, then
-`npx @hoanghainh/knot-sync@0.1.1 --version`.
+npm provenance. **Shipped:** `@hoanghainh/knot-sync@0.1.1` on npm
+(`npx @hoanghainh/knot-sync@0.1.1 --version`).
 
 ## v0.2 changes
 
@@ -215,12 +215,15 @@ Add common business query filters to query_table (starts_with, between_dates, is
 
 ### 3. add-http-mcp-transport (P1)
 
+Open-core: HTTP/SSE + shared API key for team/server deployments.
+**Out of scope (paid):** OAuth 2.1, scopes, and multi-tenant identity.
+
 ```
 /opsx:propose add-http-mcp-transport: Add networked MCP transport for centralized team/server deployments.
 Add knot-sync serve --http [--port 3000] [--host 0.0.0.0] using @modelcontextprotocol/sdk SSEServerTransport
 alongside existing stdio transport. Support Bearer Token / API key authentication via Authorization header
 configured via environment variable (KNOT_SYNC_API_KEY). Return 401 Unauthorized on unauthenticated requests.
-Enrich JSONL audit log with client IP, user agent, and request ID.
+Enrich JSONL audit log with client IP, user agent, and request ID. Out of scope: OAuth 2.1 and scopes (paid).
 ```
 
 ### 4. enhance-pii-guard (P2)
@@ -246,8 +249,7 @@ Add load and stress benchmark scripts to monitor latency and memory under 50k+ d
 
 | Version | Scope |
 |---|---|
-| v0.2 | See table above (CLI i18n → catalog review UI → bench) |
-| v0.3 | Production hardening (see Production readiness section above) + system logs |
+| v0.3 | Production hardening (see section above) + system logs |
 | Paid | OCR (Docling via Docker), 方眼紙 Excel, SQL Server / Oracle / Access / AS400, OAuth 2.1 + scopes, local LLM for catalog, vector search, model-based guardrails |
 | After v1.0 | Write tools / stored procedures, always with human approval |
 
