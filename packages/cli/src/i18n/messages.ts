@@ -34,6 +34,8 @@ export type MessageKey =
   | "plugins.none"
   | "plugins.noExtensions"
   | "serve.listening"
+  | "serve.listeningHttp"
+  | "serve.invalidPort"
   | "serve.catalogSuffix"
   | "describe.noSql"
   | "describe.moreWarnings"

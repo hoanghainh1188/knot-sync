@@ -16,7 +16,7 @@ Lệnh:
   ui        Mở UI duyệt catalog cục bộ (chỉ 127.0.0.1)
   bench     Đo giảm token và độ chính xác suite trên kho cục bộ
   plugins   Liệt kê plugin đã tải và điểm mở rộng
-  serve     Khởi động MCP server (chỉ stdio; cho Claude Desktop / Cursor / Claude Code)
+  serve     Khởi động MCP server (mặc định stdio; tùy chọn --http cho team/LAN)
 
 Tùy chọn:
   -c, --config <file>   File cấu hình (mặc định: {configFile})
@@ -39,6 +39,12 @@ Tùy chọn bench:
 
 Tùy chọn ui:
   --port <number>       Cổng loopback (mặc định: 8787)
+
+Tùy chọn serve:
+  --http                Phục vụ MCP qua HTTP (Streamable HTTP tại /mcp)
+  --port <number>       Cổng HTTP (mặc định: 3000; ui cũng dùng)
+  --host <address>      Địa chỉ bind HTTP (mặc định: 127.0.0.1)
+  Env KNOT_SYNC_API_KEY Bắt buộc khi dùng --http (Bearer token dùng chung)
 
 plugins:
   Plugin chạy in-process với toàn quyền. Chỉ cài plugin bạn tin tưởng.
@@ -82,6 +88,10 @@ plugins:
   "plugins.noExtensions": "(không có extension)",
   "serve.listening":
     "KnotSync MCP server trên stdio. Store: {store}. Audit: {audit}.",
+  "serve.listeningHttp":
+    "KnotSync MCP server tại http://{host}:{port}/mcp (Bearer). Store: {store}. Audit: {audit}.",
+  "serve.invalidPort":
+    'Giá trị --port "{value}" không hợp lệ. Dùng số nguyên từ 1 đến 65535.',
   "serve.catalogSuffix": " Catalog: {path}.",
   "describe.noSql":
     'Không có nguồn postgres/mysql. Thêm nguồn SQL kèm danh sách "allow", rồi chạy lại describe.',

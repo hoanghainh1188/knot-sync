@@ -728,6 +728,8 @@ scan:
 # Optional MCP server settings for "knot-sync serve".
 # server:
 #   audit_log: ./.data/mcp-audit.jsonl
+# For "knot-sync serve --http", set API key in the environment (never in YAML):
+#   export KNOT_SYNC_API_KEY=your-shared-secret
 
 # Optional CLI locale for help/errors (en | ja | vi). Override with --lang.
 # cli:

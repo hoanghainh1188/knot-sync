@@ -497,6 +497,27 @@ test("CLI --lang ja localizes help with English command names", async () => {
   assert.match(text, /\bserve\b/);
 });
 
+test("serve help mentions --http and missing API key fails", async () => {
+  const helpIo = capture();
+  assert.equal(await main(["--help", "--lang", "en"], helpIo), 0);
+  assert.match(helpIo.stdout.join("\n"), /--http/);
+  assert.match(helpIo.stdout.join("\n"), /KNOT_SYNC_API_KEY/);
+
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-http-"));
+  try {
+    const config = join(root, "cfg.yaml");
+    const io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], io), 0);
+    await mkdir(join(root, "share"), { recursive: true });
+    delete process.env.KNOT_SYNC_API_KEY;
+    const io2 = capture();
+    assert.equal(await main(["serve", "-c", config, "--http"], io2), 1);
+    assert.match(io2.stderr.join("\n"), /KNOT_SYNC_API_KEY/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("CLI --lang vi localizes unknown command", async () => {
   const io = capture();
   assert.equal(await main(["khong-ton-tai", "--lang", "vi"], io), 2);

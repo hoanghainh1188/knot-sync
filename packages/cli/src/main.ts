@@ -14,7 +14,14 @@ import {
   type ScanIssue,
 } from "@hoanghainh/knot-sync-core";
 import { applyGuardToDocument } from "@hoanghainh/knot-sync-guard";
-import { serveStdio } from "@hoanghainh/knot-sync-mcp-server";
+import {
+  DEFAULT_HTTP_HOST,
+  DEFAULT_HTTP_PORT,
+  missingApiKeyMessage,
+  readApiKeyFromEnv,
+  serveHttp,
+  serveStdio,
+} from "@hoanghainh/knot-sync-mcp-server";
 import { applyPiiToDocument, textHasPii } from "@hoanghainh/knot-sync-pii-basic";
 import { Store, type SourceStats } from "@hoanghainh/knot-sync-store-sqlite";
 import {
@@ -87,6 +94,8 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         pii: { type: "boolean" },
         report: { type: "string" },
         port: { type: "string" },
+        host: { type: "string" },
+        http: { type: "boolean" },
         suite: { type: "string" },
       },
     });
@@ -164,9 +173,19 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
           activeLocale = l;
         });
       case "serve":
-        return await cmdServe(configPath, io, langFlag, (l) => {
-          activeLocale = l;
-        });
+        return await cmdServe(
+          configPath,
+          {
+            http: Boolean(values.http),
+            port: values.port,
+            host: values.host,
+          },
+          io,
+          langFlag,
+          (l) => {
+            activeLocale = l;
+          },
+        );
       default:
         io.err(t(locale, "error.unknownCommand", { command }) + "\n");
         io.err(helpText(locale));
@@ -735,6 +754,7 @@ async function loadCatalogIfPresent(path: string) {
 
 async function cmdServe(
   configPath: string,
+  flags: { http: boolean; port?: string; host?: string },
   io: Io,
   langFlag: string | undefined,
   onLocale: (locale: CliLocale) => void,
@@ -742,16 +762,52 @@ async function cmdServe(
   const structural = await loadConfig(configPath);
   const locale = localeForConfig(langFlag, structural.cli.locale);
   onLocale(locale);
-  const host = await loadAppPlugins(structural);
-  const config = resolveConfig(structural, host);
+  const pluginHost = await loadAppPlugins(structural);
+  const config = resolveConfig(structural, pluginHost);
   const catalog = await loadCatalogIfPresent(config.catalog.path);
   const store = new Store(config.store.path);
-  io.err(
-    t(locale, "serve.listening", { store: config.store.path, audit: config.server.auditLog }) +
-      (catalog ? t(locale, "serve.catalogSuffix", { path: config.catalog.path }) : ""),
-  );
+
   try {
-    await serveStdio({ store, config, host, catalog });
+    if (flags.http) {
+      if (!readApiKeyFromEnv()) {
+        throw new ConfigError(missingApiKeyMessage());
+      }
+      let port = DEFAULT_HTTP_PORT;
+      if (flags.port !== undefined) {
+        const n = Number(flags.port);
+        if (!Number.isInteger(n) || n <= 0 || n > 65535) {
+          throw new ConfigError(
+            t(locale, "serve.invalidPort", { value: String(flags.port) }),
+          );
+        }
+        port = n;
+      }
+      const bindHost = flags.host?.trim() || DEFAULT_HTTP_HOST;
+      io.err(
+        t(locale, "serve.listeningHttp", {
+          host: bindHost,
+          port: String(port),
+          store: config.store.path,
+          audit: config.server.auditLog,
+        }) + (catalog ? t(locale, "serve.catalogSuffix", { path: config.catalog.path }) : ""),
+      );
+      await serveHttp({
+        store,
+        config,
+        host: pluginHost,
+        catalog,
+        bindHost,
+        port,
+      });
+    } else {
+      io.err(
+        t(locale, "serve.listening", {
+          store: config.store.path,
+          audit: config.server.auditLog,
+        }) + (catalog ? t(locale, "serve.catalogSuffix", { path: config.catalog.path }) : ""),
+      );
+      await serveStdio({ store, config, host: pluginHost, catalog });
+    }
   } finally {
     store.close();
   }

@@ -9,8 +9,16 @@ export { SOURCES_URI, documentUri, parseDocumentUri, type ParsedDocUri } from ".
 export {
   AuditLog,
   assertAuditPathOutsideSources,
+  runWithAuditHttpContext,
   type AuditEntry,
+  type AuditHttpContext,
 } from "./audit.js";
+export {
+  API_KEY_ENV,
+  checkBearerAuth,
+  missingApiKeyMessage,
+  readApiKeyFromEnv,
+} from "./auth.js";
 export {
   createMcpToolsPlugin,
   handleGetDocument,
@@ -23,3 +31,11 @@ export {
   serveStdio,
   type CreateKnotMcpServerOptions,
 } from "./server.js";
+export {
+  DEFAULT_HTTP_HOST,
+  DEFAULT_HTTP_PORT,
+  MCP_HTTP_PATH,
+  isAllowedLoopbackHostHeader,
+  serveHttp,
+  type ServeHttpOptions,
+} from "./http.js";

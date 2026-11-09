@@ -12,8 +12,10 @@ import {
 } from "@hoanghainh/knot-sync-core";
 import { Store } from "@hoanghainh/knot-sync-store-sqlite";
 import {
+  API_KEY_ENV,
   AuditLog,
   assertAuditPathOutsideSources,
+  checkBearerAuth,
   createKnotMcpServer,
   createMcpToolsPlugin,
   documentUri,
@@ -21,7 +23,12 @@ import {
   framedDocumentText,
   handleGetDocument,
   handleSearchDocuments,
+  isAllowedLoopbackHostHeader,
+  missingApiKeyMessage,
   parseDocumentUri,
+  readApiKeyFromEnv,
+  runWithAuditHttpContext,
+  serveHttp,
   SOURCES_URI,
   UNTRUSTED_BANNER,
 } from "./index.js";
@@ -211,4 +218,158 @@ test("createKnotMcpServer builds without binding a network port", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("checkBearerAuth matches timing-safe and rejects bad headers", () => {
+  assert.equal(checkBearerAuth("Bearer secret-key", "secret-key"), true);
+  assert.equal(checkBearerAuth("bearer secret-key", "secret-key"), true);
+  assert.equal(checkBearerAuth("Bearer wrong", "secret-key"), false);
+  assert.equal(checkBearerAuth("Basic secret-key", "secret-key"), false);
+  assert.equal(checkBearerAuth(undefined, "secret-key"), false);
+  assert.equal(readApiKeyFromEnv({ [API_KEY_ENV]: "  abc  " }), "abc");
+  assert.equal(readApiKeyFromEnv({ [API_KEY_ENV]: "  " }), undefined);
+  assert.match(missingApiKeyMessage(), new RegExp(API_KEY_ENV));
+});
+
+test("AuditLog merges HTTP context fields", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-aud-"));
+  try {
+    const path = join(root, "a.jsonl");
+    const log = new AuditLog(path);
+    await log.append({
+      timestamp: "2024-01-01T00:00:00.000Z",
+      kind: "tool",
+      name: "search_documents",
+      resultCount: 0,
+      status: "ok",
+    });
+    await runWithAuditHttpContext(
+      { clientIp: "127.0.0.1", userAgent: "test-agent", requestId: "req-1" },
+      async () => {
+        await log.append({
+          timestamp: "2024-01-01T00:00:01.000Z",
+          kind: "tool",
+          name: "search_documents",
+          resultCount: 1,
+          status: "ok",
+        });
+      },
+    );
+    const lines = (await readFile(path, "utf8")).trim().split("\n");
+    assert.equal(lines.length, 2);
+    const first = JSON.parse(lines[0]!);
+    const second = JSON.parse(lines[1]!);
+    assert.equal(first.clientIp, undefined);
+    assert.equal(second.clientIp, "127.0.0.1");
+    assert.equal(second.userAgent, "test-agent");
+    assert.equal(second.requestId, "req-1");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("serveHttp requires API key and rejects unauthorized requests", async () => {
+  assert.equal(isAllowedLoopbackHostHeader("127.0.0.1:3000"), true);
+  assert.equal(isAllowedLoopbackHostHeader("[::1]:3000"), true);
+  assert.equal(isAllowedLoopbackHostHeader("[::1]"), true);
+  assert.equal(isAllowedLoopbackHostHeader("::1"), true);
+  assert.equal(isAllowedLoopbackHostHeader("evil.example"), false);
+
+  const root = await mkdtemp(join(tmpdir(), "mcpn-http-"));
+  const share = join(root, "share");
+  const auditLog = join(root, "audit.jsonl");
+  const store = new Store(":memory:");
+  store.upsertDocument(
+    doc("share", "経理/請求.txt", "請求書", "合計金額 1000", { type: "txt" }),
+  );
+  const host = createPluginHost();
+  host.registerPlugin(createMcpToolsPlugin());
+  const config = minimalConfig(share, auditLog);
+  const ac = new AbortController();
+  let boundPort = 0;
+  const serving = serveHttp({
+    store,
+    host,
+    config,
+    apiKey: "test-secret",
+    bindHost: "127.0.0.1",
+    port: 0,
+    signal: ac.signal,
+    onListening: (info) => {
+      boundPort = info.port;
+    },
+  });
+  // Wait until listening
+  for (let i = 0; i < 50 && boundPort === 0; i++) {
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  assert.ok(boundPort > 0);
+
+  try {
+    const unauthorized = await fetch(`http://127.0.0.1:${boundPort}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        host: "127.0.0.1",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2024-11-05",
+          capabilities: {},
+          clientInfo: { name: "t", version: "0" },
+        },
+      }),
+    });
+    assert.equal(unauthorized.status, 401);
+
+    const ok = await fetch(`http://127.0.0.1:${boundPort}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        authorization: "Bearer test-secret",
+        host: "127.0.0.1",
+        "user-agent": "knot-test/1",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2024-11-05",
+          capabilities: {},
+          clientInfo: { name: "t", version: "0" },
+        },
+      }),
+    });
+    assert.equal(ok.status, 200);
+    assert.ok(ok.headers.get("mcp-session-id"));
+  } finally {
+    ac.abort();
+    await serving;
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("serveHttp fails fast without API key", async () => {
+  const store = new Store(":memory:");
+  const host = createPluginHost();
+  await assert.rejects(
+    () =>
+      serveHttp({
+        store,
+        host,
+        config: minimalConfig("/tmp/share", "/tmp/a.jsonl"),
+        apiKey: "",
+        bindHost: "127.0.0.1",
+        port: 0,
+      }),
+    /KNOT_SYNC_API_KEY/,
+  );
+  store.close();
 });
