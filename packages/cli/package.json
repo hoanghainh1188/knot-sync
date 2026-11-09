@@ -12,11 +12,16 @@
   "files": [
     "dist",
     "!dist/**/*.test.*",
+    "static",
     "README.md",
     "LICENSE"
   ],
   "engines": {
     "node": ">=22.13.0"
+  },
+  "scripts": {
+    "bundle": "node ../../scripts/bundle-cli.mjs",
+    "pack:publish": "pnpm run bundle && node ../../scripts/with-cli-publish-manifest.mjs npm pack"
   },
   "keywords": [
     "mcp",
@@ -40,11 +45,19 @@
     "@hoanghainh/knot-sync-report-html": "workspace:*",
     "@hoanghainh/knot-sync-store-sqlite": "workspace:*",
     "@hoanghainh/knot-sync-ui": "workspace:*",
-    "yaml": "^2.6.0"
+    "yaml": "^2.6.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^3.25.0",
+    "exceljs": "^4.4.0",
+    "mammoth": "^1.9.0",
+    "unpdf": "^1.1.0",
+    "pg": "^8.14.0",
+    "mysql2": "^3.14.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "author": "hoanghainh",
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   }
 }

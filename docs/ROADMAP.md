@@ -155,6 +155,9 @@ Reviewed entries preserved across re-runs. Out of scope: local LLM (paid).
 
 ### 10. prepare-npm-release — ✅ done
 
+Follow-up: publish **only** `@hoanghainh/knot-sync` (see change `single-npm-package`);
+other workspace packages stay private and are bundled into the CLI.
+
 v0.1.0 metadata, per-package README/LICENSE, CHANGELOG, `docs/ja` + `docs/vi`,
 CI matrix (Node 22/24 × Linux/macOS/Windows), license gate, tag publish with
 npm provenance. After merge: tag `v0.1.0` when ready, then

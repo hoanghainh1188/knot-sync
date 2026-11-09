@@ -31,4 +31,6 @@ First publishable open-core release.
 
 - Requires Node.js ≥ 22.13
 - Sources are read-only; no telemetry
+- npm publishes **only** `@hoanghainh/knot-sync` (one package); other workspace
+  packages are private and bundled into the CLI
 - After publish, verify: `npx @hoanghainh/knot-sync@0.1.0 --version`

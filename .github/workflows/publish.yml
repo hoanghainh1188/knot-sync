@@ -1,31 +1,60 @@
 name: Publish
 
+# Publishes the single public package @hoanghainh/knot-sync (workspace packages
+# are private and bundled into the CLI).
+#
+# After the one-time manual bootstrap publish, configure Trusted Publisher:
+#   Organization or user: hoanghainh1188
+#   Repository:           knot-sync
+#   Workflow filename:    publish.yml
+#   Environment:          (leave blank unless you add a GitHub Environment)
+#   Allowed actions:      npm publish
+
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type publish to confirm a manual publish from this ref'
+        required: true
+        type: string
 
 permissions:
   contents: read
-  id-token: write # npm provenance / Trusted Publishing (OIDC)
+  id-token: write # Required for npm Trusted Publishing (OIDC)
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || inputs.confirm == 'publish'
     steps:
       - uses: actions/checkout@v4
-      # version comes from package.json "packageManager" (avoid dual version error)
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm run licenses:check
-      - name: Publish packages (provenance)
+      - name: Prefer OIDC over empty setup-node authToken
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
-        run: pnpm -r publish --access public --no-git-checks
+        run: |
+          USERCONFIG="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "NPM_TOKEN present (optional fallback)."
+          else
+            echo "Using Trusted Publishing (OIDC) — stripping empty _authToken."
+            if [ -f "$USERCONFIG" ]; then
+              sed -i '/_authToken=/d' "$USERCONFIG"
+            fi
+          fi
+      - name: Publish @hoanghainh/knot-sync (bundled CLI)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # --provenance needs GitHub Actions OIDC; omit from local `pnpm publish:cli`.
+        run: pnpm bundle:cli && node scripts/with-cli-publish-manifest.mjs npm publish --access public --provenance

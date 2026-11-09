@@ -1,6 +1,8 @@
 node_modules/
 dist/
 packages/ui/static/
+packages/cli/static/
+*.tgz
 *.tsbuildinfo
 .data/
 data/

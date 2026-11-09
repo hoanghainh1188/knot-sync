@@ -13,11 +13,13 @@ function packageDirs(): string[] {
   );
 }
 
-test("every package is 0.1.0 with README and LICENSE in files", () => {
+test("only CLI is public; internals are private at 0.1.0 with README/LICENSE", () => {
   for (const dir of packageDirs()) {
     const pkgPath = join(packagesDir, dir, "package.json");
     const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as {
+      name: string;
       version: string;
+      private?: boolean;
       files?: string[];
     };
     assert.equal(pkg.version, "0.1.0", `${dir} version`);
@@ -26,7 +28,25 @@ test("every package is 0.1.0 with README and LICENSE in files", () => {
     const files = pkg.files ?? [];
     assert.ok(files.includes("README.md"), `${dir} files README`);
     assert.ok(files.includes("LICENSE"), `${dir} files LICENSE`);
+
+    if (pkg.name === "@hoanghainh/knot-sync") {
+      assert.notEqual(pkg.private, true, "CLI must be publishable");
+    } else {
+      assert.equal(pkg.private, true, `${dir} must be private`);
+    }
   }
+});
+
+test("CLI publish-dependencies.json has no workspace protocol", () => {
+  const deps = JSON.parse(
+    readFileSync(join(packagesDir, "cli", "publish-dependencies.json"), "utf8"),
+  ) as Record<string, string>;
+  for (const [name, range] of Object.entries(deps)) {
+    assert.doesNotMatch(name, /^@hoanghainh\/knot-sync-/);
+    assert.doesNotMatch(range, /^workspace:/);
+  }
+  assert.ok(deps.yaml);
+  assert.ok(deps["@modelcontextprotocol/sdk"]);
 });
 
 test("CHANGELOG 0.1.0 mentions describe / Semantic Catalog", () => {
@@ -56,12 +76,12 @@ test("CI workflow matrix includes Node 22/24 and three OSes", () => {
   assert.match(yml, /pnpm test/);
 });
 
-test("publish workflow is tag-triggered with provenance", () => {
+test("publish workflow publishes only the CLI package via OIDC", () => {
   const yml = readFileSync(join(repoRoot, ".github/workflows/publish.yml"), "utf8");
   assert.match(yml, /tags:/);
   assert.match(yml, /v\*/);
-  assert.match(yml, /provenance|NPM_CONFIG_PROVENANCE|id-token:\s*write/i);
-  assert.match(yml, /pnpm -r publish|pnpm publish/);
+  assert.match(yml, /id-token:\s*write/i);
+  assert.match(yml, /publish:cli|filter @hoanghainh\/knot-sync|with-cli-publish-manifest/);
 });
 
 test("root README links ja/vi docs and documents npx verification", () => {
@@ -69,14 +89,17 @@ test("root README links ja/vi docs and documents npx verification", () => {
   assert.match(readme, /docs\/ja/);
   assert.match(readme, /docs\/vi/);
   assert.match(readme, /npx @hoanghainh\/knot-sync/);
+  assert.match(readme, /single npm package|one npm package|only package/i);
 });
 
-test("ui package publishes static assets without CDN refs", () => {
+test("ui package keeps static assets without CDN refs", () => {
   const uiDir = join(packagesDir, "ui");
   const pkg = JSON.parse(readFileSync(join(uiDir, "package.json"), "utf8")) as {
     files?: string[];
     dependencies?: Record<string, string>;
+    private?: boolean;
   };
+  assert.equal(pkg.private, true);
   assert.ok(pkg.files?.includes("static"), "ui files must include static");
   assert.ok(pkg.dependencies?.react, "ui depends on react");
   const index = join(uiDir, "static", "index.html");
