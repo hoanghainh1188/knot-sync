@@ -17,8 +17,11 @@
     "clean": "tsc -b --clean",
     "test": "pnpm build && node --test --no-warnings=ExperimentalWarning \"packages/*/dist/**/*.test.js\"",
     "licenses:check": "node scripts/check-licenses.mjs",
-    "scan:sample": "pnpm build && node packages/cli/dist/bin.js scan --config examples/sample.config.yaml"
+    "scan:sample": "pnpm build && node packages/cli/dist/bin.js scan --config examples/sample.config.yaml",
+    "store:stress": "pnpm build && node scripts/store-load-stress.mjs",
+    "store:stress:smoke": "pnpm build && node scripts/store-load-stress.mjs --count 200 --chunk 50"
   },
+
   "devDependencies": {
     "@types/node": "^22.10.0",
     "esbuild": "^0.25.0",

@@ -582,6 +582,57 @@ test("help lists bench command", async () => {
   assert.match(io.stdout.join("\n"), /\bbench\b/);
 });
 
+test("help lists optimize command in en/ja", async () => {
+  let io = capture();
+  assert.equal(await main(["--help", "--lang", "en"], io), 0);
+  assert.match(io.stdout.join("\n"), /\boptimize\b/);
+  io = capture();
+  assert.equal(await main(["--help", "--lang", "ja"], io), 0);
+  const out = io.stdout.join("\n");
+  assert.match(out, /\boptimize\b/);
+  assert.match(out, /FTS5|最適化/);
+});
+
+test("optimize succeeds after run and fails when store path is invalid", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-opt-"));
+  try {
+    const share = join(root, "share");
+    await mkdir(share, { recursive: true });
+    await writeFile(join(share, "note.txt"), "請求書 テスト\n", "utf8");
+    const config = join(root, "cfg.yaml");
+    let io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], io), 0);
+    io = capture();
+    assert.equal(await main(["scan", "-c", config], io), 0);
+    io = capture();
+    assert.equal(await main(["run", "-c", config], io), 0);
+    io = capture();
+    assert.equal(await main(["optimize", "-c", config], io), 0);
+    assert.match(io.stdout.join("\n"), /Optimized|最適化|tối ưu/i);
+
+    const blocker = join(root, "not-a-dir");
+    await writeFile(blocker, "x", "utf8");
+    const badConfig = join(root, "bad.yaml");
+    await writeFile(
+      badConfig,
+      [
+        "store:",
+        `  path: ${blocker}/db.sqlite`,
+        "sources:",
+        "  - id: share",
+        "    type: fs",
+        "    path: ./share",
+      ].join("\n"),
+      "utf8",
+    );
+    io = capture();
+    assert.equal(await main(["optimize", "-c", badConfig, "--lang", "vi"], io), 1);
+    assert.match(io.stderr.join("\n"), /Không mở được kho|optimize/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("bench empty store exits 1 with guidance", async () => {
   const root = await mkdtemp(join(tmpdir(), "mcpn-cli-bench-empty-"));
   try {

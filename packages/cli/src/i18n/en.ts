@@ -15,6 +15,7 @@ Commands:
   describe  Generate/update knot-sync.catalog.yaml for SQL sources
   ui        Open local catalog review UI (127.0.0.1 only)
   bench     Measure token reduction and suite accuracy on the local store
+  optimize  Compact FTS5 and checkpoint the store WAL (run when idle)
   plugins   List loaded plugins and their extension points
   serve     Start the MCP server (stdio by default; optional --http for team/LAN)
 
@@ -114,4 +115,8 @@ plugins:
   "bench.catalogSummary":
     "Catalog resolve: {passed} passed, {failed} failed (before ok={before}, after ok={after})",
   "bench.catalogSkipped": "Catalog suite skipped: {reason}",
+  "optimize.done":
+    "Optimized store at {path} (FTS optimize + WAL checkpoint).",
+  "optimize.storeOpenFailed":
+    'Could not open store at {path} ({detail}).\nRun "knot-sync init", "knot-sync scan", and "knot-sync run" first, then retry "knot-sync optimize".',
 };

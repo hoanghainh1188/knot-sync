@@ -15,6 +15,7 @@ export const ja: MessageCatalog = {
   describe  SQL ソース向け knot-sync.catalog.yaml を生成/更新
   ui        ローカルのカタログレビュー UI を開く（127.0.0.1 のみ）
   bench     ローカルストアでトークン削減とスイート精度を計測
+  optimize  FTS5 を最適化しストアの WAL をチェックポイント（アイドル時に実行）
   plugins   読み込み済みプラグインと拡張ポイントを一覧
   serve     MCP サーバーを開始（既定は stdio。チーム向けに --http 可）
 
@@ -115,4 +116,8 @@ plugins:
   "bench.catalogSummary":
     "カタログ解決: 成功 {passed} / 失敗 {failed}（before ok={before}, after ok={after}）",
   "bench.catalogSkipped": "カタログスイートをスキップ: {reason}",
+  "optimize.done":
+    "ストア {path} を最適化しました（FTS optimize + WAL チェックポイント）。",
+  "optimize.storeOpenFailed":
+    "ストア {path} を開けませんでした（{detail}）。\n先に \"knot-sync init\"、\"knot-sync scan\"、\"knot-sync run\" を実行してから \"knot-sync optimize\" を再試行してください。",
 };

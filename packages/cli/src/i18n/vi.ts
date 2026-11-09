@@ -15,6 +15,7 @@ Lệnh:
   describe  Tạo/cập nhật knot-sync.catalog.yaml cho nguồn SQL
   ui        Mở UI duyệt catalog cục bộ (chỉ 127.0.0.1)
   bench     Đo giảm token và độ chính xác suite trên kho cục bộ
+  optimize  Nén FTS5 và checkpoint WAL của kho (chạy khi không ghi)
   plugins   Liệt kê plugin đã tải và điểm mở rộng
   serve     Khởi động MCP server (mặc định stdio; tùy chọn --http cho team/LAN)
 
@@ -115,4 +116,8 @@ plugins:
   "bench.catalogSummary":
     "Giải cột catalog: {passed} đạt, {failed} lỗi (before ok={before}, after ok={after})",
   "bench.catalogSkipped": "Bỏ qua suite catalog: {reason}",
+  "optimize.done":
+    "Đã tối ưu kho tại {path} (FTS optimize + WAL checkpoint).",
+  "optimize.storeOpenFailed":
+    'Không mở được kho tại {path} ({detail}).\nChạy "knot-sync init", "knot-sync scan", rồi "knot-sync run" trước, sau đó thử lại "knot-sync optimize".',
 };
