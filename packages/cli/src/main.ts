@@ -10,6 +10,7 @@ import {
   resolveConfig,
   starterConfigYaml,
   type CliLocale,
+  type Document,
   type FileEntry,
   type ScanIssue,
 } from "@hoanghainh/knot-sync-core";
@@ -23,7 +24,11 @@ import {
   serveStdio,
 } from "@hoanghainh/knot-sync-mcp-server";
 import { applyPiiToDocument, textHasPii } from "@hoanghainh/knot-sync-pii-basic";
-import { Store, type SourceStats } from "@hoanghainh/knot-sync-store-sqlite";
+import {
+  DEFAULT_UPSERT_CHUNK,
+  Store,
+  type SourceStats,
+} from "@hoanghainh/knot-sync-store-sqlite";
 import {
   DEFAULT_UI_PORT,
   createUiServer,
@@ -168,6 +173,10 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
             activeLocale = l;
           },
         );
+      case "optimize":
+        return await cmdOptimize(configPath, io, langFlag, (l) => {
+          activeLocale = l;
+        });
       case "plugins":
         return await cmdPlugins(configPath, io, langFlag, (l) => {
           activeLocale = l;
@@ -433,6 +442,16 @@ async function cmdRun(
     let skipped = 0;
     let failed = 0;
     const issues: { path: string; code: string; message: string }[] = [];
+    const pending: Document[] = [];
+    const flushPending = () => {
+      if (pending.length === 0) return;
+      store.upsertDocuments(pending);
+      pending.length = 0;
+    };
+    const enqueue = (document: Document) => {
+      pending.push(document);
+      if (pending.length >= DEFAULT_UPSERT_CHUNK) flushPending();
+    };
 
     for (const file of files) {
       const extractor = findExtractor(host, file);
@@ -524,7 +543,7 @@ async function cmdRun(
           void _ot;
           void _ht;
           // Never persist unmasked PII on error — omit originals when rules are active.
-          store.upsertDocument({
+          enqueue({
             ...result.document,
             content: "",
             tables: [],
@@ -567,7 +586,7 @@ async function cmdRun(
           void _oc;
           void _ot;
           void _ht;
-          store.upsertDocument({
+          enqueue({
             ...document,
             content: "",
             tables: [],
@@ -592,7 +611,7 @@ async function cmdRun(
               structural.guard,
             );
             if (document.metadata.status === "error") {
-              store.upsertDocument(document);
+              enqueue(document);
               failed += 1;
               issues.push({
                 path: file.relPath,
@@ -602,7 +621,7 @@ async function cmdRun(
               continue;
             }
           }
-          store.upsertDocument(document);
+          enqueue(document);
           extracted += 1;
         } catch (err) {
           const message =
@@ -619,7 +638,7 @@ async function cmdRun(
           void _oc;
           void _ot;
           void _ht;
-          store.upsertDocument({
+          enqueue({
             ...document,
             content: "",
             tables: [],
@@ -646,6 +665,8 @@ async function cmdRun(
         });
       }
     }
+
+    flushPending();
 
     io.out(
       t(locale, "run.complete", {
@@ -712,6 +733,36 @@ async function cmdUi(
   return 0;
 }
 
+async function cmdOptimize(
+  configPath: string,
+  io: Io,
+  langFlag: string | undefined,
+  onLocale: (locale: CliLocale) => void,
+): Promise<number> {
+  const structural = await loadConfig(configPath);
+  const locale = localeForConfig(langFlag, structural.cli.locale);
+  onLocale(locale);
+  let store: Store;
+  try {
+    store = new Store(structural.store.path);
+  } catch (err) {
+    io.err(
+      t(locale, "optimize.storeOpenFailed", {
+        path: structural.store.path,
+        detail: (err as Error).message || String(err),
+      }),
+    );
+    return 1;
+  }
+  try {
+    store.optimize();
+    io.out(t(locale, "optimize.done", { path: structural.store.path }));
+    return 0;
+  } finally {
+    store.close();
+  }
+}
+
 async function cmdPlugins(
   configPath: string,
   io: Io,
@@ -722,7 +773,6 @@ async function cmdPlugins(
   const locale = localeForConfig(langFlag, structural.cli.locale);
   onLocale(locale);
   const host = await loadAppPlugins(structural);
-
   io.out(t(locale, "plugins.header"));
   if (host.loaded.length === 0) {
     io.out(t(locale, "plugins.none"));

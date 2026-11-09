@@ -182,6 +182,18 @@ npx @hoanghainh/knot-sync bench
 npx @hoanghainh/knot-sync bench --suite ./examples/sample.bench.yaml
 ```
 
+### 4b. `optimize`: Compact the local store
+After large `run`s, compact FTS5 and truncate the WAL (stop `serve`/`run` first):
+```bash
+npx @hoanghainh/knot-sync optimize
+```
+
+`run` upserts documents in batches of 500 per transaction. For offline load/latency checks at 50k+ docs (dev only):
+```bash
+pnpm store:stress:smoke   # small count
+pnpm store:stress         # default 50k
+```
+
 ---
 
 ## MCP Agent Integration (`serve`)

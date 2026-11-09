@@ -11,6 +11,20 @@ import {
 
 const SCHEMA_VERSION = 1;
 
+/** Default documents per transaction for {@link Store.upsertDocuments}. */
+export const DEFAULT_UPSERT_CHUNK = 500;
+
+export interface UpsertDocumentsOptions {
+  /** Max documents per BEGIN/COMMIT (default {@link DEFAULT_UPSERT_CHUNK}). */
+  chunkSize?: number;
+}
+
+export interface OptimizeResult {
+  ftsOptimized: true;
+  /** Raw `wal_checkpoint` result row when available. */
+  checkpoint: unknown;
+}
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
@@ -326,31 +340,67 @@ export class Store {
     return doc.metadata.sourceFileHash === file.hash;
   }
 
+  private insertDocumentStmt() {
+    return this.db.prepare(
+      `INSERT INTO documents (id, source_id, type, title, content, tables_json, metadata_json, pii_json, guard_json, hash, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         source_id = excluded.source_id, type = excluded.type, title = excluded.title,
+         content = excluded.content, tables_json = excluded.tables_json,
+         metadata_json = excluded.metadata_json, pii_json = excluded.pii_json,
+         guard_json = excluded.guard_json,
+         hash = excluded.hash, updated_at = excluded.updated_at`,
+    );
+  }
+
+  private runInsertDocument(
+    stmt: ReturnType<Store["insertDocumentStmt"]>,
+    doc: Document,
+  ): void {
+    stmt.run(
+      doc.id,
+      doc.sourceId,
+      doc.type,
+      doc.title,
+      doc.content,
+      JSON.stringify(doc.tables),
+      JSON.stringify(doc.metadata),
+      JSON.stringify(doc.pii),
+      JSON.stringify(doc.guard ?? []),
+      doc.hash,
+      new Date().toISOString(),
+    );
+  }
+
   upsertDocument(doc: Document): void {
-    this.db
-      .prepare(
-        `INSERT INTO documents (id, source_id, type, title, content, tables_json, metadata_json, pii_json, guard_json, hash, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           source_id = excluded.source_id, type = excluded.type, title = excluded.title,
-           content = excluded.content, tables_json = excluded.tables_json,
-           metadata_json = excluded.metadata_json, pii_json = excluded.pii_json,
-           guard_json = excluded.guard_json,
-           hash = excluded.hash, updated_at = excluded.updated_at`,
-      )
-      .run(
-        doc.id,
-        doc.sourceId,
-        doc.type,
-        doc.title,
-        doc.content,
-        JSON.stringify(doc.tables),
-        JSON.stringify(doc.metadata),
-        JSON.stringify(doc.pii),
-        JSON.stringify(doc.guard ?? []),
-        doc.hash,
-        new Date().toISOString(),
-      );
+    this.runInsertDocument(this.insertDocumentStmt(), doc);
+  }
+
+  /**
+   * Upsert many documents in chunked transactions (default 500 per commit).
+   * Semantics are partial-commit: an error mid-chunk rolls back **that chunk
+   * only**; earlier successfully committed chunks remain in the store.
+   */
+  upsertDocuments(docs: Document[], options?: UpsertDocumentsOptions): void {
+    if (docs.length === 0) return;
+    const chunkSize = Math.max(1, options?.chunkSize ?? DEFAULT_UPSERT_CHUNK);
+    const stmt = this.insertDocumentStmt();
+    for (let i = 0; i < docs.length; i += chunkSize) {
+      const chunk = docs.slice(i, i + chunkSize);
+      this.tx(() => {
+        for (const doc of chunk) this.runInsertDocument(stmt, doc);
+      });
+    }
+  }
+
+  /**
+   * Compact the FTS5 index and truncate the WAL. Safe for local single-writer use;
+   * stop concurrent `run`/`serve` writers first.
+   */
+  optimize(): OptimizeResult {
+    this.db.exec("INSERT INTO documents_fts(documents_fts) VALUES('optimize');");
+    const checkpoint = this.db.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get();
+    return { ftsOptimized: true, checkpoint };
   }
 
   getDocument(id: string): Document | null {

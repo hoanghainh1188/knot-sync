@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { documentId, sha256, type Document, type FileEntry } from "@hoanghainh/knot-sync-core";
-import { Store } from "./index.js";
+import { DEFAULT_UPSERT_CHUNK, Store } from "./index.js";
 
 function doc(sourceId: string, loc: string, title: string, content: string): Document {
   return {
@@ -97,6 +97,46 @@ test("listFiles and unchanged extraction helpers", () => {
   assert.equal(store.documentCount(), 1);
   assert.equal(store.listDocuments().length, 1);
   assert.equal(store.findRelPathForDocument(d.id), "経理/a.xlsx");
+  store.close();
+});
+
+test("upsertDocuments batches Japanese docs and keeps search working", () => {
+  const store = new Store(":memory:");
+  assert.equal(DEFAULT_UPSERT_CHUNK, 500);
+  store.upsertDocuments([
+    doc("s", "a", "令和6年度 請求書一覧", "請求書 body"),
+    doc("s", "b", "Hóa đơn tháng 5", "hóa đơn body"),
+  ]);
+  assert.equal(store.search("請求書")[0]?.title, "令和6年度 請求書一覧");
+  assert.equal(store.documentCount(), 2);
+  store.close();
+});
+
+test("upsertDocuments rolls back only the failed chunk", () => {
+  const store = new Store(":memory:");
+  const ok = doc("s", "ok", "請求書 ok", "請求書 committed");
+  store.upsertDocuments([ok], { chunkSize: 1 });
+
+  const good = doc("s", "g", "請求書 good", "請求書 pending");
+  const bad = doc("s", "bad", "請求書 bad", "x");
+  Object.defineProperty(bad, "content", {
+    get() {
+      throw new Error("boom");
+    },
+  });
+  assert.throws(() => store.upsertDocuments([good, bad], { chunkSize: 2 }), /boom/);
+  assert.equal(store.documentCount(), 1);
+  assert.equal(store.search("committed")[0]?.id, ok.id);
+  assert.equal(store.getDocument(good.id), null);
+  store.close();
+});
+
+test("optimize keeps Japanese search working", () => {
+  const store = new Store(":memory:");
+  store.upsertDocument(doc("s", "a", "請求書", "本文 請求書"));
+  const result = store.optimize();
+  assert.equal(result.ftsOptimized, true);
+  assert.equal(store.search("請求書").length, 1);
   store.close();
 });
 

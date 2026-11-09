@@ -51,6 +51,8 @@ export type MessageKey =
   | "bench.suiteHeader"
   | "bench.searchSummary"
   | "bench.catalogSummary"
-  | "bench.catalogSkipped";
+  | "bench.catalogSkipped"
+  | "optimize.done"
+  | "optimize.storeOpenFailed";
 
 export type MessageCatalog = Record<MessageKey, string>;
