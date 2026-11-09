@@ -27,9 +27,14 @@ const externalNonWorkspace = {
   name: "external-non-workspace",
   setup(build) {
     build.onResolve({ filter: /.*/ }, (args) => {
+      // Entry + filesystem paths must never be external (Windows entries are
+      // absolute like D:\... and look like bare package ids to naive checks).
+      if (args.kind === "entry-point") return undefined;
       const p = args.path;
       if (p.startsWith("node:")) return { path: p, external: true };
-      if (p.startsWith(".") || p.startsWith("/")) return undefined;
+      if (p.startsWith(".") || isAbsolute(p) || /^[A-Za-z]:[\\/]/.test(p)) {
+        return undefined;
+      }
       if (p === WORKSPACE_PREFIX || p.startsWith(`${WORKSPACE_PREFIX}-`)) {
         return undefined;
       }
