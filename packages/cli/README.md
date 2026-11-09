@@ -186,7 +186,19 @@ npx @hoanghainh/knot-sync bench --suite ./examples/sample.bench.yaml
 
 ## MCP Agent Integration (`serve`)
 
-`knot-sync serve` communicates over **stdio** (no open network ports). It enforces read-only access and wraps all outputs in an untrusted data frame.
+By default `knot-sync serve` uses **stdio** (no open network ports) for Claude Desktop / Cursor. It enforces read-only access and wraps all outputs in an untrusted data frame.
+
+### Optional HTTP transport (team / LAN)
+
+For a shared on-prem instance:
+
+```bash
+export KNOT_SYNC_API_KEY='your-shared-secret'
+npx @hoanghainh/knot-sync serve --http --port 3000
+# listens on http://127.0.0.1:3000/mcp (override with --host)
+```
+
+Clients must send `Authorization: Bearer <KNOT_SYNC_API_KEY>`. The API key is **environment-only** (never put it in YAML). Default bind is loopback; use a reverse proxy / firewall if you bind `0.0.0.0`. Transport is MCP **Streamable HTTP** at `/mcp` (SDK’s current HTTP mode; legacy SSE is not required).
 
 ### MCP Surfaces Exposed
 

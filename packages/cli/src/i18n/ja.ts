@@ -16,7 +16,7 @@ export const ja: MessageCatalog = {
   ui        ローカルのカタログレビュー UI を開く（127.0.0.1 のみ）
   bench     ローカルストアでトークン削減とスイート精度を計測
   plugins   読み込み済みプラグインと拡張ポイントを一覧
-  serve     MCP サーバーを開始（stdio のみ。Claude Desktop / Cursor / Claude Code 向け）
+  serve     MCP サーバーを開始（既定は stdio。チーム向けに --http 可）
 
 オプション:
   -c, --config <file>   設定ファイル（既定: {configFile}）
@@ -39,6 +39,12 @@ bench オプション:
 
 ui オプション:
   --port <number>       ループバックのポート（既定: 8787）
+
+serve オプション:
+  --http                HTTP で MCP を提供（/mcp の Streamable HTTP）
+  --port <number>       HTTP ポート（既定: 3000。ui でも使用）
+  --host <address>      待ち受けアドレス（既定: 127.0.0.1）
+  環境変数 KNOT_SYNC_API_KEY  --http 時に必須の共有 Bearer トークン
 
 plugins:
   プラグインはプロセス内でフル権限で動作します。信頼できるものだけ入れてください。
@@ -82,6 +88,10 @@ plugins:
   "plugins.noExtensions": "（拡張なし）",
   "serve.listening":
     "KnotSync MCP サーバー（stdio）。ストア: {store}。監査: {audit}。",
+  "serve.listeningHttp":
+    "KnotSync MCP サーバー http://{host}:{port}/mcp（Bearer 認証）。ストア: {store}。監査: {audit}。",
+  "serve.invalidPort":
+    '不正な --port "{value}" です。1〜65535 の整数を指定してください。',
   "serve.catalogSuffix": " カタログ: {path}。",
   "describe.noSql":
     "postgres/mysql ソースがありません。allow リスト付きの SQL ソースを追加してから describe を再実行してください。",

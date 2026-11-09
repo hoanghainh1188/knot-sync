@@ -16,7 +16,7 @@ Commands:
   ui        Open local catalog review UI (127.0.0.1 only)
   bench     Measure token reduction and suite accuracy on the local store
   plugins   List loaded plugins and their extension points
-  serve     Start the MCP server (stdio only; for Claude Desktop / Cursor / Claude Code)
+  serve     Start the MCP server (stdio by default; optional --http for team/LAN)
 
 Options:
   -c, --config <file>   Config file (default: {configFile})
@@ -39,6 +39,12 @@ bench options:
 
 ui options:
   --port <number>       Loopback port (default: 8787)
+
+serve options:
+  --http                Serve MCP over HTTP (Streamable HTTP at /mcp)
+  --port <number>       HTTP port (default: 3000; also used by ui)
+  --host <address>      HTTP bind address (default: 127.0.0.1)
+  Env KNOT_SYNC_API_KEY Required shared Bearer token when using --http
 
 plugins:
   Plugins run in-process with full trust. Install only plugins you trust.
@@ -82,6 +88,10 @@ plugins:
   "plugins.noExtensions": "(no extensions)",
   "serve.listening":
     "KnotSync MCP server on stdio. Store: {store}. Audit: {audit}.",
+  "serve.listeningHttp":
+    "KnotSync MCP server on http://{host}:{port}/mcp (Bearer auth). Store: {store}. Audit: {audit}.",
+  "serve.invalidPort":
+    'Invalid --port "{value}". Use an integer from 1 to 65535.',
   "serve.catalogSuffix": " Catalog: {path}.",
   "describe.noSql":
     'No postgres/mysql sources found. Add a SQL source with an "allow" list, then re-run describe.',
