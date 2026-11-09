@@ -76,7 +76,7 @@ flowchart LR
   - Includes a local web UI (`knot-sync ui`) to review, label, and approve mappings.
 - 🔒 **PII Masking & Safety Guard**:
   - Mask, hash, or drop PII: Japanese My Number (with checksum), Vietnamese CCCD (12 digits), phone numbers (JP/VN), emails, and credit cards (Luhn).
-  - Blocks indirect prompt injections: detects instruction overrides in English, Japanese, and Vietnamese, zero-width / bidi control characters, and extractor-exposed hidden text.
+  - Blocks indirect prompt injections: detects instruction overrides in English, Japanese, and Vietnamese, zero-width / bidi controls (including floods), suspicious Base64 payloads, markdown exfil links/images, and extractor-exposed hidden text.
 - ⚡ **First-Class MCP Server (`serve`)**:
   - Exposes documents and SQL tables as native MCP Resources (`knot://...`) and Tools (`search_documents`, `get_document`, `describe_table`, `query_table`).
   - Strict input validation via Zod; all document content is wrapped in an `UNTRUSTED DATA` frame to prevent jailbreaks.
@@ -304,8 +304,8 @@ KnotSync is structured as a clean, modular TypeScript monorepo managed by `pnpm`
 | [`packages/connector-sql`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-sql) | Read-only PostgreSQL and MySQL connector, schema introspection |
 | [`packages/extractor-office`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/extractor-office) | Document text & table extractor (`.xlsx`, `.docx`, `.pdf`, `.csv`, `.md`, `.txt`) |
 | [`packages/cleaner-ja-vi`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/cleaner-ja-vi) | Text normalizer: NFKC, Wareki, ISO dates, TCVN3/VNI, token reduction |
-| [`packages/pii-basic`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/pii-basic) | Rule-based PII mask/hash/drop (CCCD, My Number, phones, emails, credit cards) |
-| [`packages/guard`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/guard) | Multi-lingual indirect prompt injection detector |
+| [`packages/pii-basic`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/pii-basic) | Rule-based PII mask/hash/drop (CCCD, My Number, MST, bank, names, phones, emails, cards) |
+| [`packages/guard`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/guard) | Multi-lingual injection guard (phrases, controls/flood, Base64, markdown exfil) |
 | [`packages/store-sqlite`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/store-sqlite) | `node:sqlite` store with FTS5 trigram search |
 | [`packages/catalog`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/catalog) | Semantic Catalog YAML manager, dictionary resolver, Excel definition parser |
 | [`packages/ui`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/ui) | Bundled React catalog review UI (runs on loopback `127.0.0.1`) |

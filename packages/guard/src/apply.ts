@@ -55,6 +55,16 @@ export function computeRisk(
   );
   if (families.size >= 2) return "high";
   if (families.size === 1) return "medium";
+  if (
+    contentFindings.some(
+      (f) =>
+        f.rule === "controls-flood" ||
+        f.rule === "base64-payload" ||
+        f.rule === "md-exfil",
+    )
+  ) {
+    return "medium";
+  }
   if (contentFindings.some((f) => f.rule === "controls")) return "low";
   return "none";
 }

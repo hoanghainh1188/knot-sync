@@ -15,12 +15,15 @@ export {
 } from "./apply.js";
 export {
   ALL_RULES,
+  bankAccountRule,
   creditCardRule,
   emailRule,
   isValidMyNumber,
   luhnOk,
   makeValidMyNumber,
+  mstVnRule,
   myNumberCheckDigit,
+  personNameRule,
   phoneJpRule,
   phoneVnRule,
 } from "./rules.js";
