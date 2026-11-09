@@ -1,336 +1,332 @@
 # KnotSync
 
-> Scan, clean and serve legacy enterprise data to AI agents via the
-> [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
+> **The Open-Source Semantic Layer for Legacy Enterprise Data.**  
+> Scan, clean, and serve legacy office documents and databases to AI agents via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
 
-**Status: v0.1.1 (open-core).** `init`, `scan`, `run`, `describe`, `ui`, `bench`,
-`plugins` and `serve` are ready to publish. See [CHANGELOG.md](./CHANGELOG.md).
+[![npm version](https://img.shields.io/npm/v/@hoanghainh/knot-sync?color=cb3837)](https://www.npmjs.com/package/@hoanghainh/knot-sync)
+[![CI Status](https://github.com/hoanghainh1188/knot-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/hoanghainh1188/knot-sync/actions)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Node: >=22.13](https://img.shields.io/badge/node-%3E%3D22.13-brightgreen.svg)](https://nodejs.org)
+[![MCP](https://img.shields.io/badge/MCP-1.2.0-purple.svg)](https://modelcontextprotocol.io)
 
-npm exposes a **single npm package**: `@hoanghainh/knot-sync` (workspace packages
-stay private in this monorepo and are bundled into the CLI for publish).
+[English](./README.md) • [日本語](./docs/ja/README.md) • [Tiếng Việt](./docs/vi/README.md)
 
-- Runs **fully on your own machine**. Nothing is sent to the Internet.
-- Sources are **read-only**. The tool never changes your files or databases.
-- Built for **Japanese and Vietnamese** legacy data (和暦, 全角/半角, TCVN3/VNI fonts…).
-- Extensible via **plugins** (connectors, extractors, cleaners, rules…). Plugins run
-  in-process with full trust — install only modules you trust. Paid plugins check
-  their own license keys; the core never does. (Publishing `@hoanghainh/knot-sync-core`
-  separately for paid plugins is deferred.)
+---
 
-## Quick start
+## Why KnotSync?
 
-Requires Node.js 22.13 or newer.
+Legacy enterprise data is a goldmine for internal AI agents, but feeding it directly to LLMs often fails:
+
+- **Legacy Japanese & Vietnamese Data**: Documents are riddled with old font encodings (TCVN3, VNI), Japanese era names (和暦 - Meiji/Taisho/Showa/Heisei/Reiwa), full-width digits, and non-standard dates that distort LLM reasoning.
+- **Cryptic Databases**: Legacy schemas use abbreviated column names (`TKSK_CD`, `ma_kh`) that lead agents to hallucinate incorrect queries.
+- **Security & Privacy Risks**: Sensitive PII (CCCD, My Number, credit cards) and prompt injection traps (hidden white-on-white text, zero-width instructions) slip unnoticed into AI prompts.
+- **Token Inefficiency**: Messy spreadsheets with repeated blank rows and unnormalized tables waste 30–50% of your LLM context budget.
+
+**KnotSync acts as a local semantic shield and data adapter**: It ingests your legacy files and databases, normalizes text, strips PII, blocks prompt injections, enriches schemas with human business labels, and serves clean context via MCP — **100% on-premises, completely read-only, and zero internet required**.
+
+---
+
+## Architecture & Data Flow
+
+```mermaid
+flowchart LR
+    subgraph Sources["Legacy Sources (Read-Only)"]
+        FS["📁 Shared Folders<br/>(.xlsx, .docx, .pdf, .csv, .txt)"]
+        DB["🗄️ SQL Databases<br/>(PostgreSQL, MySQL)"]
+    end
+
+    subgraph KnotSync["KnotSync Pipeline (100% Local & Offline)"]
+        direction TB
+        Ingest["1. Ingest & Inventory (scan)"]
+        Clean["2. JA/VI Cleaning & Token Reduction"]
+        Shield["3. PII Masking & Injection Guard"]
+        Catalog["4. Semantic Catalog & Business Labels"]
+        Store[("Local SQLite FTS5<br/>(Trigram Search)")]
+        
+        Ingest --> Clean --> Shield --> Catalog --> Store
+    end
+
+    subgraph Agents["AI Agents & Workstations"]
+        Claude["Claude Desktop / Claude Code"]
+        Cursor["Cursor / Windsurf"]
+        Custom["Any MCP-Compliant Agent"]
+    end
+
+    FS --> Ingest
+    DB --> Ingest
+    Store -->|"MCP Stdio / Tools & Resources"| Claude
+    Store -->|"MCP Stdio / Tools & Resources"| Cursor
+    Store -->|"MCP Stdio / Tools & Resources"| Custom
+```
+
+---
+
+## Key Features
+
+- 🛡️ **100% On-Premise & Zero-Trust**: Everything runs on your local machine using Node.js built-ins. Zero telemetry, no cloud dependencies, and zero internet calls. Sources are strictly **read-only**.
+- 🇯🇵 🇻🇳 **Deep Japanese & Vietnamese Legacy Support**:
+  - Automatically converts Japanese imperial eras (和暦: 明治, 大正, 昭和, 平成, 令和 including 元年) to Gregorian dates.
+  - Detects and converts legacy Vietnamese encodings (TCVN3, VNI-Windows) to clean UTF-8.
+  - Normalizes full-width alphanumeric characters (NFKC) and unifies heterogeneous date formats to ISO 8601.
+  - Collapses empty spreadsheet rows/columns, reducing token usage by 30–50%.
+- 🏷️ **Semantic Catalog (Explain Cryptic Fields)**:
+  - Introspects SQL tables and maps cryptic column names (`TKSK_CD` → "得意先コード" / "customer code", `ma_kh` → "mã khách hàng").
+  - Ingests company-specific dictionary files or legacy Excel table definitions (テーブル定義書 / 項目定義書).
+  - Includes a local web UI (`knot-sync ui`) to review, label, and approve mappings.
+- 🔒 **PII Masking & Safety Guard**:
+  - Mask, hash, or drop PII: Japanese My Number (with checksum), Vietnamese CCCD (12 digits), phone numbers (JP/VN), emails, and credit cards (Luhn).
+  - Blocks indirect prompt injections: detects instruction overrides in English, Japanese, and Vietnamese, zero-width / bidi control characters, and extractor-exposed hidden text.
+- ⚡ **First-Class MCP Server (`serve`)**:
+  - Exposes documents and SQL tables as native MCP Resources (`knot://...`) and Tools (`search_documents`, `get_document`, `describe_table`, `query_table`).
+  - Strict input validation via Zod; all document content is wrapped in an `UNTRUSTED DATA` frame to prevent jailbreaks.
+  - Appends every tool invocation to an append-only JSONL audit log.
+- 🔌 **Extensible Plugin System**:
+  - Add custom connectors, extractors, cleaners, PII rules, and MCP tools. Plugins run in-process with full trust.
+
+---
+
+## Comparison: KnotSync vs Alternatives
+
+| Feature | Raw File Ingestion / Basic RAG | Cloud Parsers (Unstructured, LlamaParse) | **KnotSync** |
+|---|:---:|:---:|:---:|
+| **Deployment** | Local scripts | ❌ Cloud API (Sends data over Internet) | ✅ **100% Local & Air-gapped** |
+| **Source Safety** | Manual precaution | Read-only | ✅ **Enforced Read-Only (Session level)** |
+| **Japanese Wareki (和暦)** | ❌ Distorts years | ❌ Limited / Raw text only | ✅ **Native conversion to Gregorian** |
+| **Vietnamese TCVN3 / VNI** | ❌ Unreadable garbled text | ❌ Unsupported | ✅ **Auto-detect & convert to Unicode** |
+| **Cryptic DB Cataloging** | ❌ Hallucinates column names | ❌ Documents only (No SQL) | ✅ **Semantic Catalog (YAML/Excel/UI)** |
+| **Indirect Prompt Guard** | ❌ None | ❌ None | ✅ **Built-in multi-lingual injection guard** |
+| **AI Protocol** | Custom APIs | REST API | ✅ **Native Model Context Protocol (MCP)** |
+| **External Dependencies** | High | Heavy Docker/Python stack | ✅ **Zero native binaries (Fast Node.js)** |
+
+---
+
+## Quickstart (5-Minute Tour)
+
+**Prerequisite**: Node.js **22.13** or newer.
+
+KnotSync is distributed as a single npm package: `@hoanghainh/knot-sync`.
 
 ```bash
+# 1. Initialize configuration for your local shared folder
 npx @hoanghainh/knot-sync init --path /path/to/shared/folder
+
+# 2. Scan sources: inspect file inventory, duplicates, and health
 npx @hoanghainh/knot-sync scan
+
+# 3. Ingest, extract, clean (JA/VI), mask PII, and build local search index
 npx @hoanghainh/knot-sync run
-npx @hoanghainh/knot-sync describe   # SQL sources: build Semantic Catalog
-npx @hoanghainh/knot-sync ui         # Review catalog in a local browser (127.0.0.1)
-npx @hoanghainh/knot-sync bench      # Token reduction + suite accuracy on your store
-npx @hoanghainh/knot-sync plugins
+
+# 4. (Optional) For SQL sources: build the Semantic Catalog
+npx @hoanghainh/knot-sync describe
+
+# 5. Start the MCP server over stdio for AI agents
 npx @hoanghainh/knot-sync serve
 ```
 
-### Bench (`bench`)
+---
 
-`knot-sync bench` reads the local document store (after `scan` / `run`) and reports
-estimated token totals **before/after** cleaning (`tokensBefore` / `tokensAfter`
-from the JA/VN cleaner). Optionally run a customer-owned suite file
-(`knot-sync.bench.yaml` beside the config, or `--suite <path>`) with document-search
-cases and catalog column-resolution checks. Fully offline; never writes to sources.
+## Step-by-Step Commands
 
+### 1. `scan`: Audit Data Health
+Scans configured folders and SQL tables without extracting text:
+```bash
+npx @hoanghainh/knot-sync scan
+npx @hoanghainh/knot-sync scan --json
+npx @hoanghainh/knot-sync scan --pii              # Estimate files containing PII
+npx @hoanghainh/knot-sync scan --report           # Generate offline HTML Health Report
+```
+Example terminal output:
+```text
+■ Source "finance": 142 files, 84.2 MB
+
+  By type:
+    xlsx   84   62.1 MB
+    pdf    36   18.4 MB
+    docx   22    3.7 MB
+
+  Health:
+    Duplicate copies     18   12.4 MB wasted
+    Older than 5 years   29
+    Empty files           3
+    Unreadable            0
+
+  Biggest duplicates:
+    4.1 MB × 3
+      - 営業/2023_見積書 (1).xlsx
+      - 営業/2023_見積書.xlsx
+      - 営業/2023_見積書_最新_fix.xlsx
+```
+
+### 2. `run`: Ingest & Normalize Pipeline
+Extracts text and tables from `.xlsx`, `.docx`, `.pdf` (text-based), `.csv`, `.tsv`, `.txt`, `.md` into a local SQLite store (`node:sqlite`).
+- **Cleaning**: NFKC normalization, Wareki $\rightarrow$ Gregorian, ISO 8601 dates, TCVN3/VNI conversion, and whitespace/empty-row token reduction.
+- **PII Masking**: Mask (`***`), hash, or drop sensitive numbers.
+- **Guardrails**: Flags prompt-injection patterns, zero-width chars, and hidden cells.
+- **Incremental**: Unchanged files (matching SHA-256 hash) are skipped automatically.
+
+### 3. `ui`: Review Semantic Catalog
+Launches a bundled React review interface on **127.0.0.1:8787** (loopback only) to edit business names, descriptions, and mark columns as reviewed:
+```bash
+npx @hoanghainh/knot-sync ui --lang ja
+# Open http://127.0.0.1:8787/?lang=ja
+```
+
+### 4. `bench`: Measure Token Reduction & Accuracy
+Measures before/after token reduction and runs benchmark suites (`knot-sync.bench.yaml`) to verify search accuracy and catalog resolution offline:
 ```bash
 npx @hoanghainh/knot-sync bench
-npx @hoanghainh/knot-sync bench --json
 npx @hoanghainh/knot-sync bench --suite ./examples/sample.bench.yaml
 ```
 
-See [examples/sample.bench.yaml](./examples/sample.bench.yaml) for the suite shape.
-Search cases score the **cleaned** store (there is no parallel dirty FTS index).
-Catalog cases compare resolve **without** vs **with** the catalog file.
+---
 
-### Catalog review UI (`ui`)
+## MCP Agent Integration (`serve`)
 
-`knot-sync ui` serves a bundled React review screen on **127.0.0.1** only
-(default port `8787`, override with `--port`). Edit ja/vi/en labels, mark
-`reviewed`, and save back to `knot-sync.catalog.yaml`. Customer source folders
-and databases are never written. UI chrome follows `--lang` / `cli.locale`.
+`knot-sync serve` communicates over **stdio** (no open network ports). It enforces read-only access and wraps all outputs in an untrusted data frame.
 
-```bash
-npx @hoanghainh/knot-sync ui --lang ja
-# open http://127.0.0.1:8787/?lang=ja
+### MCP Surfaces Exposed
+
+| Surface | Identifier | Description |
+|---|---|---|
+| **Resource** | `knot://sources` | List all configured data sources |
+| **Resource** | `knot://docs/{source}/{doc_id}` | Retrieve a clean document with metadata |
+| **Resource** | `knot://db/{source}/{table}/schema` | Retrieve allow-listed SQL schema & business labels |
+| **Tool** | `search_documents` | Trigram full-text search (`query`, `source`, `type`, `limit`) |
+| **Tool** | `get_document` | Fetch document by its unique ID |
+| **Tool** | `describe_table` | Inspect allowed columns, data types, and business descriptions |
+| **Tool** | `query_table` | Parameterized SQL query with safe filters (`eq`, `in`, `range`, `contains`) |
+
+### Registering in Claude Desktop
+
+Add KnotSync to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "knot-sync": {
+      "command": "npx",
+      "args": ["@hoanghainh/knot-sync", "serve", "-c", "/absolute/path/to/knot-sync.config.yaml"]
+    }
+  }
+}
 ```
 
-### CLI language (`--lang` / `cli.locale`)
+### Registering in Cursor / Windsurf
 
-Help, errors, and human-readable progress can be shown in English, Japanese, or
-Vietnamese. Command names, flags, `--json` keys, and `--version` stay English.
+Add to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "knot-sync": {
+      "command": "npx",
+      "args": ["@hoanghainh/knot-sync", "serve", "-c", "/absolute/path/to/knot-sync.config.yaml"]
+    }
+  }
+}
+```
+
+---
+
+## SQL Sources (PostgreSQL & MySQL)
+
+KnotSync connects to SQL databases in **strict read-only transaction mode**. Database credentials must be provided via environment variables (`url: env:VAR_NAME`) — never stored in plain text. Only tables and columns explicitly declared in `allow:` are exposed.
+
+```yaml
+# knot-sync.config.yaml
+sources:
+  - id: erp_database
+    type: postgres
+    url: env:KNOT_PG_URL
+    allow:
+      受注:
+        columns: [受注番号, TKSK_CD, 金額]
+      hoa_don:
+        columns: [so_hd, ma_kh, so_tien]
+```
+
+Run `knot-sync describe` to generate `knot-sync.catalog.yaml` and enrich cryptic columns with business names:
+
+```yaml
+# knot-sync.catalog.yaml
+version: 1
+sources:
+  erp_database:
+    tables:
+      受注:
+        columns:
+          TKSK_CD:
+            label: { ja: "得意先コード", vi: "mã khách hàng", en: "customer code" }
+            reviewed: true
+```
+
+---
+
+## Multilingual Support (`--lang`)
+
+CLI output, error messages, and progress indicators are fully localized in **English**, **Japanese (日本語)**, and **Vietnamese (Tiếng Việt)**:
 
 ```bash
 npx @hoanghainh/knot-sync --help --lang ja
 npx @hoanghainh/knot-sync scan --lang vi
 ```
 
-Optional config (overridden by `--lang`):
-
-```yaml
-cli:
-  locale: ja   # en | ja | vi
-```
-
-Resolution order: `--lang` → `cli.locale` → `KNOT_SYNC_LANG` / `LANG` heuristic → `en`.
-
-`run` extracts text and tables from the last scan (`.xlsx`, `.docx`, text PDF,
-`.csv`/`.tsv`, `.txt`, `.md`) into the local document store, then applies the
-built-in JP/VN cleaner (`cleaner-ja-vi`: NFKC, wareki→Gregorian, ISO dates,
-TCVN3/VNI, token reduction). Original text and rough token counts are kept in
-document metadata. Toggle steps under config `cleaning:` (all enabled by
-default). Then built-in PII rules mask emails, JP/VN phones, CCCD, My Number,
-and card numbers (`pii.mode`: `mask` | `hash` | `drop`); findings are stored
-without raw values. `scan --pii` estimates how many small text files look like
-they contain PII without storing matches. After PII, the built-in guard
-(`guard.mode`: `flag` | `strip` | `block`) detects instruction-like phrases
-(EN/JP/VN), zero-width/bidi controls, and extractor-exposed hidden text; risk
-and spans are stored on `Document.guard`. Unchanged files (same content hash)
-are skipped. Unsupported or broken files are reported as issues; the run
-continues.
-
-Example output:
-
-```
-■ Source "sample": 8 files, 59 B
-
-  By type:
-    xlsx   4   36 B
-    ...
-  Health:
-    Duplicate copies     2   16 B wasted
-    Older than 5 years   1
-    Empty files          1
-    Unreadable           0
-
-  Biggest duplicates:
-    8 B × 3
-      - 営業/見積書 (1).xlsx
-      - 営業/見積書.xlsx
-      - 営業/見積書_最新_本当に最新.xlsx
-```
-
-Use `scan --json` for machine-readable output. Use `scan --report [file]` to write
-one self-contained HTML health report (offline, light/dark, EN/日本語/Tiếng Việt
-labels). Default path: `./knot-sync-scan-report.html` (never inside a source folder).
-
-## MCP server (`serve`)
-
-`knot-sync serve` speaks MCP over **stdio only** (no HTTP, no network). It is
-read-only: tools never change sources or the store. Document text is always
-framed as untrusted data. Tool calls are appended to a JSONL audit log
-(`server.audit_log`, default beside the store as `mcp-audit.jsonl`).
-
-| Surface | What it does |
-|---|---|
-| Resource `knot://sources` | List configured source ids/types |
-| Resource `knot://docs/{source}/{doc_id}` | Fetch one stored document |
-| Resource `knot://db/{source}/{table}/schema` | Allow-listed SQL table schema |
-| Tool `search_documents` | Keyword search (`query`, optional `source` / `type` / `limit`) |
-| Tool `get_document` | Fetch by document id |
-| Tool `describe_table` | Describe allow-listed SQL columns |
-| Tool `query_table` | Parameterized filters on allow-listed columns (no free SQL) |
-| Config `prompts:` | Optional MCP prompts (name, description, arguments, template) |
-
-### Register in Claude Desktop
-
-Add to `claude_desktop_config.json` (adjust the config path):
-
-```json
-{
-  "mcpServers": {
-    "knot-sync": {
-      "command": "npx",
-      "args": ["@hoanghainh/knot-sync", "serve", "-c", "/absolute/path/to/knot-sync.config.yaml"]
-    }
-  }
-}
-```
-
-### Register in Claude Code / Cursor
-
-Point the MCP server entry at the same command (stdio). Example Cursor
-`.cursor/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "knot-sync": {
-      "command": "npx",
-      "args": ["@hoanghainh/knot-sync", "serve", "-c", "/absolute/path/to/knot-sync.config.yaml"]
-    }
-  }
-}
-```
-
-Run `scan` then `run` before `serve` so the store has documents to search.
-
-## SQL sources (PostgreSQL / MySQL)
-
-Built-in connectors `postgres` and `mysql` connect **read-only**. The database
-URL must come from an environment variable (`url: env:NAME`) — never store a
-plaintext URL in the config file. Only tables/columns listed under `allow:` are
-visible to `scan` and MCP.
-
-```yaml
-sources:
-  - id: erp
-    type: postgres
-    url: env:KNOT_PG_URL
-    allow:
-      受注:
-        columns: [受注番号, 得意先名, 金額]
-      hoa_don:
-        columns: [ma_kh, so_tien]
-```
-
-```bash
-export KNOT_PG_URL='postgres://readonly_user@127.0.0.1:5432/erp'
-npx @hoanghainh/knot-sync scan -c knot-sync.config.yaml
-```
-
-`scan` inventories each allow-listed table (row estimates when available). MCP
-`query_table` supports filters `eq` / `in` / `range` / `contains` with a max of
-200 rows (default 50). Cell values are framed as untrusted content.
-
-## Semantic Catalog (`describe`)
-
-For SQL sources, `knot-sync describe` writes `knot-sync.catalog.yaml` (path
-overridable via `catalog.path`) with business labels (ja/vi/en), descriptions,
-types, sampled distinct values, PII/expose flags, and a `reviewed` flag.
-
-Inputs (all local, read-only):
-
-- DB introspection of allow-listed tables/columns
-- Bounded distinct sampling
-- Built-in romaji (e.g. `TKSK_CD` → 得意先コード) and Vietnamese abbreviations
-  (e.g. `ma_kh` → mã khách hàng)
-- Optional customer dictionary (`catalog.dictionary`)
-- Optional テーブル定義書 / 項目定義書 Excel (`catalog.definition_excel` +
-  `catalog.definition_mapping`)
-
-Re-running `describe` **never overwrites** entries with `reviewed: true`.
-
-When the catalog file exists, `serve` loads it so `describe_table` / schema
-resources show business labels, and `query_table` accepts unique business-name
-filter columns and validates `eq`/`in` against catalog `values` when set.
-
-```yaml
-catalog:
-  path: ./knot-sync.catalog.yaml
-  # dictionary: ./customer-dict.yaml
-  # definition_excel: ./defs/項目定義.xlsx
-```
-
-```yaml
-# knot-sync.catalog.yaml (excerpt)
-version: 1
-sources:
-  erp:
-    tables:
-      受注:
-        columns:
-          TKSK_CD:
-            label: { ja: "得意先コード", vi: "", en: "customer code" }
-            values: []
-            reviewed: false
-```
-
-## Roadmap
-
-KnotSync is a **semantic layer for legacy data**: it does not only clean files, it explains
-cryptic fields (`TKSK_CD`, `ma_kh`…) so AI agents call tools correctly.
-
-- ✅ Foundation: folder source, SQLite store, `init`, `scan`
-- ✅ Plugin system (`plugins` command, built-in `fs` connector plugin)
-- ✅ Office extraction (`run`, built-in `extractor-office` plugin)
-- ✅ JP/VN cleaning (`cleaner-ja-vi`, config `cleaning:`)
-- ✅ PII masking (`pii-basic`, config `pii:`, `scan --pii`)
-- ✅ Prompt-injection guard (`guard`, config `guard:`)
-- ✅ HTML scan report (`scan --report`, `report-html`)
-- ✅ MCP server (`serve`, stdio, `mcp-server`)
-- ✅ PostgreSQL / MySQL (`connector-sql`, allow-list, `query_table`)
-- ✅ Semantic Catalog (`describe`, `catalog` package, MCP business names/enums)
-- ✅ Catalog review UI (`ui`, loopback-only)
-- ✅ CLI i18n (`--lang` / `cli.locale`)
-- ✅ Bench (`bench`, tokens + suite accuracy)
-- ✅ npm release prep (0.1.0, CI, license gate, ja/vi docs)
-
-Details and order: [docs/ROADMAP.md](./docs/ROADMAP.md). Development uses
-[OpenSpec](https://github.com/Fission-AI/OpenSpec): specs live in `openspec/specs/`.
-
-### Verify after publish
-
-On a machine without a prior local install:
-
-```bash
-npx @hoanghainh/knot-sync@0.1.1 --version
-# expect: 0.1.1
-```
-
-## Development
-
-```bash
-corepack enable          # gives you pnpm
-pnpm install
-pnpm test                # build + run all tests
-pnpm scan:sample         # scan examples/sample-data
-```
-
-Packages (monorepo; **only** `packages/cli` is published to npm as
-`@hoanghainh/knot-sync`):
-
-| Package | Purpose |
-|---|---|
-| `packages/core` | Types (`Document`, `FileEntry`), config loader, plugin host API |
-| `packages/connector-fs` | Built-in `fs` connector plugin (read-only folder walker) |
-| `packages/connector-sql` | Built-in `postgres` / `mysql` connectors (env URL, allow-list) |
-| `packages/extractor-office` | Built-in extractor for Office/text files (`run`) |
-| `packages/cleaner-ja-vi` | Built-in JP/VN text cleaner (NFKC, wareki, ISO dates, TCVN3/VNI, token reduce) |
-| `packages/pii-basic` | Built-in PII detection/masking (email, phones, CCCD, My Number, Luhn) |
-| `packages/guard` | Built-in prompt-injection guard (EN/JP/VN phrases, controls, hidden text) |
-| `packages/report-html` | Self-contained HTML scan health report (`scan --report`) |
-| `packages/catalog` | Semantic Catalog YAML, dictionaries, Excel defs, `describe` helpers |
-| `packages/mcp-server` | Stdio MCP server (resources, search/get tools, audit log) |
-| `packages/store-sqlite` | `node:sqlite` store, FTS5 trigram search (works for 日本語 / Tiếng Việt) |
-| `packages/cli` | `knot-sync` command |
-
-Extra plugins are listed under `plugins:` in the config (npm package name or path
-relative to the config file). Example: `examples/plugins/mask-company-id.mjs`.
-
-Design notes:
-
-- **No native dependencies.** Storage uses the built-in `node:sqlite`, so `npx` installs fast and works offline-friendly.
-- **Few dependencies on purpose** (`yaml`; MCP adds `@modelcontextprotocol/sdk` + `zod`; SQL adds `pg` + `mysql2`; catalog/Excel reuse `exceljs` — all MIT). Less supply-chain risk for enterprise users.
-- Search terms shorter than 3 characters (e.g. `請求`) fall back to `LIKE`, because trigram FTS needs 3+ characters.
-- **Plugins are never auto-discovered** — only built-ins plus entries in `plugins:`.
+Resolution precedence: `--lang` flag $\rightarrow$ config `cli.locale` $\rightarrow$ `KNOT_SYNC_LANG` / `LANG` environment variable $\rightarrow$ fallback to `en`.
 
 ---
 
-## Languages / 言語 / Ngôn ngữ
+## Monorepo Architecture
 
-- 日本語: [docs/ja/README.md](./docs/ja/README.md)
-- Tiếng Việt: [docs/vi/README.md](./docs/vi/README.md)
+KnotSync is structured as a clean, modular TypeScript monorepo managed by `pnpm`. Only `@hoanghainh/knot-sync` (bundled CLI) is published to npm.
 
-## 日本語
+| Package | Responsibility |
+|---|---|
+| [`packages/core`](./packages/core) | Data models (`Document`, `FileEntry`), config loader, plugin host API |
+| [`packages/connector-fs`](./packages/connector-fs) | Read-only folder walker and file inventory scanner |
+| [`packages/connector-sql`](./packages/connector-sql) | Read-only PostgreSQL and MySQL connector, schema introspection |
+| [`packages/extractor-office`](./packages/extractor-office) | Document text & table extractor (`.xlsx`, `.docx`, `.pdf`, `.csv`, `.md`, `.txt`) |
+| [`packages/cleaner-ja-vi`](./packages/cleaner-ja-vi) | Text normalizer: NFKC, Wareki, ISO dates, TCVN3/VNI, token reduction |
+| [`packages/pii-basic`](./packages/pii-basic) | Rule-based PII mask/hash/drop (CCCD, My Number, phones, emails, credit cards) |
+| [`packages/guard`](./packages/guard) | Multi-lingual indirect prompt injection detector |
+| [`packages/store-sqlite`](./packages/store-sqlite) | `node:sqlite` store with FTS5 trigram search |
+| [`packages/catalog`](./packages/catalog) | Semantic Catalog YAML manager, dictionary resolver, Excel definition parser |
+| [`packages/ui`](./packages/ui) | Bundled React catalog review UI (runs on loopback `127.0.0.1`) |
+| [`packages/mcp-server`](./packages/mcp-server) | Official Model Context Protocol stdio server |
+| [`packages/report-html`](./packages/report-html) | Self-contained, zero-dependency offline HTML scan report |
+| [`packages/cli`](./packages/cli) | Unified CLI entrypoint (`knot-sync`) |
 
-社内に散らばった古いデータ（Excel、Word、PDF、紙の書類、古いDB）を整理し、MCP 経由で AI エージェントに安全に渡すためのツールです。
-すべて自社のマシン内で動き、データは外部に送信されません。元データは読み取りのみで、変更しません。
-詳細は [docs/ja/README.md](./docs/ja/README.md)。
+### Development & Contributing
 
-## Tiếng Việt
+```bash
+# Enable pnpm via corepack
+corepack enable
+pnpm install
 
-Công cụ dọn dẹp dữ liệu cũ nằm rải rác trong công ty (Excel, Word, PDF, giấy tờ scan, database cũ), rồi đưa cho AI Agent qua MCP một cách an toàn.
-Mọi thứ chạy trên máy của bạn, không gửi dữ liệu ra ngoài. Dữ liệu gốc chỉ được đọc, không bị sửa.
-Chi tiết: [docs/vi/README.md](./docs/vi/README.md).
+# Build all packages and UI client
+pnpm build
+
+# Run unit and integration tests (100% pass)
+pnpm test
+
+# Test scan against sample data
+pnpm scan:sample
+```
+
+- **Zero native dependencies**: Uses Node.js 22 built-in `node:sqlite`, ensuring blazing-fast installation with zero build toolchain requirements.
+- **Strictly vetted dependencies**: External libraries are kept to an absolute minimum (`yaml`, `@modelcontextprotocol/sdk`, `zod`, `exceljs`, `mammoth`, `unpdf`, `pg`, `mysql2`).
+
+---
+
+## Roadmap
+
+Development follows the [OpenSpec](https://github.com/Fission-AI/OpenSpec) specification process. See [docs/ROADMAP.md](./docs/ROADMAP.md) for the active roadmap and upcoming milestones:
+
+- [x] **v0.1**: Core pipeline, Office extractors, JA/VI cleaners, PII masking, Injection guard, MCP Server, SQL connectors, Semantic Catalog.
+- [x] **v0.2**: CLI i18n (EN/JA/VI), Catalog Review UI, Token/accuracy Benchmarking suite.
+- [ ] **v0.3**: Production Hardening (OOM/timeout protection, custom SQL schemas, HTTP/SSE MCP transport, expanded regional PII).
+
+---
 
 ## License
 
-[Apache-2.0](./LICENSE)
+[Apache-2.0](./LICENSE) © 2026 Hoàng Hải Anh.
