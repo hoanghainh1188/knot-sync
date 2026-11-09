@@ -64,6 +64,7 @@ test("pnpm pack:cli tarball has registry-safe package.json and required files", 
     const pkg = JSON.parse(await readFile(join(pkgRoot, "package.json"), "utf8")) as {
       name: string;
       version: string;
+      main?: string;
       bin?: Record<string, string>;
       dependencies?: Record<string, string>;
     };
