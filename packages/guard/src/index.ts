@@ -17,12 +17,18 @@ export {
 } from "./apply.js";
 export {
   ALL_RULES,
+  BASE64_MIN_LENGTH,
+  base64PayloadRule,
+  controlsFloodRule,
   controlsRule,
+  FLOOD_MIN_CONTROLS,
+  FLOOD_WINDOW,
   HIDDEN_CHANNEL_RULES,
   hiddenTextRule,
   instructionEnRule,
   instructionJaRule,
   instructionVnRule,
+  mdExfilRule,
 } from "./rules.js";
 
 export function createGuardPlugin(

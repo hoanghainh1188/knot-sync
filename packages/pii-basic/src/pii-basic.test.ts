@@ -150,3 +150,55 @@ test("textHasPii for scan sampling", () => {
   assert.equal(textHasPii("hello", ALL_RULES), false);
   assert.equal(textHasPii("mail me@x.co", ALL_RULES), true);
 });
+
+test("mst-vn detects enterprise and branch tax codes", () => {
+  const enterprise = collectFindings("MST: 0312345678", ALL_RULES);
+  assert.ok(enterprise.some((f) => f.rule === "mst-vn"));
+  const branch = collectFindings("Mã số thuế 0312345678-001", ALL_RULES);
+  const hit = branch.find((f) => f.rule === "mst-vn");
+  assert.ok(hit);
+  assert.match("Mã số thuế 0312345678-001".slice(hit!.start, hit!.end), /0312345678/);
+});
+
+test("bank-account requires label; bare digits ignored", () => {
+  assert.ok(
+    collectFindings("Số tài khoản: 0123456789", ALL_RULES).some(
+      (f) => f.rule === "bank-account",
+    ),
+  );
+  assert.ok(
+    collectFindings("口座番号: 1234567", ALL_RULES).every(
+      (f) => f.rule !== "bank-account",
+    ),
+    "too short",
+  );
+  assert.ok(
+    collectFindings("口座番号: 012345678901", ALL_RULES).some(
+      (f) => f.rule === "bank-account",
+    ),
+  );
+  assert.ok(
+    collectFindings("order id 0123456789 only", ALL_RULES).every(
+      (f) => f.rule !== "bank-account",
+    ),
+  );
+});
+
+test("mst-vn preferred over bank-account for labeled MST digits", () => {
+  const text = "MST: 0312345678";
+  const findings = collectFindings(text, ALL_RULES);
+  assert.ok(findings.some((f) => f.rule === "mst-vn"));
+  assert.ok(findings.every((f) => f.rule !== "bank-account"));
+});
+
+test("person-name matches labeled JP/VN names only", () => {
+  const jp = collectFindings("氏名: 山田 太郎", ALL_RULES);
+  assert.ok(jp.some((f) => f.rule === "person-name"));
+  const vn = collectFindings("Họ tên: Nguyễn Văn An", ALL_RULES);
+  assert.ok(vn.some((f) => f.rule === "person-name"));
+  assert.ok(
+    collectFindings("山田 went to the shop", ALL_RULES).every(
+      (f) => f.rule !== "person-name",
+    ),
+  );
+});

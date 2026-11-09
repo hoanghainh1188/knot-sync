@@ -1,4 +1,11 @@
 import type { PiiRule } from "@hoanghainh/knot-sync-core";
+import {
+  JP_GIVEN,
+  JP_SURNAMES,
+  NAME_LABELS,
+  VN_FAMILY,
+  VN_GIVEN,
+} from "./names.js";
 
 function pushMatches(text: string, re: RegExp, out: Array<{ start: number; end: number }>): void {
   re.lastIndex = 0;
@@ -8,6 +15,38 @@ function pushMatches(text: string, re: RegExp, out: Array<{ start: number; end: 
     if (m[0].length === 0) re.lastIndex += 1;
   }
 }
+
+/** Look-back window (chars) for label cues before a candidate span. */
+const LABEL_WINDOW = 40;
+
+function labelBefore(
+  text: string,
+  index: number,
+  labels: readonly string[],
+): boolean {
+  const start = Math.max(0, index - LABEL_WINDOW);
+  const window = text.slice(start, index);
+  const lower = window.toLowerCase();
+  for (const label of labels) {
+    if (label.toLowerCase() !== label) {
+      if (window.includes(label)) return true;
+    }
+    if (lower.includes(label.toLowerCase())) return true;
+  }
+  return false;
+}
+
+const MST_LABELS = ["MST", "Mã số thuế", "Ma so thue", "税号", "税務番号"] as const;
+const BANK_LABELS = [
+  "口座番号",
+  "口座",
+  "Số tài khoản",
+  "So tai khoan",
+  "STK",
+  "account number",
+  "Account No",
+  "A/C",
+] as const;
 
 /** Digits only, mapping full-width ０-９ → 0-9. */
 export function toAsciiDigits(s: string): string {
@@ -94,6 +133,9 @@ export const phoneVnRule: PiiRule = {
       const national = digits.startsWith("84") ? "0" + digits.slice(2) : digits;
       if (national.length < 10 || national.length > 11) continue;
       if (!/^0[3-9]/.test(national) && !/^0\d{9,10}$/.test(national)) continue;
+      // Defer to MST / bank-account when those labels sit nearby.
+      if (labelBefore(mapped, m.index, MST_LABELS)) continue;
+      if (labelBefore(mapped, m.index, BANK_LABELS)) continue;
       out.push({ start: m.index, end: m.index + m[0].length });
     }
     return out;
@@ -112,6 +154,7 @@ export const cccdRule: PiiRule = {
       const digits = m[0].replace(/\D/g, "");
       if (digits.length !== 12) continue;
       if (isValidMyNumber(digits)) continue; // prefer my-number rule
+      if (labelBefore(mapped, m.index, BANK_LABELS)) continue;
       out.push({ start: m.index, end: m.index + m[0].length });
     }
     return out;
@@ -183,11 +226,165 @@ export const creditCardRule: PiiRule = {
   },
 };
 
-export const ALL_RULES: PiiRule[] = [
+/**
+ * Vietnamese tax code (MST): 10-digit enterprise (label-gated) or
+ * 13-digit branch `NNNNNNNNNN-NNN` (hyphen optional; distinctive shape).
+ */
+export const mstVnRule: PiiRule = {
+  id: "mst-vn",
+  find(text) {
+    const mapped = [...text].map((ch) => toAsciiDigits(ch)).join("");
+    const out: Array<{ start: number; end: number }> = [];
+
+    // Branch form must include a hyphen/dash so bare 13-digit SKUs are not claimed.
+    const branchRe = /(?<!\d)\d{10}\s*[-–]\s*\d{3}(?!\d)/g;
+    let m: RegExpExecArray | null;
+    branchRe.lastIndex = 0;
+    while ((m = branchRe.exec(mapped)) !== null) {
+      const digits = m[0].replace(/\D/g, "");
+      if (digits.length !== 13) continue;
+      out.push({ start: m.index, end: m.index + m[0].length });
+    }
+
+    const enterpriseRe = /(?<!\d)\d{10}(?!\d)/g;
+    enterpriseRe.lastIndex = 0;
+    while ((m = enterpriseRe.exec(mapped)) !== null) {
+      // Skip if already covered by a branch match.
+      const start = m.index;
+      const end = m.index + m[0].length;
+      if (out.some((s) => !(end <= s.start || start >= s.end))) continue;
+      if (!labelBefore(mapped, start, MST_LABELS)) continue;
+      out.push({ start, end });
+    }
+    return out;
+  },
+};
+
+/** Bank account digit runs near JP/VN/EN account labels (8–16 digits). */
+export const bankAccountRule: PiiRule = {
+  id: "bank-account",
+  find(text) {
+    const mapped = [...text].map((ch) => toAsciiDigits(ch)).join("");
+    const out: Array<{ start: number; end: number }> = [];
+    const re = /(?<!\d)(?:\d[\s-]?){7,15}\d(?!\d)/g;
+    let m: RegExpExecArray | null;
+    re.lastIndex = 0;
+    while ((m = re.exec(mapped)) !== null) {
+      const digits = m[0].replace(/\D/g, "");
+      if (digits.length < 8 || digits.length > 16) continue;
+      // Prefer MST for 10-digit / 13-digit tax shapes when MST label present,
+      // and skip hyphenated 10+3 branch forms entirely (mst-vn owns them).
+      // MST branch form NNNNNNNNNN-NNN is owned by mst-vn.
+      if (digits.length === 13 && mapped.slice(m.index, m.index + m[0].length).includes("-")) {
+        continue;
+      }
+      if (digits.length === 10 && labelBefore(mapped, m.index, MST_LABELS)) continue;
+      if (!labelBefore(mapped, m.index, BANK_LABELS)) continue;
+      out.push({ start: m.index, end: m.index + m[0].length });
+    }
+    return out;
+  },
+};
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function findLabelSites(text: string): number[] {
+  const sites: number[] = [];
+  const lower = text.toLowerCase();
+  for (const label of NAME_LABELS) {
+    const isLatin = /^[\x00-\x7F]+$/.test(label);
+    let from = 0;
+    while (from < text.length) {
+      const at = isLatin ? lower.indexOf(label.toLowerCase(), from) : text.indexOf(label, from);
+      if (at < 0) break;
+      let i = at + label.length;
+      while (i < text.length && /[\s:：\-–]/.test(text[i]!)) i++;
+      sites.push(i);
+      from = at + label.length;
+    }
+  }
+  return sites;
+}
+
+/**
+ * Label-gated JP/VN personal names using curated surname/given dictionaries.
+ */
+export const personNameRule: PiiRule = {
+  id: "person-name",
+  find(text) {
+    const out: Array<{ start: number; end: number }> = [];
+    const familySorted = [...VN_FAMILY].sort((a, b) => b.length - a.length);
+    const givenSorted = [...VN_GIVEN].sort((a, b) => b.length - a.length);
+    const givenAndFamily = [...givenSorted, ...familySorted];
+    for (const i of findLabelSites(text)) {
+      const windowEnd = Math.min(text.length, i + 40);
+      const window = text.slice(i, windowEnd);
+
+      let matched = false;
+      for (const sur of JP_SURNAMES) {
+        if (!window.startsWith(sur)) continue;
+        let end = i + sur.length;
+        const rest = text.slice(end, windowEnd);
+        const space = rest.match(/^\s+/);
+        if (space) {
+          const afterSpace = rest.slice(space[0].length);
+          for (const given of JP_GIVEN) {
+            if (afterSpace.startsWith(given)) {
+              end = end + space[0].length + given.length;
+              break;
+            }
+          }
+        }
+        out.push({ start: i, end });
+        matched = true;
+        break;
+      }
+      if (matched) continue;
+
+      const winLower = window.toLowerCase();
+      let cursor = 0;
+      while (cursor < window.length && /\s/.test(window[cursor]!)) cursor++;
+      let familyHit: string | null = null;
+      for (const fam of familySorted) {
+        if (winLower.startsWith(fam.toLowerCase(), cursor)) {
+          familyHit = window.slice(cursor, cursor + fam.length);
+          cursor += fam.length;
+          break;
+        }
+      }
+      if (!familyHit) continue;
+      const parts = [familyHit];
+      while (cursor < window.length && parts.length < 4) {
+        if (!/\s/.test(window[cursor]!)) break;
+        while (cursor < window.length && /\s/.test(window[cursor]!)) cursor++;
+        let next: string | null = null;
+        for (const tok of givenAndFamily) {
+          if (winLower.startsWith(tok.toLowerCase(), cursor)) {
+            next = window.slice(cursor, cursor + tok.length);
+            cursor += tok.length;
+            break;
+          }
+        }
+        if (!next) break;
+        parts.push(next);
+      }
+      if (parts.length < 2) continue;
+      const re = new RegExp(parts.map((p) => escapeRe(p)).join("\\s+"));
+      const hm = re.exec(window);
+      if (hm) out.push({ start: i + hm.index, end: i + hm.index + hm[0].length });
+    }
+    return out;
+  },
+};export const ALL_RULES: PiiRule[] = [
   emailRule,
   phoneJpRule,
   phoneVnRule,
   myNumberRule,
   cccdRule,
   creditCardRule,
+  mstVnRule,
+  bankAccountRule,
+  personNameRule,
 ];

@@ -16,12 +16,26 @@ export interface Span {
   end: number;
 }
 
+/** Higher wins when two rules claim the same length/start span. */
+const RULE_PRIORITY: Record<string, number> = {
+  "my-number": 100,
+  "credit-card": 90,
+  "mst-vn": 85,
+  cccd: 70,
+  email: 60,
+  "phone-jp": 50,
+  "phone-vn": 50,
+  "bank-account": 75,
+  "person-name": 30,
+};
+
 export function mergeSpans(spans: Span[]): Span[] {
   const sorted = [...spans].sort((a, b) => {
     const lenA = a.end - a.start;
     const lenB = b.end - b.start;
     if (lenB !== lenA) return lenB - lenA;
-    return a.start - b.start;
+    if (a.start !== b.start) return a.start - b.start;
+    return (RULE_PRIORITY[b.rule] ?? 0) - (RULE_PRIORITY[a.rule] ?? 0);
   });
   const accepted: Span[] = [];
   for (const s of sorted) {

