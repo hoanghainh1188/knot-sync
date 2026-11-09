@@ -69,6 +69,7 @@ function minimalConfig(sourcePath: string, auditLog: string): AppConfig {
       legacyVietnamese: true,
       tokenReduce: true,
     },
+    extraction: { maxFileSizeMb: 50, timeoutSeconds: 30, maxTextChars: 500_000 },
     pii: { mode: "mask", saltPath: "/tmp/salt" },
     guard: { mode: "flag" },
     server: { auditLog },

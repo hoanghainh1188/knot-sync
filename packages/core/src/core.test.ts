@@ -4,11 +4,13 @@ import { resolve } from "node:path";
 import {
   ConfigError,
   DEFAULT_CLEANING_CONFIG,
+  DEFAULT_EXTRACTION_CONFIG,
   DEFAULT_GUARD_MODE,
   DEFAULT_PII_MODE,
   parseCleaningConfig,
   parseCliConfig,
   parseConfig,
+  parseExtractionConfig,
   parseGuardConfig,
   parsePiiConfig,
   parsePromptsConfig,
@@ -88,9 +90,12 @@ test("starter config parses", () => {
   assert.equal(cfg.scan.oldFileYears, 5);
   assert.equal(cfg.scan.hash, true);
   assert.deepEqual(cfg.cleaning, DEFAULT_CLEANING_CONFIG);
+  assert.deepEqual(cfg.extraction, DEFAULT_EXTRACTION_CONFIG);
   assert.equal(cfg.pii.mode, DEFAULT_PII_MODE);
   assert.match(cfg.pii.saltPath, /pii-salt$/);
   assert.equal(cfg.guard.mode, DEFAULT_GUARD_MODE);
+  assert.match(starterConfigYaml(), /extraction:/);
+  assert.match(starterConfigYaml(), /maxFileSizeMb/);
 });
 
 test("pii defaults to mask when omitted", () => {
@@ -252,6 +257,45 @@ test("cleaning rejects unknown keys and non-booleans", () => {
   assert.throws(
     () => parseCleaningConfig({ nfkc: "yes" }),
     /cleaning\.nfkc.*boolean/,
+  );
+});
+
+test("extraction defaults when omitted", () => {
+  assert.deepEqual(parseExtractionConfig(undefined), DEFAULT_EXTRACTION_CONFIG);
+  const structural = parseConfig("sources:\n  - id: a\n    type: fs\n    path: /x\n", "/");
+  assert.deepEqual(structural.extraction, DEFAULT_EXTRACTION_CONFIG);
+});
+
+test("extraction partial override keeps other defaults", () => {
+  const structural = parseConfig(
+    [
+      "sources:",
+      "  - id: a",
+      "    type: fs",
+      "    path: /x",
+      "extraction:",
+      "  maxFileSizeMb: 10",
+      "",
+    ].join("\n"),
+    "/",
+  );
+  assert.equal(structural.extraction.maxFileSizeMb, 10);
+  assert.equal(structural.extraction.timeoutSeconds, 30);
+  assert.equal(structural.extraction.maxTextChars, 500_000);
+});
+
+test("extraction rejects unknown keys and non-positive values", () => {
+  assert.throws(
+    () => parseExtractionConfig({ foo: 1 }),
+    /Unknown key "foo".*extraction/,
+  );
+  assert.throws(
+    () => parseExtractionConfig({ maxFileSizeMb: 0 }),
+    /extraction\.maxFileSizeMb.*positive/,
+  );
+  assert.throws(
+    () => parseExtractionConfig({ timeoutSeconds: -1 }),
+    /extraction\.timeoutSeconds.*positive/,
   );
 });
 

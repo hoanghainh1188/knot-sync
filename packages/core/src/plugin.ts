@@ -34,8 +34,12 @@ export interface Connector {
 }
 
 export interface ExtractContext {
-  /** Reserved for future pipeline options (cleaners, etc.). */
+  /** AbortSignal for per-file extraction timeout. */
   signal?: AbortSignal;
+  /** Soft-fail with SKIPPED_TOO_LARGE when file.size exceeds this. */
+  maxFileSizeBytes?: number;
+  /** Cap characters from delimited / plain-text extraction. */
+  maxTextChars?: number;
 }
 
 export type ExtractResult =

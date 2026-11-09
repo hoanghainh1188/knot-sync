@@ -104,3 +104,42 @@ test("extracts text PDF and fails on corrupt files", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("SKIPPED_TOO_LARGE when file.size exceeds maxFileSizeBytes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "knot-ext-large-"));
+  try {
+    await writeFile(join(root, "big.xlsx"), await buildXlsx([["a"], ["b"]]));
+    const large = {
+      ...entry(root, "big.xlsx", "xlsx" as const, ".xlsx"),
+      size: 100_000_000,
+    };
+    const result = await extractOfficeFile(large, { maxFileSizeBytes: 1024 });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.code, "SKIPPED_TOO_LARGE");
+      assert.match(result.message, /maxFileSizeMb|over/i);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Vietnamese CSV truncates at maxTextChars with metadata", async () => {
+  const root = await mkdtemp(join(tmpdir(), "knot-ext-chunk-"));
+  try {
+    const header = "mã khách,số tiền";
+    const body = Array.from({ length: 50 }, (_, i) => `KH${i},100`).join("\n");
+    await writeFile(join(root, "hoa-don.csv"), `${header}\n${body}\n`, "utf8");
+    const result = await extractOfficeFile(entry(root, "hoa-don.csv", "csv", ".csv"), {
+      maxTextChars: header.length + 20,
+    });
+    assert.equal(result.ok, true, result.ok ? "" : `${result.code}: ${result.message}`);
+    if (result.ok) {
+      assert.equal(result.document.metadata.truncated, true);
+      assert.ok(result.document.content.length < header.length + body.length);
+      assert.match(result.document.content, /mã khách/);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
