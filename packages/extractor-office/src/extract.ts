@@ -1,12 +1,15 @@
+import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import ExcelJS from "exceljs";
 import mammoth from "mammoth";
 import { extractText, getDocumentProxy } from "unpdf";
 import {
+  DEFAULT_EXTRACTION_CONFIG,
   documentId,
   sha256,
   type Document,
+  type ExtractContext,
   type ExtractResult,
   type FileEntry,
   type TableData,
@@ -90,16 +93,149 @@ function isLikelyHiddenCell(cell: ExcelJS.Cell): boolean {
   return fontWhite && fillWhite;
 }
 
-async function extractXlsx(file: FileEntry, bytes: Buffer): Promise<ExtractResult> {
-  const workbook = new ExcelJS.Workbook();
-  // exceljs typings disagree with Node's Buffer; runtime accepts Node Buffer.
-  await workbook.xlsx.load(bytes as never);
+function aborted(signal?: AbortSignal): boolean {
+  return signal?.aborted === true;
+}
+
+function timeoutFail(file: FileEntry): ExtractResult {
+  return fail(
+    "EXTRACT_TIMEOUT",
+    `Extraction timed out for "${file.relPath}". Raise extraction.timeoutSeconds or exclude the file, then retry "knot-sync run".`,
+  );
+}
+
+function sheetsToDocument(
+  file: FileEntry,
+  sheets: Array<{ name: string; rows: string[][]; hiddenParts: string[] }>,
+): ExtractResult {
   const tables: TableData[] = [];
   const parts: string[] = [];
   const hiddenParts: string[] = [];
+  for (const sheet of sheets) {
+    hiddenParts.push(...sheet.hiddenParts);
+    if (sheet.rows.length === 0) continue;
+    const headers = sheet.rows[0] ?? [];
+    const body = sheet.rows.slice(1);
+    tables.push({ name: sheet.name, headers, rows: body });
+    parts.push(`## ${sheet.name}\n`);
+    parts.push(`| ${headers.map(escapeMdCell).join(" | ")} |`);
+    parts.push(`| ${headers.map(() => "---").join(" | ")} |`);
+    for (const r of body) {
+      parts.push(`| ${headers.map((_, i) => escapeMdCell(r[i] ?? "")).join(" | ")} |`);
+    }
+    parts.push("");
+  }
+  if (tables.length === 0 && parts.length === 0) {
+    return fail("EMPTY", `Spreadsheet "${file.relPath}" has no rows.`);
+  }
+  const extra: Record<string, string | number | boolean | null> = {};
+  if (hiddenParts.length > 0) {
+    extra.guardHiddenText = hiddenParts.join("\n");
+  }
+  return { ok: true, document: toDocument(file, parts.join("\n"), tables, extra) };
+}
 
+/** Prefer streaming reader; fall back to buffer load when ExcelJS stream path fails. */
+async function extractXlsx(file: FileEntry, ctx?: ExtractContext): Promise<ExtractResult> {
+  const streamed = await extractXlsxStreaming(file, ctx);
+  if (streamed.ok || streamed.code === "EMPTY" || streamed.code === "EXTRACT_TIMEOUT") {
+    return streamed;
+  }
+  // ExcelJS 4.4 WorkbookReader can throw when workbook model is not ready; buffer path
+  // remains bounded by extraction.maxFileSizeMb.
+  return extractXlsxBuffered(file, ctx);
+}
+
+async function extractXlsxStreaming(
+  file: FileEntry,
+  ctx?: ExtractContext,
+): Promise<ExtractResult> {
+  const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(file.absPath, {
+    entries: "emit",
+    sharedStrings: "cache",
+    hyperlinks: "cache",
+    styles: "cache",
+    worksheets: "emit",
+  });
+
+  const sheets: Array<{ name: string; rows: string[][]; hiddenParts: string[] }> = [];
+
+  try {
+    for await (const worksheetReader of workbookReader) {
+      if (aborted(ctx?.signal)) return timeoutFail(file);
+      const sheetMeta = worksheetReader as unknown as { name?: string; id?: number };
+      const sheetName =
+        typeof sheetMeta.name === "string" && sheetMeta.name
+          ? sheetMeta.name
+          : `Sheet${sheetMeta.id ?? "?"}`;
+
+      const rows: string[][] = [];
+      const hiddenParts: string[] = [];
+      let maxCol = 0;
+
+      for await (const rowOrBatch of worksheetReader) {
+        if (aborted(ctx?.signal)) return timeoutFail(file);
+        const batch = Array.isArray(rowOrBatch) ? rowOrBatch : [rowOrBatch];
+        for (const row of batch) {
+          maxCol = Math.max(maxCol, row.cellCount);
+          const cells: string[] = [];
+          for (let c = 1; c <= row.cellCount; c++) {
+            const cell = row.getCell(c);
+            const text = cellToString(cell.value);
+            cells.push(text);
+            if (text && isLikelyHiddenCell(cell)) hiddenParts.push(text);
+          }
+          rows.push(cells);
+        }
+      }
+
+      for (const r of rows) {
+        while (r.length < maxCol) r.push("");
+      }
+      sheets.push({ name: sheetName, rows, hiddenParts });
+    }
+  } catch (err) {
+    if (aborted(ctx?.signal)) return timeoutFail(file);
+    return fail(
+      "PARSE",
+      `Failed to extract "${file.relPath}": ${(err as Error).message}`,
+    );
+  }
+
+  return sheetsToDocument(file, sheets);
+}
+
+async function extractXlsxBuffered(
+  file: FileEntry,
+  ctx?: ExtractContext,
+): Promise<ExtractResult> {
+  if (aborted(ctx?.signal)) return timeoutFail(file);
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(file.absPath);
+  } catch (err) {
+    return fail(
+      "READ",
+      `Could not read "${file.relPath}": ${(err as Error).message}. Check permissions and re-run scan.`,
+    );
+  }
+  if (aborted(ctx?.signal)) return timeoutFail(file);
+
+  const workbook = new ExcelJS.Workbook();
+  try {
+    await workbook.xlsx.load(bytes as never);
+  } catch (err) {
+    return fail(
+      "PARSE",
+      `Failed to extract "${file.relPath}": ${(err as Error).message}`,
+    );
+  }
+
+  const sheets: Array<{ name: string; rows: string[][]; hiddenParts: string[] }> = [];
   for (const sheet of workbook.worksheets) {
+    if (aborted(ctx?.signal)) return timeoutFail(file);
     const rows: string[][] = [];
+    const hiddenParts: string[] = [];
     let maxCol = 0;
     sheet.eachRow({ includeEmpty: false }, (row) => {
       maxCol = Math.max(maxCol, row.cellCount);
@@ -115,27 +251,9 @@ async function extractXlsx(file: FileEntry, bytes: Buffer): Promise<ExtractResul
       }
       rows.push(cells);
     });
-    if (rows.length === 0) continue;
-    const headers = rows[0] ?? [];
-    const body = rows.slice(1);
-    tables.push({ name: sheet.name, headers, rows: body });
-    parts.push(`## ${sheet.name}\n`);
-    parts.push(`| ${headers.map(escapeMdCell).join(" | ")} |`);
-    parts.push(`| ${headers.map(() => "---").join(" | ")} |`);
-    for (const r of body) {
-      parts.push(`| ${headers.map((_, i) => escapeMdCell(r[i] ?? "")).join(" | ")} |`);
-    }
-    parts.push("");
+    sheets.push({ name: sheet.name, rows, hiddenParts });
   }
-
-  if (tables.length === 0 && parts.length === 0) {
-    return fail("EMPTY", `Spreadsheet "${file.relPath}" has no rows.`);
-  }
-  const extra: Record<string, string | number | boolean | null> = {};
-  if (hiddenParts.length > 0) {
-    extra.guardHiddenText = hiddenParts.join("\n");
-  }
-  return { ok: true, document: toDocument(file, parts.join("\n"), tables, extra) };
+  return sheetsToDocument(file, sheets);
 }
 
 async function extractDocx(file: FileEntry, bytes: Buffer): Promise<ExtractResult> {
@@ -177,8 +295,7 @@ async function extractPdf(file: FileEntry, bytes: Buffer): Promise<ExtractResult
   }
 }
 
-function parseDelimited(text: string, delimiter: string): TableData {
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((l) => l.length > 0);
+function parseDelimitedLines(lines: string[], delimiter: string): TableData {
   if (lines.length === 0) return { headers: [], rows: [] };
   const split = (line: string) => line.split(delimiter).map((c) => c.trim());
   const headers = split(lines[0]!);
@@ -200,47 +317,129 @@ function tableToMarkdown(table: TableData): string {
   return lines.join("\n");
 }
 
-type Utf8Decode = { ok: true; text: string } | { ok: false; code: string; message: string };
+async function readTextBounded(
+  file: FileEntry,
+  maxTextChars: number,
+  signal?: AbortSignal,
+): Promise<
+  | { ok: true; text: string; truncated: boolean }
+  | { ok: false; code: string; message: string }
+> {
+  // Binary stream + fatal UTF-8 decode (preserve ENCODING soft-fail for legacy encodings).
+  const stream = createReadStream(file.absPath);
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let text = "";
+  let truncated = false;
 
-function decodeUtf8(file: FileEntry, bytes: Buffer): Utf8Decode {
+  const onAbort = () => {
+    stream.destroy();
+  };
+  signal?.addEventListener("abort", onAbort, { once: true });
+
   try {
-    return { ok: true, text: new TextDecoder("utf-8", { fatal: true }).decode(bytes) };
+    for await (const chunk of stream) {
+      if (aborted(signal)) {
+        return {
+          ok: false,
+          code: "EXTRACT_TIMEOUT",
+          message: `Extraction timed out for "${file.relPath}". Raise extraction.timeoutSeconds or exclude the file, then retry "knot-sync run".`,
+        };
+      }
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      let piece: string;
+      try {
+        piece = decoder.decode(buf, { stream: true });
+      } catch (err) {
+        return {
+          ok: false,
+          code: "ENCODING",
+          message: `Could not decode "${file.relPath}" as UTF-8: ${(err as Error).message}. Convert the file to UTF-8 and re-run.`,
+        };
+      }
+      if (piece.length === 0) continue;
+      if (text.length + piece.length > maxTextChars) {
+        text += piece.slice(0, Math.max(0, maxTextChars - text.length));
+        truncated = true;
+        break;
+      }
+      text += piece;
+    }
+    if (!truncated) {
+      try {
+        text += decoder.decode();
+      } catch (err) {
+        return {
+          ok: false,
+          code: "ENCODING",
+          message: `Could not decode "${file.relPath}" as UTF-8: ${(err as Error).message}. Convert the file to UTF-8 and re-run.`,
+        };
+      }
+    }
   } catch (err) {
+    if (aborted(signal)) {
+      return {
+        ok: false,
+        code: "EXTRACT_TIMEOUT",
+        message: `Extraction timed out for "${file.relPath}". Raise extraction.timeoutSeconds or exclude the file, then retry "knot-sync run".`,
+      };
+    }
     return {
       ok: false,
-      code: "ENCODING",
-      message: `Could not decode "${file.relPath}" as UTF-8: ${(err as Error).message}. Convert the file to UTF-8 and re-run.`,
+      code: "READ",
+      message: `Could not read "${file.relPath}": ${(err as Error).message || String(err)}. Check permissions and re-run scan.`,
     };
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+    stream.destroy();
   }
+
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  return { ok: true, text, truncated };
 }
 
 async function extractDelimited(
   file: FileEntry,
-  bytes: Buffer,
   delimiter: string,
+  ctx?: ExtractContext,
 ): Promise<ExtractResult> {
-  const decoded = decodeUtf8(file, bytes);
-  if (!decoded.ok) return decoded;
-  const table = parseDelimited(decoded.text, delimiter);
+  const maxTextChars = ctx?.maxTextChars ?? DEFAULT_EXTRACTION_CONFIG.maxTextChars;
+  const read = await readTextBounded(file, maxTextChars, ctx?.signal);
+  if (!read.ok) return read;
+  const lines = read.text.split(/\r?\n/).filter((l) => l.length > 0);
+  const table = parseDelimitedLines(lines, delimiter);
   if (table.headers.length === 0) {
     return fail("EMPTY", `Delimited file "${file.relPath}" is empty.`);
   }
+  const extra: Record<string, string | number | boolean | null> = {};
+  if (read.truncated) {
+    extra.truncated = true;
+    extra.truncationNote = `Content truncated at extraction.maxTextChars=${maxTextChars}.`;
+  }
   return {
     ok: true,
-    document: toDocument(file, tableToMarkdown(table) + "\n", [table]),
+    document: toDocument(file, tableToMarkdown(table) + "\n", [table], extra),
   };
 }
 
-async function extractPlainText(file: FileEntry, bytes: Buffer): Promise<ExtractResult> {
-  const decoded = decodeUtf8(file, bytes);
-  if (!decoded.ok) return decoded;
-  if (decoded.text.trim() === "") {
+async function extractPlainText(file: FileEntry, ctx?: ExtractContext): Promise<ExtractResult> {
+  const maxTextChars = ctx?.maxTextChars ?? DEFAULT_EXTRACTION_CONFIG.maxTextChars;
+  const read = await readTextBounded(file, maxTextChars, ctx?.signal);
+  if (!read.ok) return read;
+  if (read.text.trim() === "") {
     return fail("EMPTY", `Text file "${file.relPath}" is empty.`);
   }
-  return { ok: true, document: toDocument(file, decoded.text, []) };
+  const extra: Record<string, string | number | boolean | null> = {};
+  if (read.truncated) {
+    extra.truncated = true;
+    extra.truncationNote = `Content truncated at extraction.maxTextChars=${maxTextChars}.`;
+  }
+  return { ok: true, document: toDocument(file, read.text, [], extra) };
 }
 
-export async function extractOfficeFile(file: FileEntry): Promise<ExtractResult> {
+export async function extractOfficeFile(
+  file: FileEntry,
+  ctx?: ExtractContext,
+): Promise<ExtractResult> {
   if (!(OFFICE_EXTENSIONS as readonly string[]).includes(file.ext)) {
     return fail(
       "UNSUPPORTED",
@@ -248,6 +447,36 @@ export async function extractOfficeFile(file: FileEntry): Promise<ExtractResult>
     );
   }
 
+  const maxBytes = ctx?.maxFileSizeBytes;
+  if (typeof maxBytes === "number" && maxBytes > 0 && file.size > maxBytes) {
+    const mb = Math.round((maxBytes / (1024 * 1024)) * 10) / 10;
+    return fail(
+      "SKIPPED_TOO_LARGE",
+      `Skipped "${file.relPath}" (${file.size} bytes) — over extraction.maxFileSizeMb=${mb}. Raise the limit or exclude the file, then retry "knot-sync run".`,
+    );
+  }
+
+  if (aborted(ctx?.signal)) return timeoutFail(file);
+
+  // Stream path for xlsx — no full buffer load.
+  if (file.ext === ".xlsx") {
+    try {
+      return await extractXlsx(file, ctx);
+    } catch (err) {
+      if (aborted(ctx?.signal)) return timeoutFail(file);
+      return fail(
+        "PARSE",
+        `Failed to extract "${file.relPath}": ${(err as Error).message}`,
+      );
+    }
+  }
+
+  // Delimited / plain — stream with maxTextChars.
+  if (file.ext === ".csv") return extractDelimited(file, ",", ctx);
+  if (file.ext === ".tsv") return extractDelimited(file, "\t", ctx);
+  if (file.ext === ".txt" || file.ext === ".md") return extractPlainText(file, ctx);
+
+  // docx / pdf still need a buffer (bounded by maxFileSizeMb).
   let bytes: Buffer;
   try {
     bytes = await readFile(file.absPath);
@@ -258,21 +487,14 @@ export async function extractOfficeFile(file: FileEntry): Promise<ExtractResult>
     );
   }
 
+  if (aborted(ctx?.signal)) return timeoutFail(file);
+
   try {
     switch (file.ext) {
-      case ".xlsx":
-        return await extractXlsx(file, bytes);
       case ".docx":
         return await extractDocx(file, bytes);
       case ".pdf":
         return await extractPdf(file, bytes);
-      case ".csv":
-        return await extractDelimited(file, bytes, ",");
-      case ".tsv":
-        return await extractDelimited(file, bytes, "\t");
-      case ".txt":
-      case ".md":
-        return await extractPlainText(file, bytes);
       default:
         return fail(
           "UNSUPPORTED",
@@ -280,6 +502,7 @@ export async function extractOfficeFile(file: FileEntry): Promise<ExtractResult>
         );
     }
   } catch (err) {
+    if (aborted(ctx?.signal)) return timeoutFail(file);
     return fail(
       "PARSE",
       `Failed to extract "${file.relPath}": ${(err as Error).message}`,

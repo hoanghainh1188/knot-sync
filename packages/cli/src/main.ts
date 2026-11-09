@@ -432,8 +432,50 @@ async function cmdRun(
         continue;
       }
 
+      const maxFileSizeBytes = structural.extraction.maxFileSizeMb * 1024 * 1024;
+      if (file.size > maxFileSizeBytes) {
+        failed += 1;
+        issues.push({
+          path: file.relPath,
+          code: "SKIPPED_TOO_LARGE",
+          message:
+            `Skipped "${file.relPath}" (${file.size} bytes) — over extraction.maxFileSizeMb=${structural.extraction.maxFileSizeMb}. ` +
+            `Raise the limit or exclude the file, then retry "knot-sync run".`,
+        });
+        continue;
+      }
+
+      const timeoutMs = Math.max(1, Math.floor(structural.extraction.timeoutSeconds * 1000));
+      const signal = AbortSignal.timeout(timeoutMs);
+      const timeoutMessage =
+        `Extraction timed out for "${file.relPath}" after ${structural.extraction.timeoutSeconds}s. ` +
+        `Raise extraction.timeoutSeconds or exclude the file, then retry "knot-sync run".`;
+
       try {
-        const result = await extractor.extract(file);
+        const result = await Promise.race([
+          extractor.extract(file, {
+            signal,
+            maxFileSizeBytes,
+            maxTextChars: structural.extraction.maxTextChars,
+          }),
+          new Promise<never>((_, reject) => {
+            const onAbort = () => {
+              signal.removeEventListener("abort", onAbort);
+              reject(Object.assign(new Error(timeoutMessage), { name: "TimeoutError" }));
+            };
+            if (signal.aborted) onAbort();
+            else signal.addEventListener("abort", onAbort, { once: true });
+          }),
+        ]);
+        if (signal.aborted) {
+          failed += 1;
+          issues.push({
+            path: file.relPath,
+            code: "EXTRACT_TIMEOUT",
+            message: timeoutMessage,
+          });
+          continue;
+        }
         if (!result.ok) {
           failed += 1;
           issues.push({ path: file.relPath, code: result.code, message: result.message });
@@ -575,10 +617,13 @@ async function cmdRun(
         }
       } catch (err) {
         failed += 1;
+        const name = (err as { name?: string }).name ?? "";
+        const timedOut =
+          signal.aborted || name === "TimeoutError" || name === "AbortError";
         issues.push({
           path: file.relPath,
-          code: "EXTRACT",
-          message: (err as Error).message || String(err),
+          code: timedOut ? "EXTRACT_TIMEOUT" : "EXTRACT",
+          message: timedOut ? timeoutMessage : (err as Error).message || String(err),
         });
       }
     }

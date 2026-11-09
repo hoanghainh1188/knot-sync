@@ -10,7 +10,7 @@ export { OFFICE_EXTENSIONS, extractOfficeFile } from "./extract.js";
 export const officeExtractor: Extractor = {
   id: "office",
   extensions: [...OFFICE_EXTENSIONS],
-  extract: (file) => extractOfficeFile(file),
+  extract: (file, ctx) => extractOfficeFile(file, ctx),
 };
 
 const officePlugin: KnotSyncPlugin = {

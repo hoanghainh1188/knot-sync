@@ -188,7 +188,7 @@ Target: Hardening KnotSync for enterprise-grade production deployments (resilien
 
 | # | Change | Priority | Status |
 |---|---|:---:|---|
-| 1 | `harden-office-extraction` | P0 | 📋 planned |
+| 1 | `harden-office-extraction` | P0 | ✅ done |
 | 2 | `harden-sql-connector` | P1 | 📋 planned |
 | 3 | `add-http-mcp-transport` | P1 | 📋 planned |
 | 4 | `enhance-pii-guard` | P2 | 📋 planned |

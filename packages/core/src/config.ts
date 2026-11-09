@@ -10,6 +10,7 @@ import type {
   CleaningConfig,
   CliConfig,
   CliLocale,
+  ExtractionConfig,
   GuardConfig,
   GuardMode,
   PiiConfig,
@@ -46,6 +47,7 @@ const CORE_TOP_LEVEL_KEYS = new Set([
   "scan",
   "plugins",
   "cleaning",
+  "extraction",
   "pii",
   "guard",
   "server",
@@ -102,6 +104,14 @@ export const DEFAULT_CLEANING_CONFIG: CleaningConfig = {
   tokenReduce: true,
 };
 
+const EXTRACTION_KEYS = ["maxFileSizeMb", "timeoutSeconds", "maxTextChars"] as const;
+
+export const DEFAULT_EXTRACTION_CONFIG: ExtractionConfig = {
+  maxFileSizeMb: 50,
+  timeoutSeconds: 30,
+  maxTextChars: 500_000,
+};
+
 export function resolvePath(baseDir: string, p: string): string {
   return isAbsolute(p) ? p : resolve(baseDir, p);
 }
@@ -135,6 +145,7 @@ export interface StructuralConfig {
   store: StoreConfig;
   scan: ScanConfig;
   cleaning: CleaningConfig;
+  extraction: ExtractionConfig;
   pii: PiiConfig;
   guard: GuardConfig;
   server: ServerConfig;
@@ -468,6 +479,48 @@ export function parseCleaningConfig(raw: unknown): CleaningConfig {
   };
 }
 
+function assertPositiveNumber(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    throw new ConfigError(`"${field}" must be a positive number.`);
+  }
+  return value;
+}
+
+/** Parse optional `extraction:` section; omitted keys use defaults. */
+export function parseExtractionConfig(raw: unknown): ExtractionConfig {
+  if (raw === undefined || raw === null) {
+    return { ...DEFAULT_EXTRACTION_CONFIG };
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ConfigError(
+      '"extraction" must be an object (e.g. { maxFileSizeMb: 50, timeoutSeconds: 30 }).',
+    );
+  }
+  const obj = raw as Record<string, unknown>;
+  const allowed = new Set<string>(EXTRACTION_KEYS);
+  for (const key of Object.keys(obj)) {
+    if (!allowed.has(key)) {
+      throw new ConfigError(
+        `Unknown key "${key}" under "extraction". Allowed keys: ${EXTRACTION_KEYS.join(", ")}.`,
+      );
+    }
+  }
+  return {
+    maxFileSizeMb:
+      obj.maxFileSizeMb === undefined
+        ? DEFAULT_EXTRACTION_CONFIG.maxFileSizeMb
+        : assertPositiveNumber(obj.maxFileSizeMb, "extraction.maxFileSizeMb"),
+    timeoutSeconds:
+      obj.timeoutSeconds === undefined
+        ? DEFAULT_EXTRACTION_CONFIG.timeoutSeconds
+        : assertPositiveNumber(obj.timeoutSeconds, "extraction.timeoutSeconds"),
+    maxTextChars:
+      obj.maxTextChars === undefined
+        ? DEFAULT_EXTRACTION_CONFIG.maxTextChars
+        : assertPositiveNumber(obj.maxTextChars, "extraction.maxTextChars"),
+  };
+}
+
 function parsePluginsList(raw: unknown): string[] {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw) || raw.some((v) => typeof v !== "string")) {
@@ -532,6 +585,7 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
 
   const plugins = parsePluginsList(c.plugins);
   const cleaning = parseCleaningConfig(c.cleaning);
+  const extraction = parseExtractionConfig(c.extraction);
 
   const storePath = resolvePath(
     baseDir,
@@ -563,6 +617,7 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
       hash: scan.hash === undefined ? true : Boolean(scan.hash),
     },
     cleaning,
+    extraction,
     pii,
     guard,
     server,
@@ -595,6 +650,7 @@ export function resolveConfig(structural: StructuralConfig, host: PluginHost): A
     store: structural.store,
     scan: structural.scan,
     cleaning: structural.cleaning,
+    extraction: structural.extraction,
     pii: structural.pii,
     guard: structural.guard,
     server: structural.server,
@@ -653,6 +709,12 @@ scan:
 #   datesIso: true
 #   legacyVietnamese: true
 #   tokenReduce: true
+
+# Optional extraction limits for "knot-sync run" (soft-fail oversized / timed-out files).
+# extraction:
+#   maxFileSizeMb: 50      # SKIPPED_TOO_LARGE over this size
+#   timeoutSeconds: 30     # EXTRACT_TIMEOUT per file
+#   maxTextChars: 500000   # truncate large csv/tsv/txt/md
 
 # Optional PII masking applied by "knot-sync run" after cleaning (default mode: mask).
 # pii:

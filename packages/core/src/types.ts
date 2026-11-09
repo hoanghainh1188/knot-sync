@@ -141,6 +141,16 @@ export interface CleaningConfig {
   tokenReduce: boolean;
 }
 
+/** Extraction resource limits (`extraction:` in config). */
+export interface ExtractionConfig {
+  /** Skip files larger than this many mebibytes. */
+  maxFileSizeMb: number;
+  /** Per-file wall-clock timeout in seconds. */
+  timeoutSeconds: number;
+  /** Max characters accepted from one delimited/plain-text extraction. */
+  maxTextChars: number;
+}
+
 export type PiiMode = "mask" | "hash" | "drop";
 
 /** PII masking settings for the built-in pii-basic plugin. */
@@ -216,6 +226,7 @@ export interface AppConfig {
   store: StoreConfig;
   scan: ScanConfig;
   cleaning: CleaningConfig;
+  extraction: ExtractionConfig;
   pii: PiiConfig;
   guard: GuardConfig;
   server: ServerConfig;

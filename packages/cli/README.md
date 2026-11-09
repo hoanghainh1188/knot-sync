@@ -164,6 +164,9 @@ Extracts text and tables from `.xlsx`, `.docx`, `.pdf` (text-based), `.csv`, `.t
 - **PII Masking**: Mask (`***`), hash, or drop sensitive numbers.
 - **Guardrails**: Flags prompt-injection patterns, zero-width chars, and hidden cells.
 - **Incremental**: Unchanged files (matching SHA-256 hash) are skipped automatically.
+- **Hardened extraction**: `extraction.maxFileSizeMb` (default 50) skips oversized files with
+  `SKIPPED_TOO_LARGE`; `timeoutSeconds` (default 30) soft-fails hung extracts; large `.xlsx`
+  uses streaming parse; oversized CSV/TSV/TXT truncate at `maxTextChars`.
 
 ### 3. `ui`: Review Semantic Catalog
 Launches a bundled React review interface on **127.0.0.1:8787** (loopback only) to edit business names, descriptions, and mark columns as reviewed:
