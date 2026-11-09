@@ -70,12 +70,17 @@ test("pnpm pack:cli tarball has registry-safe package.json and required files", 
       main?: string;
       bin?: Record<string, string>;
       dependencies?: Record<string, string>;
+      repository?: { type?: string; url?: string };
+      homepage?: string;
     };
     assert.equal(pkg.name, "@hoanghainh/knot-sync");
     assert.equal(pkg.version, cliVersion);
     // No "./" prefix — npm publish treats "./dist/bin.js" as invalid and drops bin.
     assert.equal(pkg.bin?.["knot-sync"], "dist/bin.js");
     assert.equal(pkg.main, "dist/bin.js");
+    assert.equal(pkg.repository?.type, "git");
+    assert.match(pkg.repository?.url ?? "", /github\.com\/hoanghainh1188\/knot-sync/);
+    assert.match(pkg.homepage ?? "", /github\.com\/hoanghainh1188\/knot-sync/);
     for (const [name, range] of Object.entries(pkg.dependencies ?? {})) {
       assert.doesNotMatch(name, /^@hoanghainh\/knot-sync-/);
       assert.doesNotMatch(range, /^workspace:/);
@@ -88,6 +93,20 @@ test("pnpm pack:cli tarball has registry-safe package.json and required files", 
     assert.ok(existsSync(join(pkgRoot, "LICENSE")));
     assert.ok(existsSync(join(pkgRoot, "README.md")));
     assert.equal(existsSync(join(pkgRoot, "dist/main.js")), false);
+
+    const readme = await readFile(join(pkgRoot, "README.md"), "utf8");
+    const nonEmptyLines = readme.split("\n").filter((line) => line.trim().length > 0);
+    assert.ok(nonEmptyLines.length > 20, "packed README must not be a stub");
+    assert.match(readme, /## Quickstart/i);
+    assert.match(readme, /npx @hoanghainh\/knot-sync/);
+    assert.match(readme, /Japanese/i);
+    assert.match(readme, /Vietnamese/i);
+    assert.match(readme, /和暦|wareki/i);
+    assert.match(readme, /TCVN3|VNI/i);
+    assert.doesNotMatch(
+      readme,
+      /See the\s+repository root README for install and usage/i,
+    );
   } finally {
     await rm(dir, { recursive: true, force: true });
     await rm(tgz, { force: true });

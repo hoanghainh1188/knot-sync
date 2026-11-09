@@ -9,7 +9,7 @@
 [![Node: >=22.13](https://img.shields.io/badge/node-%3E%3D22.13-brightgreen.svg)](https://nodejs.org)
 [![MCP](https://img.shields.io/badge/MCP-1.2.0-purple.svg)](https://modelcontextprotocol.io)
 
-[English](./README.md) • [日本語](./docs/ja/README.md) • [Tiếng Việt](./docs/vi/README.md)
+[English](https://github.com/hoanghainh1188/knot-sync#readme) • [日本語](https://github.com/hoanghainh1188/knot-sync/blob/main/docs/ja/README.md) • [Tiếng Việt](https://github.com/hoanghainh1188/knot-sync/blob/main/docs/vi/README.md)
 
 ---
 
@@ -282,19 +282,19 @@ KnotSync is structured as a clean, modular TypeScript monorepo managed by `pnpm`
 
 | Package | Responsibility |
 |---|---|
-| [`packages/core`](./packages/core) | Data models (`Document`, `FileEntry`), config loader, plugin host API |
-| [`packages/connector-fs`](./packages/connector-fs) | Read-only folder walker and file inventory scanner |
-| [`packages/connector-sql`](./packages/connector-sql) | Read-only PostgreSQL and MySQL connector, schema introspection |
-| [`packages/extractor-office`](./packages/extractor-office) | Document text & table extractor (`.xlsx`, `.docx`, `.pdf`, `.csv`, `.md`, `.txt`) |
-| [`packages/cleaner-ja-vi`](./packages/cleaner-ja-vi) | Text normalizer: NFKC, Wareki, ISO dates, TCVN3/VNI, token reduction |
-| [`packages/pii-basic`](./packages/pii-basic) | Rule-based PII mask/hash/drop (CCCD, My Number, phones, emails, credit cards) |
-| [`packages/guard`](./packages/guard) | Multi-lingual indirect prompt injection detector |
-| [`packages/store-sqlite`](./packages/store-sqlite) | `node:sqlite` store with FTS5 trigram search |
-| [`packages/catalog`](./packages/catalog) | Semantic Catalog YAML manager, dictionary resolver, Excel definition parser |
-| [`packages/ui`](./packages/ui) | Bundled React catalog review UI (runs on loopback `127.0.0.1`) |
-| [`packages/mcp-server`](./packages/mcp-server) | Official Model Context Protocol stdio server |
-| [`packages/report-html`](./packages/report-html) | Self-contained, zero-dependency offline HTML scan report |
-| [`packages/cli`](./packages/cli) | Unified CLI entrypoint (`knot-sync`) |
+| [`packages/core`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/core) | Data models (`Document`, `FileEntry`), config loader, plugin host API |
+| [`packages/connector-fs`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-fs) | Read-only folder walker and file inventory scanner |
+| [`packages/connector-sql`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-sql) | Read-only PostgreSQL and MySQL connector, schema introspection |
+| [`packages/extractor-office`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/extractor-office) | Document text & table extractor (`.xlsx`, `.docx`, `.pdf`, `.csv`, `.md`, `.txt`) |
+| [`packages/cleaner-ja-vi`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/cleaner-ja-vi) | Text normalizer: NFKC, Wareki, ISO dates, TCVN3/VNI, token reduction |
+| [`packages/pii-basic`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/pii-basic) | Rule-based PII mask/hash/drop (CCCD, My Number, phones, emails, credit cards) |
+| [`packages/guard`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/guard) | Multi-lingual indirect prompt injection detector |
+| [`packages/store-sqlite`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/store-sqlite) | `node:sqlite` store with FTS5 trigram search |
+| [`packages/catalog`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/catalog) | Semantic Catalog YAML manager, dictionary resolver, Excel definition parser |
+| [`packages/ui`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/ui) | Bundled React catalog review UI (runs on loopback `127.0.0.1`) |
+| [`packages/mcp-server`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/mcp-server) | Official Model Context Protocol stdio server |
+| [`packages/report-html`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/report-html) | Self-contained, zero-dependency offline HTML scan report |
+| [`packages/cli`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/cli) | Unified CLI entrypoint (`knot-sync`) |
 
 ### Development & Contributing
 
@@ -320,7 +320,7 @@ pnpm scan:sample
 
 ## Roadmap
 
-Development follows the [OpenSpec](https://github.com/Fission-AI/OpenSpec) specification process. See [docs/ROADMAP.md](./docs/ROADMAP.md) for the active roadmap and upcoming milestones:
+Development follows the [OpenSpec](https://github.com/Fission-AI/OpenSpec) specification process. See [docs/ROADMAP.md](https://github.com/hoanghainh1188/knot-sync/blob/main/docs/ROADMAP.md) for the active roadmap and upcoming milestones:
 
 - [x] **v0.1**: Core pipeline, Office extractors, JA/VI cleaners, PII masking, Injection guard, MCP Server, SQL connectors, Semantic Catalog.
 - [x] **v0.2**: CLI i18n (EN/JA/VI), Catalog Review UI, Token/accuracy Benchmarking suite.
@@ -330,4 +330,4 @@ Development follows the [OpenSpec](https://github.com/Fission-AI/OpenSpec) speci
 
 ## License
 
-[Apache-2.0](./LICENSE) © 2026 Hoàng Hải Anh.
+[Apache-2.0](https://github.com/hoanghainh1188/knot-sync/blob/main/LICENSE) © 2026 Hoàng Hải Anh.

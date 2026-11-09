@@ -76,5 +76,9 @@ rmSync(staticDest, { recursive: true, force: true });
 mkdirSync(staticDest, { recursive: true });
 cpSync(staticSrc, staticDest, { recursive: true });
 
+// npm packs packages/cli/README.md — keep it identical to the product README.
+cpSync(join(root, "README.md"), join(cliDir, "README.md"));
+
 console.log("Bundled CLI → packages/cli/dist/bin.js");
 console.log("Copied UI static → packages/cli/static/");
+console.log("Synced product README → packages/cli/README.md");

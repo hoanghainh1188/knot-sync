@@ -13,7 +13,7 @@ function packageDirs(): string[] {
   );
 }
 
-test("only CLI is public; internals are private at 0.1.1 with README/LICENSE", () => {
+test("only CLI is public; internals are private with README/LICENSE", () => {
   for (const dir of packageDirs()) {
     const pkgPath = join(packagesDir, dir, "package.json");
     const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as {
@@ -22,7 +22,6 @@ test("only CLI is public; internals are private at 0.1.1 with README/LICENSE", (
       private?: boolean;
       files?: string[];
     };
-    assert.equal(pkg.version, "0.1.1", `${dir} version`);
     assert.ok(existsSync(join(packagesDir, dir, "README.md")), `${dir} README`);
     assert.ok(existsSync(join(packagesDir, dir, "LICENSE")), `${dir} LICENSE`);
     const files = pkg.files ?? [];
@@ -30,6 +29,7 @@ test("only CLI is public; internals are private at 0.1.1 with README/LICENSE", (
     assert.ok(files.includes("LICENSE"), `${dir} files LICENSE`);
 
     if (pkg.name === "@hoanghainh/knot-sync") {
+      assert.equal(pkg.version, "0.1.2", "CLI publishable version");
       assert.notEqual(pkg.private, true, "CLI must be publishable");
     } else {
       assert.equal(pkg.private, true, `${dir} must be private`);
