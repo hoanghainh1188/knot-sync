@@ -179,13 +179,76 @@ Resolve locale from --lang, then cli.locale, then env heuristic, else en.
 Keep command names, flags, --json keys and --version in English. No new deps.
 ```
 
+## Production readiness (v0.3 & Enterprise Hardening)
+
+Target: Hardening KnotSync for enterprise-grade production deployments (resilience, security, scalability, and multi-tenant access).
+
+| # | Change | Priority | Status |
+|---|---|:---:|---|
+| 1 | `harden-office-extraction` | P0 | 📋 planned |
+| 2 | `harden-sql-connector` | P1 | 📋 planned |
+| 3 | `add-http-mcp-transport` | P1 | 📋 planned |
+| 4 | `enhance-pii-guard` | P2 | 📋 planned |
+| 5 | `scale-sqlite-store` | P2 | 📋 planned |
+
+### 1. harden-office-extraction (P0)
+
+```
+/opsx:propose harden-office-extraction: Harden office extractor against OOM and infinite hangs.
+Add config extraction.maxFileSizeMb (default 50MB) and extraction.timeoutSeconds (default 30s).
+Safely skip oversized files with an actionable issue code (SKIPPED_TOO_LARGE) without aborting
+the scan or run. Switch large xlsx parsing to ExcelJS streaming reader to keep RAM usage bounded.
+Implement per-file extraction timeout via Promise.race / AbortSignal. Add chunking for large
+delimited text files (.csv, .tsv, .txt) exceeding token thresholds.
+```
+
+### 2. harden-sql-connector (P1)
+
+```
+/opsx:propose harden-sql-connector: Support custom PostgreSQL schemas and resilient connection management.
+Allow configurable schema in PostgresSourceConfig (default: "public", configurable to any schema).
+Update introspection queries in packages/connector-sql/src/postgres.ts to filter dynamically.
+Adopt connection pooling (pg.Pool with max connections cap) and enforce per-session statement_timeout
+(e.g., 5000ms) to prevent full-table scan resource exhaustion on production databases.
+Add common business query filters to query_table (starts_with, between_dates, is_null).
+```
+
+### 3. add-http-mcp-transport (P1)
+
+```
+/opsx:propose add-http-mcp-transport: Add networked MCP transport for centralized team/server deployments.
+Add knot-sync serve --http [--port 3000] [--host 0.0.0.0] using @modelcontextprotocol/sdk SSEServerTransport
+alongside existing stdio transport. Support Bearer Token / API key authentication via Authorization header
+configured via environment variable (KNOT_SYNC_API_KEY). Return 401 Unauthorized on unauthenticated requests.
+Enrich JSONL audit log with client IP, user agent, and request ID.
+```
+
+### 4. enhance-pii-guard (P2)
+
+```
+/opsx:propose enhance-pii-guard: Expand PII masking and prompt injection defenses to meet regional compliance.
+Add Vietnamese Tax Code (MST - 10-digit enterprise and 13-digit branch format) and Bank Account Number
+detection rules with common prefixes to pii-basic. Add heuristic name dictionaries for common Vietnamese and
+Japanese surnames/given names. Harden guard with suspicious Base64 payload detection, markdown exfiltration
+pattern detection (![exfil](https://...)), and zero-width character flood detection.
+```
+
+### 5. scale-sqlite-store (P2)
+
+```
+/opsx:propose scale-sqlite-store: Optimize SQLite storage and FTS5 for large document stores (>100k docs).
+Batch document upserts in chunked transactions (500 records per tx) to minimize disk I/O and lock contention.
+Add knot-sync optimize CLI command to run FTS5 optimize and PRAGMA wal_checkpoint(TRUNCATE).
+Add load and stress benchmark scripts to monitor latency and memory under 50k+ document indices.
+```
+
 ## Later
 
 | Version | Scope |
 |---|---|
 | v0.2 | See table above (CLI i18n → catalog review UI → bench) |
-| v0.3 | System logs (app log files of legacy systems), resource subscriptions |
-| Paid | OCR (Docling via Docker), 方眼紙 Excel, SQL Server / Oracle / Access / AS400, HTTP + OAuth 2.1 + scopes, local LLM for catalog, vector search, model-based guardrails |
+| v0.3 | Production hardening (see Production readiness section above) + system logs |
+| Paid | OCR (Docling via Docker), 方眼紙 Excel, SQL Server / Oracle / Access / AS400, OAuth 2.1 + scopes, local LLM for catalog, vector search, model-based guardrails |
 | After v1.0 | Write tools / stored procedures, always with human approval |
 
 Do not use unverified effectiveness numbers in marketing; `bench` produces real ones.
