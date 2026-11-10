@@ -378,7 +378,8 @@ Development follows the [OpenSpec](https://github.com/Fission-AI/OpenSpec) speci
 - [x] **v0.1**: Core pipeline, Office extractors, JA/VI cleaners, PII masking, Injection guard, MCP Server, SQL connectors, Semantic Catalog.
 - [x] **v0.2**: CLI i18n (EN/JA/VI), Catalog Review UI, Token/accuracy Benchmarking suite.
 - [x] **v0.3 (open-core)**: Extraction bounds, SQL schema/pools/timeouts, HTTP MCP + API key, expanded PII/guard, SQLite batch/`optimize`, system logs.
-- [x] **Paid OCR**: Opt-in `packages/extractor-ocr` (local Docker Docling, license self-check, PDF EMPTY fallthrough). Later: OAuth 2.1, extra DB engines, vector search, local LLM catalog, 方眼紙.
+- [x] **Paid OCR**: Opt-in `packages/extractor-ocr` (local Docker Docling, license self-check, PDF EMPTY fallthrough).
+- [x] **Paid 方眼紙 Excel**: Opt-in `packages/extractor-housen` (form/grid heuristics, license self-check). Later: OAuth 2.1, extra DB engines, vector search, local LLM catalog.
 
 ---
 

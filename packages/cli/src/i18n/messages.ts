@@ -31,6 +31,7 @@ export type MessageKey =
   | "run.andMoreIssues"
   | "run.documentsSaved"
   | "run.issueLicense"
+  | "run.issueHousenLicense"
   | "run.issueDocker"
   | "plugins.header"
   | "plugins.none"

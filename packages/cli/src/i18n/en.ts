@@ -85,6 +85,8 @@ plugins:
   "run.documentsSaved": "Documents saved to {path}",
   "run.issueLicense":
     "OCR license missing or invalid. Set KNOT_SYNC_OCR_LICENSE (or extractor-ocr.licenseKey), then retry knot-sync run.",
+  "run.issueHousenLicense":
+    "Housen Excel license missing or invalid. Set KNOT_SYNC_HOUSEN_LICENSE (or extractor-housen.licenseKey), then retry knot-sync run.",
   "run.issueDocker":
     "Docker is required for OCR. Install/start Docker, pull quay.io/docling-project/docling-serve-cpu:v1.38.2, then retry knot-sync run.",
   "plugins.header":

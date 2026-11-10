@@ -39,6 +39,7 @@ import { cmdBench } from "./bench/run.js";
 import { CatalogError, cmdDescribe } from "./describe.js";
 import { formatBytes, formatCount, table } from "./format.js";
 import { resolveLocale, t } from "./i18n/index.js";
+import { maybeApplyHousenRewrite } from "./housen-rewrite.js";
 import { extractWithOcrFallback } from "./ocr-fallback.js";
 import { findExtractor, loadAppPlugins } from "./plugins.js";
 import {
@@ -253,18 +254,19 @@ function formatSystemLogWriteFailed(locale: CliLocale): (detail: string) => stri
   return (detail) => t(locale, "logging.writeFailed", { detail });
 }
 
-/** Localize OCR LICENSE/DOCKER issue lines; other codes keep extractor message. */
+/** Localize OCR/housen LICENSE and DOCKER issue lines; other codes keep extractor message. */
 function formatRunIssue(
   locale: CliLocale,
   issue: { path: string; code: string; message: string },
 ): string {
-  const ocrKeys: Record<string, MessageKey> = {
-    LICENSE: "run.issueLicense",
-    DOCKER: "run.issueDocker",
-  };
-  const key = ocrKeys[issue.code];
-  if (key) {
+  if (issue.code === "LICENSE") {
+    const key: MessageKey = /housen|HOUSEN|KNOT_SYNC_HOUSEN/i.test(issue.message)
+      ? "run.issueHousenLicense"
+      : "run.issueLicense";
     return `  [${issue.code}] ${issue.path}: ${t(locale, key)}`;
+  }
+  if (issue.code === "DOCKER") {
+    return `  [DOCKER] ${issue.path}: ${t(locale, "run.issueDocker")}`;
   }
   return `  [${issue.code}] ${issue.path}: ${issue.message}`;
 }
@@ -561,8 +563,16 @@ async function cmdRun(
           maxFileSizeBytes,
           maxTextChars: structural.extraction.maxTextChars,
         };
-        const result = await Promise.race([
-          extractWithOcrFallback(host, file, extractor, extractCtx),
+        const raced = await Promise.race([
+          (async () => {
+            const primary = await extractWithOcrFallback(
+              host,
+              file,
+              extractor,
+              extractCtx,
+            );
+            return maybeApplyHousenRewrite(host, file, primary, extractCtx);
+          })(),
           new Promise<never>((_, reject) => {
             const onAbort = () => {
               signal.removeEventListener("abort", onAbort);
@@ -580,6 +590,12 @@ async function cmdRun(
             message: timeoutMessage,
           });
           continue;
+        }
+        const { result, sideIssues } = raced;
+        // Side issues (e.g. housen LICENSE) keep the office Document — record
+        // without double-counting the file as both extracted and failed.
+        for (const si of sideIssues) {
+          issues.push({ path: file.relPath, code: si.code, message: si.message });
         }
         if (!result.ok) {
           failed += 1;
