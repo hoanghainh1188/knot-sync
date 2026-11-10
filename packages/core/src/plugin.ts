@@ -2,7 +2,14 @@ import { createRequire } from "node:module";
 import { isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ConfigError } from "./errors.js";
-import type { Document, FileEntry, ScanIssue, SourceConfig } from "./types.js";
+import type {
+  Document,
+  FileEntry,
+  GuardConfig,
+  PiiConfig,
+  ScanIssue,
+  SourceConfig,
+} from "./types.js";
 
 /** Host plugin API version. Plugins must declare the same number. */
 export const PLUGIN_API_VERSION = 1;
@@ -14,6 +21,7 @@ export type ExtensionPoint =
   | "pii-rule"
   | "guard-rule"
   | "catalog-source"
+  | "document-enricher"
   | "mcp-tool"
   | "mcp-prompt"
   | "mcp-auth";
@@ -134,6 +142,25 @@ export interface CatalogSource {
   ): CatalogSuggestion | Promise<CatalogSuggestion>;
 }
 
+/** Context for post-rule document enrichers (paid model guardrails, etc.). */
+export interface DocumentEnrichContext {
+  pii: PiiConfig;
+  guard: GuardConfig;
+}
+
+/**
+ * Async document enricher run after rule-based PII and guard on `run`.
+ * Sync PiiRule/GuardRule stay offline; enrichers MAY call a local inference
+ * endpoint when their paid plugin is loaded and licensed.
+ */
+export interface DocumentEnricher {
+  id: string;
+  enrich(
+    document: Document,
+    ctx: DocumentEnrichContext,
+  ): Document | Promise<Document>;
+}
+
 /** Opaque context passed to MCP tool handlers (filled by the MCP host). */
 export type McpHandlerContext = Record<string, unknown>;
 
@@ -168,6 +195,7 @@ export interface PluginApi {
   registerPiiRule(rule: PiiRule): void;
   registerGuardRule(rule: GuardRule): void;
   registerCatalogSource(source: CatalogSource): void;
+  registerDocumentEnricher(enricher: DocumentEnricher): void;
   registerMcpTool(tool: McpTool): void;
   registerMcpPrompt(prompt: McpPrompt): void;
   /** At most one mcp-auth provider (paid oauth). */
@@ -201,6 +229,7 @@ export interface PluginHost {
   piiRules: Map<string, PiiRule>;
   guardRules: Map<string, GuardRule>;
   catalogSources: Map<string, CatalogSource>;
+  documentEnrichers: Map<string, DocumentEnricher>;
   mcpTools: Map<string, McpTool>;
   mcpPrompts: Map<string, McpPrompt>;
   /** Present when a paid oauth (or test) plugin registered an auth provider. */
@@ -282,6 +311,7 @@ export function createPluginHost(options: CreatePluginHostOptions = {}): PluginH
   const piiRules = new Map<string, PiiRule>();
   const guardRules = new Map<string, GuardRule>();
   const catalogSources = new Map<string, CatalogSource>();
+  const documentEnrichers = new Map<string, DocumentEnricher>();
   const mcpTools = new Map<string, McpTool>();
   const mcpPrompts = new Map<string, McpPrompt>();
   let mcpAuthProvider: McpAuthProvider | undefined;
@@ -376,6 +406,14 @@ export function createPluginHost(options: CreatePluginHostOptions = {}): PluginH
         }
         registerInMap(catalogSources, "catalog-source", s, plugin.name, extensions);
       },
+      registerDocumentEnricher: (e) => {
+        if (typeof e.enrich !== "function") {
+          throw new ConfigError(
+            `Plugin "${plugin.name}" document-enricher "${e.id}" must provide enrich(document, ctx).`,
+          );
+        }
+        registerInMap(documentEnrichers, "document-enricher", e, plugin.name, extensions);
+      },
       registerMcpTool: (t) => {
         if (typeof t.description !== "string" || t.description.trim() === "") {
           throw new ConfigError(
@@ -448,6 +486,7 @@ export function createPluginHost(options: CreatePluginHostOptions = {}): PluginH
     piiRules,
     guardRules,
     catalogSources,
+    documentEnrichers,
     mcpTools,
     mcpPrompts,
     get mcpAuthProvider() {

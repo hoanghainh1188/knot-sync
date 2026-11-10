@@ -8,6 +8,7 @@ import { applyPiiToDocument, textHasPii } from "./apply.js";
 import { ALL_RULES } from "./rules.js";
 
 export {
+  applyModeToText,
   applyPiiToDocument,
   collectFindings,
   mergeSpans,

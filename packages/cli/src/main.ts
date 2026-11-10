@@ -708,8 +708,6 @@ async function cmdRun(
               continue;
             }
           }
-          enqueue(document);
-          extracted += 1;
         } catch (err) {
           const message =
             `Prompt-injection guard failed (${(err as Error).message || String(err)}). ` +
@@ -739,6 +737,62 @@ async function cmdRun(
           });
           failed += 1;
           issues.push({ path: file.relPath, code: "GUARD", message });
+          continue;
+        }
+
+        try {
+          let blockedByEnricher = false;
+          for (const enricher of host.documentEnrichers.values()) {
+            document = await enricher.enrich(document, {
+              pii: structural.pii,
+              guard: structural.guard,
+            });
+            if (document.metadata.status === "error") {
+              enqueue(document);
+              failed += 1;
+              issues.push({
+                path: file.relPath,
+                code: "GUARD",
+                message: String(
+                  document.metadata.errorMessage ?? "blocked by document enricher",
+                ),
+              });
+              blockedByEnricher = true;
+              break;
+            }
+          }
+          if (blockedByEnricher) continue;
+          enqueue(document);
+          extracted += 1;
+        } catch (err) {
+          const message =
+            `Document enricher failed (${(err as Error).message || String(err)}). ` +
+            `Check paid enricher plugins (e.g. guard-llm) settings, then retry "knot-sync run".`;
+          const {
+            sourceFileHash: _drop,
+            originalContent: _oc,
+            originalTables: _ot,
+            guardHiddenText: _ht,
+            ...restMeta
+          } = document.metadata;
+          void _drop;
+          void _oc;
+          void _ot;
+          void _ht;
+          enqueue({
+            ...document,
+            content: "",
+            tables: [],
+            pii: document.pii,
+            guard: document.guard ?? [],
+            metadata: {
+              ...restMeta,
+              status: "error",
+              errorMessage: message,
+            },
+          });
+          failed += 1;
+          issues.push({ path: file.relPath, code: "ENRICH", message });
         }
       } catch (err) {
         failed += 1;

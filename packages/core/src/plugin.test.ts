@@ -272,3 +272,53 @@ test("register keeps this binding", () => {
   host.registerPlugin(plugin);
   assert.equal(host.piiRules.has("ok"), true);
 });
+
+test("registerDocumentEnricher appears on host; duplicate id fails", () => {
+  const host = createPluginHost();
+  host.registerPlugin(
+    makePlugin({
+      name: "enrich-a",
+      onRegister: (api) => {
+        api.registerDocumentEnricher({
+          id: "model-guard",
+          enrich: async (doc) => doc,
+        });
+      },
+    }),
+  );
+  assert.ok(host.documentEnrichers.has("model-guard"));
+  assert.deepEqual(host.loaded[0]?.extensions, [
+    { point: "document-enricher", id: "model-guard" },
+  ]);
+  assert.throws(
+    () =>
+      host.registerPlugin(
+        makePlugin({
+          name: "enrich-b",
+          onRegister: (api) => {
+            api.registerDocumentEnricher({
+              id: "model-guard",
+              enrich: async (doc) => doc,
+            });
+          },
+        }),
+      ),
+    /Duplicate document-enricher id "model-guard"/,
+  );
+});
+
+test("rejects document-enricher without enrich", () => {
+  const host = createPluginHost();
+  assert.throws(
+    () =>
+      host.registerPlugin(
+        makePlugin({
+          name: "bad-enrich",
+          onRegister: (api) => {
+            api.registerDocumentEnricher({ id: "broken" } as never);
+          },
+        }),
+      ),
+    /must provide enrich/,
+  );
+});
