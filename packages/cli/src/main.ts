@@ -927,7 +927,7 @@ async function cmdServe(
 
       try {
         if (flags.http) {
-          if (!readApiKeyFromEnv()) {
+          if (!readApiKeyFromEnv() && !pluginHost.mcpAuthProvider) {
             throw new ConfigError(missingApiKeyMessage());
           }
           let port = DEFAULT_HTTP_PORT;

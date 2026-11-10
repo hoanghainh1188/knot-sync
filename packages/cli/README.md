@@ -216,6 +216,8 @@ npx @hoanghainh/knot-sync serve --http --port 3000
 
 Clients must send `Authorization: Bearer <KNOT_SYNC_API_KEY>`. The API key is **environment-only** (never put it in YAML). Default bind is loopback; use a reverse proxy / firewall if you bind `0.0.0.0`. Transport is MCP **Streamable HTTP** at `/mcp` (SDK’s current HTTP mode; legacy SSE is not required).
 
+Paid opt-in OAuth/scopes: enable [`packages/auth-oauth`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/auth-oauth) under `plugins:` for local token issuance (`/oauth/token`) or on-prem JWKS validation; `KNOT_SYNC_API_KEY` remains a full-access fallback.
+
 ### Local logs (system vs audit)
 
 KnotSync writes **two** local JSONL files by default under the store directory (both must stay **outside** configured sources; never document bodies / PII / API keys):
@@ -344,6 +346,7 @@ KnotSync is structured as a clean, modular TypeScript monorepo managed by `pnpm`
 | [`packages/connector-fs`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-fs) | Read-only folder walker and file inventory scanner |
 | [`packages/connector-sql`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-sql) | Read-only PostgreSQL and MySQL connector, schema introspection |
 | [`packages/connector-sql-enterprise`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-sql-enterprise) | Opt-in paid mssql/oracle/access/as400 connectors (license self-check) |
+| [`packages/auth-oauth`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/auth-oauth) | Opt-in paid HTTP MCP OAuth/scopes (local AS + optional JWKS) |
 | [`packages/extractor-office`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/extractor-office) | Document text & table extractor (`.xlsx`, `.docx`, `.pdf`, `.csv`, `.md`, `.txt`) |
 | [`packages/cleaner-ja-vi`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/cleaner-ja-vi) | Text normalizer: NFKC, Wareki, ISO dates, TCVN3/VNI, token reduction |
 | [`packages/pii-basic`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/pii-basic) | Rule-based PII mask/hash/drop (CCCD, My Number, MST, bank, names, phones, emails, cards) |
@@ -386,7 +389,8 @@ Development follows the [OpenSpec](https://github.com/Fission-AI/OpenSpec) speci
 - [x] **v0.3 (open-core)**: Extraction bounds, SQL schema/pools/timeouts, HTTP MCP + API key, expanded PII/guard, SQLite batch/`optimize`, system logs.
 - [x] **Paid OCR**: Opt-in `packages/extractor-ocr` (local Docker Docling, license self-check, PDF EMPTY fallthrough).
 - [x] **Paid 方眼紙 Excel**: Opt-in `packages/extractor-housen` (form/grid heuristics, license self-check).
-- [x] **Paid enterprise SQL**: Opt-in `packages/connector-sql-enterprise` (mssql/oracle/access/as400, license self-check). Later: OAuth 2.1, vector search, local LLM catalog.
+- [x] **Paid enterprise SQL**: Opt-in `packages/connector-sql-enterprise` (mssql/oracle/access/as400, license self-check).
+- [x] **Paid OAuth scopes**: Opt-in `packages/auth-oauth` (local AS + optional JWKS, tool/resource scopes; API key fallback). Later: vector search, local LLM catalog.
 
 ---
 

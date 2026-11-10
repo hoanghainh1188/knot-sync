@@ -24,6 +24,11 @@ import {
 } from "@hoanghainh/knot-sync-core";
 import type { Store } from "@hoanghainh/knot-sync-store-sqlite";
 import { AuditLog, assertAuditPathOutsideSources, type AuditEntry } from "./audit.js";
+import {
+  assertResourceAuthorized,
+  assertToolAuthorized,
+  getMcpAuthContext,
+} from "./auth-context.js";
 import { frameDocument, framedDocumentText, UNTRUSTED_BANNER } from "./frame.js";
 import {
   getDocumentInput,
@@ -79,6 +84,13 @@ export interface CreateKnotMcpServerOptions {
   auditLogPath?: string;
   /** Optional Semantic Catalog (loaded by serve when the file exists). */
   catalog?: CatalogDocument;
+  /**
+   * Auth provider used for tool/resource scope gates (defaults to host.mcpAuthProvider).
+   * Pass the same instance serveHttp authenticated with.
+   */
+  authProvider?: import("@hoanghainh/knot-sync-core").McpAuthProvider;
+  /** When true, missing auth context fails closed (HTTP + oauth). */
+  requireAuthContext?: boolean;
 }
 
 function enrichSchemaForResource(
@@ -144,7 +156,16 @@ function renderTemplate(template: string, args: Record<string, string | undefine
 
 async function auditSafe(log: AuditLog, entry: AuditEntry): Promise<void> {
   try {
-    await log.append(entry);
+    const auth = getMcpAuthContext();
+    const enriched: AuditEntry = auth
+      ? {
+          ...entry,
+          subject: entry.subject ?? auth.subject,
+          scopes: entry.scopes ?? auth.scopes,
+          authVia: entry.authVia ?? auth.via,
+        }
+      : entry;
+    await log.append(enriched);
   } catch {
     // Audit failures must not break MCP responses.
   }
@@ -160,6 +181,8 @@ export function createKnotMcpServer(options: CreateKnotMcpServerOptions): McpSer
   const audit = new AuditLog(auditAbs);
   const catalog = options.catalog;
   const toolCtx = { store, config, catalog };
+  const authProvider = options.authProvider ?? host.mcpAuthProvider;
+  const authRequired = Boolean(options.requireAuthContext && authProvider);
 
   const server = new McpServer({
     name: "knot-sync",
@@ -175,6 +198,11 @@ export function createKnotMcpServer(options: CreateKnotMcpServerOptions): McpSer
       mimeType: "application/json",
     },
     async (uri) => {
+      assertResourceAuthorized(
+        uri.href,
+        authProvider?.authorizeResource.bind(authProvider),
+        authRequired,
+      );
       const list = config.sources.map((s) => ({ id: s.id, type: s.type }));
       await auditSafe(audit, {
         timestamp: new Date().toISOString(),
@@ -205,6 +233,11 @@ export function createKnotMcpServer(options: CreateKnotMcpServerOptions): McpSer
       mimeType: "text/plain",
     },
     async (uri) => {
+      assertResourceAuthorized(
+        uri.href,
+        authProvider?.authorizeResource.bind(authProvider),
+        authRequired,
+      );
       const parsed = parseDocumentUri(uri.href);
       if (!parsed) {
         await auditSafe(audit, {
@@ -258,6 +291,11 @@ export function createKnotMcpServer(options: CreateKnotMcpServerOptions): McpSer
       mimeType: "application/json",
     },
     async (uri, vars) => {
+      assertResourceAuthorized(
+        uri.href,
+        authProvider?.authorizeResource.bind(authProvider),
+        authRequired,
+      );
       const sourceId = String(vars.source ?? "");
       const table = String(vars.table ?? "");
       try {
@@ -317,6 +355,11 @@ export function createKnotMcpServer(options: CreateKnotMcpServerOptions): McpSer
     },
     async (args) => {
       try {
+        assertToolAuthorized(
+          "search_documents",
+          authProvider?.authorizeTool.bind(authProvider),
+          authRequired,
+        );
         const result = searchTool
           ? await searchTool.handler(args, toolCtx)
           : await handleSearchDocuments(args, toolCtx);
@@ -360,6 +403,11 @@ export function createKnotMcpServer(options: CreateKnotMcpServerOptions): McpSer
     },
     async (args) => {
       try {
+        assertToolAuthorized(
+          "get_document",
+          authProvider?.authorizeTool.bind(authProvider),
+          authRequired,
+        );
         const result = getTool
           ? await getTool.handler(args, toolCtx)
           : await handleGetDocument(args, toolCtx);
@@ -400,6 +448,11 @@ export function createKnotMcpServer(options: CreateKnotMcpServerOptions): McpSer
     },
     async (args) => {
       try {
+        assertToolAuthorized(
+          "describe_table",
+          authProvider?.authorizeTool.bind(authProvider),
+          authRequired,
+        );
         const result = describeTool
           ? await describeTool.handler(args, toolCtx)
           : await handleDescribeTable(args, toolCtx);
@@ -438,6 +491,11 @@ export function createKnotMcpServer(options: CreateKnotMcpServerOptions): McpSer
     },
     async (args) => {
       try {
+        assertToolAuthorized(
+          "query_table",
+          authProvider?.authorizeTool.bind(authProvider),
+          authRequired,
+        );
         const result = queryTool
           ? await queryTool.handler(args, toolCtx)
           : await handleQueryTable(args, toolCtx);

@@ -772,11 +772,18 @@ sources:
 #   #   export KNOT_ORACLE_URL='oracle://user:pass@host:1521/ORCLPDB1'
 #   #   export KNOT_ACCESS_ODBC='Driver={Microsoft Access Driver (*.mdb, *.accdb)};Dbq=C:\data\legacy.accdb;ReadOnly=1'
 #   #   export KNOT_AS400_ODBC='Driver={IBM i Access ODBC Driver};System=ibmi;Uid=USER;Pwd=SECRET'
+# OAuth 2.1-style HTTP MCP auth (scopes) — not a built-in; enable explicitly:
+#   export KNOT_SYNC_OAUTH_LICENSE=your-key
+#   export KNOT_SYNC_OAUTH_SIGNING_SECRET=long-random-secret
+#   export KNOT_SYNC_OAUTH_CLIENT_ID=agent-a
+#   export KNOT_SYNC_OAUTH_CLIENT_SECRET=agent-secret
+#   # KNOT_SYNC_API_KEY remains a full-access fallback when the plugin is loaded
 # plugins:
 #   - ./plugins/mask-company-id.mjs
 #   - ../packages/extractor-ocr/dist/index.js   # monorepo path example
 #   - ../packages/extractor-housen/dist/index.js
 #   - ../packages/connector-sql-enterprise/dist/index.js
+#   - ../packages/auth-oauth/dist/index.js
 # extractor-ocr:
 #   # image: quay.io/docling-project/docling-serve-cpu:v1.38.2
 #   # timeoutSeconds: 120
@@ -792,6 +799,14 @@ sources:
 # connector-sql-enterprise:
 #   # licenseEnv: KNOT_SYNC_SQL_ENTERPRISE_LICENSE
 #   # licenseKey: knot-sync-sql-enterprise-dev   # tests / local only
+# auth-oauth:
+#   # licenseEnv: KNOT_SYNC_OAUTH_LICENSE
+#   # licenseKey: knot-sync-oauth-dev   # tests / local only
+#   # issuer: knot-sync-local
+#   # audience: knot-sync-mcp
+#   # tokenPath: /oauth/token
+#   # jwksUrl: https://keycloak.internal/.../certs   # optional on-prem IdP
+#   # defaultScopes: [tool:*, resource:*]
 
 store:
   path: ./.data/store.sqlite   # one SQLite file, safe to delete

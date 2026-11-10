@@ -15,7 +15,40 @@ export type ExtensionPoint =
   | "guard-rule"
   | "catalog-source"
   | "mcp-tool"
-  | "mcp-prompt";
+  | "mcp-prompt"
+  | "mcp-auth";
+
+/** Result of authenticating an HTTP Authorization header. */
+export type McpAuthResult =
+  | {
+      ok: true;
+      /** Client / subject id for audit (never a secret). */
+      subject: string;
+      /** Granted scopes, e.g. tool:search_documents, resource:*. */
+      scopes: string[];
+      via: "oauth" | "apiKey";
+    }
+  | { ok: false; status?: number; message?: string };
+
+/**
+ * Optional HTTP MCP auth provider (paid oauth plugin).
+ * When absent, serve --http uses shared API key only.
+ */
+export interface McpAuthProvider {
+  id: string;
+  authenticate(authorizationHeader: string | undefined): Promise<McpAuthResult> | McpAuthResult;
+  authorizeTool(toolId: string, auth: Extract<McpAuthResult, { ok: true }>): boolean;
+  authorizeResource(uri: string, auth: Extract<McpAuthResult, { ok: true }>): boolean;
+  /**
+   * Optional HTTP handler for token issuance (e.g. POST /oauth/token).
+   * Return true if the request was fully handled.
+   */
+  handleHttp?(
+    req: import("node:http").IncomingMessage,
+    res: import("node:http").ServerResponse,
+    url: URL,
+  ): Promise<boolean> | boolean;
+}
 
 export interface ParseSourceContext {
   baseDir: string;
@@ -136,6 +169,8 @@ export interface PluginApi {
   registerCatalogSource(source: CatalogSource): void;
   registerMcpTool(tool: McpTool): void;
   registerMcpPrompt(prompt: McpPrompt): void;
+  /** At most one mcp-auth provider (paid oauth). */
+  registerMcpAuthProvider(provider: McpAuthProvider): void;
   /** Opaque settings under the plugin's config key, or undefined. */
   getPluginSettings(): unknown;
 }
@@ -167,6 +202,8 @@ export interface PluginHost {
   catalogSources: Map<string, CatalogSource>;
   mcpTools: Map<string, McpTool>;
   mcpPrompts: Map<string, McpPrompt>;
+  /** Present when a paid oauth (or test) plugin registered an auth provider. */
+  mcpAuthProvider?: McpAuthProvider;
   loaded: LoadedPluginInfo[];
   getConnector(type: string): Connector | undefined;
   listConnectorIds(): string[];
@@ -246,6 +283,7 @@ export function createPluginHost(options: CreatePluginHostOptions = {}): PluginH
   const catalogSources = new Map<string, CatalogSource>();
   const mcpTools = new Map<string, McpTool>();
   const mcpPrompts = new Map<string, McpPrompt>();
+  let mcpAuthProvider: McpAuthProvider | undefined;
   const loaded: LoadedPluginInfo[] = [];
   const pluginNames = new Set<string>();
 
@@ -368,6 +406,32 @@ export function createPluginHost(options: CreatePluginHostOptions = {}): PluginH
         }
         registerInMap(mcpPrompts, "mcp-prompt", p, plugin.name, extensions);
       },
+      registerMcpAuthProvider: (provider) => {
+        if (typeof provider.id !== "string" || provider.id.trim() === "") {
+          throw new ConfigError(
+            `Plugin "${plugin.name}" mcp-auth provider must have a non-empty id.`,
+          );
+        }
+        if (typeof provider.authenticate !== "function") {
+          throw new ConfigError(
+            `Plugin "${plugin.name}" mcp-auth "${provider.id}" must provide authenticate().`,
+          );
+        }
+        if (typeof provider.authorizeTool !== "function" || typeof provider.authorizeResource !== "function") {
+          throw new ConfigError(
+            `Plugin "${plugin.name}" mcp-auth "${provider.id}" must provide authorizeTool and authorizeResource.`,
+          );
+        }
+        if (mcpAuthProvider) {
+          throw new ConfigError(
+            `Duplicate mcp-auth provider (already have "${mcpAuthProvider.id}", ` +
+              `plugin "${plugin.name}" tried to register "${provider.id}"). ` +
+              `List only one auth plugin under plugins:.`,
+          );
+        }
+        mcpAuthProvider = provider;
+        extensions.push({ point: "mcp-auth", id: provider.id });
+      },
       getPluginSettings: () =>
         Object.hasOwn(pluginSettings, plugin.name) ? pluginSettings[plugin.name] : undefined,
     };
@@ -385,6 +449,9 @@ export function createPluginHost(options: CreatePluginHostOptions = {}): PluginH
     catalogSources,
     mcpTools,
     mcpPrompts,
+    get mcpAuthProvider() {
+      return mcpAuthProvider;
+    },
     loaded,
     getConnector: (type) => connectors.get(type),
     listConnectorIds: () => [...connectors.keys()].sort(),

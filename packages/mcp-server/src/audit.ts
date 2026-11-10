@@ -18,8 +18,13 @@ export interface AuditEntry {
   userAgent?: string;
   /** Per-request correlation id for HTTP mode. */
   requestId?: string;
+  /** Authenticated subject / client id (never a token). */
+  subject?: string;
+  /** Granted scopes summary (never secrets). */
+  scopes?: string[];
+  /** How the request was authenticated. */
+  authVia?: "oauth" | "apiKey";
 }
-
 /** Request-scoped fields merged into audit lines (HTTP mode). */
 export interface AuditHttpContext {
   clientIp?: string;

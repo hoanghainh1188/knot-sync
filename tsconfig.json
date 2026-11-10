@@ -5,6 +5,7 @@
     { "path": "packages/connector-fs" },
     { "path": "packages/connector-sql" },
     { "path": "packages/connector-sql-enterprise" },
+    { "path": "packages/auth-oauth" },
     { "path": "packages/extractor-office" },
     { "path": "packages/extractor-ocr" },
     { "path": "packages/extractor-housen" },
