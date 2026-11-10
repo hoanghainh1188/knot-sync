@@ -280,7 +280,8 @@ async function extractPdf(file: FileEntry, bytes: Buffer): Promise<ExtractResult
     if (!content) {
       return fail(
         "EMPTY",
-        `PDF "${file.relPath}" has no extractable text (scanned PDFs need OCR, which is out of scope).`,
+        `PDF "${file.relPath}" has no extractable text (scanned PDF). ` +
+          `Enable the OCR plugin (extractor-ocr under plugins:) with Docker Docling, then retry "knot-sync run".`,
       );
     }
     return { ok: true, document: toDocument(file, content, []) };

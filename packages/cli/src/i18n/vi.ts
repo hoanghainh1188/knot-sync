@@ -83,6 +83,10 @@ plugins:
   "run.issuesHeader": "\nSự cố:",
   "run.andMoreIssues": "  … và {n} nữa",
   "run.documentsSaved": "Đã lưu tài liệu vào {path}",
+  "run.issueLicense":
+    "Thiếu hoặc sai giấy phép OCR. Đặt KNOT_SYNC_OCR_LICENSE (hoặc extractor-ocr.licenseKey), rồi chạy lại knot-sync run.",
+  "run.issueDocker":
+    "OCR cần Docker. Cài/khởi động Docker, pull quay.io/docling-project/docling-serve-cpu:v1.38.2, rồi chạy lại knot-sync run.",
   "plugins.header":
     "Plugin đã tải (in-process, toàn quyền — chỉ cài plugin bạn tin tưởng):",
   "plugins.none": "  (không có)",

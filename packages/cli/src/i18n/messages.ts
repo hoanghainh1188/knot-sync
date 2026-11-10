@@ -30,6 +30,8 @@ export type MessageKey =
   | "run.issuesHeader"
   | "run.andMoreIssues"
   | "run.documentsSaved"
+  | "run.issueLicense"
+  | "run.issueDocker"
   | "plugins.header"
   | "plugins.none"
   | "plugins.noExtensions"

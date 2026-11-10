@@ -1,0 +1,29 @@
+{
+  "name": "@hoanghainh/knot-sync-extractor-ocr",
+  "version": "0.0.1",
+  "description": "Opt-in Docling OCR extractor plugin for KnotSync (local Docker; license self-check).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@hoanghainh/knot-sync-core": "workspace:*"
+  },
+  "author": "hoanghainh",
+  "private": true
+}

@@ -35,7 +35,7 @@ flowchart LR
         DB["SQL Databases<br/>(PostgreSQL, MySQL)"]
     end
 
-    subgraph KnotSync["KnotSync (100% Local & Offline)"]
+    subgraph KnotSync["KnotSync (Local & Offline)"]
         direction TB
         Scan["scan: inventory & health"]
         Run["run: extract → JA/VI clean → PII → guard"]
@@ -377,7 +377,8 @@ Development follows the [OpenSpec](https://github.com/Fission-AI/OpenSpec) speci
 
 - [x] **v0.1**: Core pipeline, Office extractors, JA/VI cleaners, PII masking, Injection guard, MCP Server, SQL connectors, Semantic Catalog.
 - [x] **v0.2**: CLI i18n (EN/JA/VI), Catalog Review UI, Token/accuracy Benchmarking suite.
-- [x] **v0.3 (open-core)**: Extraction bounds, SQL schema/pools/timeouts, HTTP MCP + API key, expanded PII/guard, SQLite batch/`optimize`, system logs. **Paid later:** OAuth 2.1, OCR, extra DB engines, vector search, local LLM catalog.
+- [x] **v0.3 (open-core)**: Extraction bounds, SQL schema/pools/timeouts, HTTP MCP + API key, expanded PII/guard, SQLite batch/`optimize`, system logs.
+- [x] **Paid OCR**: Opt-in `packages/extractor-ocr` (local Docker Docling, license self-check, PDF EMPTY fallthrough). Later: OAuth 2.1, extra DB engines, vector search, local LLM catalog, 方眼紙.
 
 ---
 
