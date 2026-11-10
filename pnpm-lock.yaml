@@ -213,6 +213,18 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/guard-llm:
+    dependencies:
+      '@hoanghainh/knot-sync-core':
+        specifier: workspace:*
+        version: link:../core
+      '@hoanghainh/knot-sync-guard':
+        specifier: workspace:*
+        version: link:../guard
+      '@hoanghainh/knot-sync-pii-basic':
+        specifier: workspace:*
+        version: link:../pii-basic
+
   packages/mcp-server:
     dependencies:
       '@hoanghainh/knot-sync-catalog':

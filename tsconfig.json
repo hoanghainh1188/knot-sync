@@ -8,6 +8,7 @@
     { "path": "packages/auth-oauth" },
     { "path": "packages/catalog-llm" },
     { "path": "packages/search-vector" },
+    { "path": "packages/guard-llm" },
     { "path": "packages/extractor-office" },
     { "path": "packages/extractor-ocr" },
     { "path": "packages/extractor-housen" },
