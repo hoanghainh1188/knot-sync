@@ -124,7 +124,8 @@ export interface CatalogSuggestion {
 
 /**
  * Executable catalog-source: suggests labels/descriptions for one column
- * without network I/O or writing to customer sources.
+ * without writing to customer sources. Free built-ins stay offline; paid
+ * plugins MAY call a local inference endpoint when explicitly configured.
  */
 export interface CatalogSource {
   id: string;

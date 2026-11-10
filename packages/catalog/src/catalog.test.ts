@@ -22,7 +22,7 @@ import {
   tokenizePhysicalName,
   writeCatalogFile,
 } from "./index.js";
-import { loadPlugins } from "@hoanghainh/knot-sync-core";
+import { loadPlugins, type CatalogSource } from "@hoanghainh/knot-sync-core";
 
 test("parseCatalogYaml round-trips Japanese physical names", () => {
   const doc = parseCatalogYaml(`
@@ -252,4 +252,64 @@ test("buildDescribeDraft uses hooks and sources", async () => {
   assert.ok(col);
   assert.match(col.label.ja, /得意先/);
   assert.deepEqual(draft.sources.erp?.tables["受注"]?.columns.KIN?.values, ["100", "200"]);
+});
+
+test("fill-empty catalog-llm does not overwrite dictionary; blank gets draft", async () => {
+  let llmCalls = 0;
+  const llm: CatalogSource = {
+    id: "catalog-llm",
+    async suggest(input) {
+      llmCalls += 1;
+      if (input.column === "TKSK_CD") {
+        return { label: { ja: "SHOULD_NOT_WIN" } };
+      }
+      return {
+        label: { ja: "予備", vi: "dự phòng" },
+        description: "llm draft",
+      };
+    },
+  };
+
+  const draft = await buildDescribeDraft({
+    sqlSources: [
+      {
+        id: "erp",
+        type: "postgres",
+        url: "postgres://x",
+        urlEnv: "X",
+        // qqq_unk is intentionally unknown to romaji/vi dictionaries
+        allow: { 受注: { columns: ["TKSK_CD", "qqq_unk"] } },
+      },
+    ],
+    catalogSources: [createRomajiCatalogSource(), llm],
+    hooks: {
+      async introspectTable() {
+        return {
+          name: "受注",
+          columns: [
+            { name: "TKSK_CD", dataType: "varchar" },
+            { name: "qqq_unk", dataType: "varchar" },
+          ],
+        };
+      },
+      async sampleDistinct() {
+        return [];
+      },
+    },
+  });
+
+  const tksk = draft.sources.erp?.tables["受注"]?.columns.TKSK_CD;
+  assert.ok(tksk);
+  assert.match(tksk.label.ja, /得意先/);
+  assert.doesNotMatch(tksk.label.ja, /SHOULD_NOT_WIN/);
+  assert.equal(tksk.reviewed, false);
+
+  const blank = draft.sources.erp?.tables["受注"]?.columns.qqq_unk;
+  assert.ok(blank);
+  assert.equal(blank.label.ja, "予備");
+  assert.equal(blank.label.vi, "dự phòng");
+  assert.equal(blank.description, "llm draft");
+  assert.equal(blank.reviewed, false);
+  // LLM skipped for TKSK_CD because labels already filled.
+  assert.equal(llmCalls, 1);
 });

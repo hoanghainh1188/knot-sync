@@ -45,9 +45,13 @@ export {
   createExcelDefinitionCatalogSource,
   applySuggestions,
   applySuggestionsAsync,
+  applySuggestionsWithFillEmpty,
+  suggestionLabelsEmpty,
+  mergeFillEmpty,
 } from "./sources.js";
 export {
   DISTINCT_SAMPLE_LIMIT,
+  FILL_EMPTY_CATALOG_SOURCE_IDS,
   type DescribeColumnMeta,
   type DescribeTableMeta,
   type DescribeSqlHooks,

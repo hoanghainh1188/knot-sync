@@ -1,8 +1,14 @@
 import type { CatalogSource, CatalogSuggestion, SqlSourceConfig } from "@hoanghainh/knot-sync-core";
 import { emptyColumn, emptyTable, type CatalogDocument } from "./types.js";
-import { applySuggestionsAsync } from "./sources.js";
+import { applySuggestionsWithFillEmpty } from "./sources.js";
 
 export const DISTINCT_SAMPLE_LIMIT = 50;
+
+/**
+ * CatalogSource ids that only fill blank labels (paid local LLM).
+ * Must match `CATALOG_LLM_SOURCE_ID` in packages/catalog-llm (avoid importing paid package).
+ */
+export const FILL_EMPTY_CATALOG_SOURCE_IDS = new Set(["catalog-llm"]);
 
 /** Column meta from SQL introspection (injected to keep catalog free of drivers). */
 export interface DescribeColumnMeta {
@@ -102,13 +108,23 @@ export async function buildDescribeDraft(options: {
             DISTINCT_SAMPLE_LIMIT,
           );
         }
-        const suggestion = await applySuggestionsAsync(catalogSources, {
-          sourceId: source.id,
-          table: tableName,
-          column: col.name,
-          dbType: col.dataType,
-          sampleValues: samples,
-        });
+        const overwriteSources = catalogSources.filter(
+          (s) => !FILL_EMPTY_CATALOG_SOURCE_IDS.has(s.id),
+        );
+        const fillEmptySources = catalogSources.filter((s) =>
+          FILL_EMPTY_CATALOG_SOURCE_IDS.has(s.id),
+        );
+        const suggestion = await applySuggestionsWithFillEmpty(
+          overwriteSources,
+          fillEmptySources,
+          {
+            sourceId: source.id,
+            table: tableName,
+            column: col.name,
+            dbType: col.dataType,
+            sampleValues: samples,
+          },
+        );
         if (samples.length > 0 && (!suggestion.values || suggestion.values.length === 0)) {
           suggestion.values = samples;
         }

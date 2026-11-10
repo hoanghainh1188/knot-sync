@@ -125,3 +125,57 @@ export async function applySuggestionsAsync(
   }
   return out;
 }
+
+/** True when no ja/vi/en label is present. */
+export function suggestionLabelsEmpty(suggestion: CatalogSuggestion): boolean {
+  return !suggestion.label?.ja && !suggestion.label?.vi && !suggestion.label?.en;
+}
+
+/**
+ * Merge `fill` into `base` only for empty fields (labels + description).
+ * Does not touch values; `pii` fills only when base has no pii yet.
+ */
+export function mergeFillEmpty(
+  base: CatalogSuggestion,
+  fill: CatalogSuggestion,
+): CatalogSuggestion {
+  const out: CatalogSuggestion = {
+    label: { ...(base.label ?? {}) },
+    description: base.description,
+    values: base.values ? [...base.values] : undefined,
+    pii: base.pii,
+  };
+  if (fill.label) {
+    if (!out.label!.ja && fill.label.ja) out.label!.ja = fill.label.ja;
+    if (!out.label!.vi && fill.label.vi) out.label!.vi = fill.label.vi;
+    if (!out.label!.en && fill.label.en) out.label!.en = fill.label.en;
+  }
+  if (!out.description && fill.description) out.description = fill.description;
+  if (out.pii === undefined && fill.pii !== undefined) out.pii = fill.pii;
+  if (!out.label?.ja && !out.label?.vi && !out.label?.en) {
+    delete out.label;
+  }
+  return out;
+}
+
+/**
+ * Apply overwrite sources first, then fill-empty sources only when labels are blank.
+ * Used so paid local-LLM sources do not overwrite dictionary/Excel labels.
+ * If any label is already set, fill-empty sources are skipped entirely (including
+ * description/pii) — matching the “LLM only for blank columns” product rule.
+ */
+export async function applySuggestionsWithFillEmpty(
+  overwriteSources: CatalogSource[],
+  fillEmptySources: CatalogSource[],
+  input: CatalogSuggestInput,
+): Promise<CatalogSuggestion> {
+  let out = await applySuggestionsAsync(overwriteSources, input);
+  if (!suggestionLabelsEmpty(out) || fillEmptySources.length === 0) {
+    return out;
+  }
+  for (const source of fillEmptySources) {
+    const fill = await source.suggest(input);
+    out = mergeFillEmpty(out, fill);
+  }
+  return out;
+}
