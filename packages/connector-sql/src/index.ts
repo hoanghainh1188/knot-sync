@@ -18,6 +18,12 @@ export {
   type TableMeta,
   type ColumnMeta,
 } from "./driver.js";
+export {
+  registerSqlDriverFactory,
+  unregisterSqlDriverFactory,
+  getRegisteredSqlDriverFactory,
+  clearSqlDriverRegistry,
+} from "./driver-registry.js";
 export { createPostgresDriver, postgresStatementTimeoutSql } from "./postgres.js";
 export { createMysqlDriver, mysqlMaxExecutionTimeSql } from "./mysql.js";
 export {

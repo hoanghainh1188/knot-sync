@@ -98,10 +98,30 @@ export interface SqlAllowTable {
   columns: string[];
 }
 
-/** Postgres or MySQL source (connection URL resolved from env at load time). */
+/** Built-in free SQL engines. */
+export type BuiltinSqlSourceType = "postgres" | "mysql";
+
+/**
+ * Paid enterprise SQL engines (registered by connector-sql-enterprise plugin).
+ * Free CLI does not load these unless the plugin is listed under `plugins:`.
+ */
+export type EnterpriseSqlSourceType = "mssql" | "oracle" | "access" | "as400";
+
+export type SqlSourceType = BuiltinSqlSourceType | EnterpriseSqlSourceType;
+
+const SQL_SOURCE_TYPES = new Set<string>([
+  "postgres",
+  "mysql",
+  "mssql",
+  "oracle",
+  "access",
+  "as400",
+]);
+
+/** SQL source (connection URL resolved from env at load time). */
 export interface SqlSourceConfig {
   id: string;
-  type: "postgres" | "mysql";
+  type: SqlSourceType;
   /** Resolved connection string — never written back to YAML. */
   url: string;
   /** Environment variable name that provided the URL (for errors). */
@@ -110,7 +130,7 @@ export interface SqlSourceConfig {
   allow: Record<string, SqlAllowTable>;
   /**
    * PostgreSQL schema for introspection and qualified table references.
-   * Defaults to `public` when omitted. Must not be set on mysql sources.
+   * Defaults to `public` when omitted. Must not be set on non-postgres sources.
    */
   schema?: string;
   /**
@@ -127,7 +147,15 @@ export function isFsSource(source: SourceConfig): source is FsSourceConfig {
 }
 
 export function isSqlSource(source: SourceConfig): source is SqlSourceConfig {
+  return SQL_SOURCE_TYPES.has(source.type);
+}
+
+export function isBuiltinSqlSource(source: SourceConfig): source is SqlSourceConfig {
   return source.type === "postgres" || source.type === "mysql";
+}
+
+export function isEnterpriseSqlSourceType(type: string): type is EnterpriseSqlSourceType {
+  return type === "mssql" || type === "oracle" || type === "access" || type === "as400";
 }
 
 export interface StoreConfig {

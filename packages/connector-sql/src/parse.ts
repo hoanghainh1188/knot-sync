@@ -3,6 +3,7 @@ import {
   assertSourceId,
   type SqlAllowTable,
   type SqlSourceConfig,
+  type SqlSourceType,
 } from "@hoanghainh/knot-sync-core";
 import { DEFAULT_STATEMENT_TIMEOUT_MS } from "./driver.js";
 
@@ -92,7 +93,7 @@ function parsePostgresSchema(raw: unknown, index: number): string | undefined {
 export function parseSqlSource(
   raw: Record<string, unknown>,
   ctx: { baseDir: string; index: number },
-  expectedType: "postgres" | "mysql",
+  expectedType: SqlSourceType,
 ): SqlSourceConfig {
   const id = assertSourceId(raw.id, ctx.index);
   if (raw.type !== expectedType) {
@@ -104,14 +105,14 @@ export function parseSqlSource(
   const allow = parseAllow(raw.allow, ctx.index);
   const statementTimeoutMs = parseStatementTimeoutMs(raw.statementTimeoutMs, ctx.index);
 
-  if (expectedType === "mysql") {
+  if (expectedType !== "postgres") {
     if (raw.schema !== undefined) {
       throw new ConfigError(
-        `sources[${ctx.index}].schema is only allowed for type "postgres" ` +
-          `(MySQL uses the connection database). Remove schema from this source.`,
+        `sources[${ctx.index}].schema is only allowed for type "postgres". ` +
+          `Remove schema from this ${expectedType} source.`,
       );
     }
-    return { id, type: "mysql", url, urlEnv, allow, statementTimeoutMs };
+    return { id, type: expectedType, url, urlEnv, allow, statementTimeoutMs };
   }
 
   const schema = parsePostgresSchema(raw.schema, ctx.index);
