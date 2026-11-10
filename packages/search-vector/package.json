@@ -1,0 +1,30 @@
+{
+  "name": "@hoanghainh/knot-sync-search-vector",
+  "version": "0.0.1",
+  "description": "Opt-in paid local embedding / vector search for KnotSync documents.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@hoanghainh/knot-sync-core": "workspace:*",
+    "@hoanghainh/knot-sync-store-sqlite": "workspace:*"
+  },
+  "author": "hoanghainh",
+  "private": true
+}

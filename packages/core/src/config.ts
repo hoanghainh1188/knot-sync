@@ -785,6 +785,7 @@ sources:
 #   - ../packages/connector-sql-enterprise/dist/index.js
 #   - ../packages/auth-oauth/dist/index.js
 #   - ../packages/catalog-llm/dist/index.js
+#   - ../packages/search-vector/dist/index.js
 # extractor-ocr:
 #   # image: quay.io/docling-project/docling-serve-cpu:v1.38.2
 #   # timeoutSeconds: 120
@@ -817,6 +818,16 @@ sources:
 #   # includeSamples: false
 #   # licenseEnv: KNOT_SYNC_CATALOG_LLM_LICENSE
 #   # licenseKey: knot-sync-catalog-llm-dev       # tests / local only
+# search-vector:  # local embeddings + search_similar (Ollama / Docker OpenAI-compatible)
+#   # export KNOT_SYNC_SEARCH_VECTOR_LICENSE=your-key
+#   # model: nomic-embed-text
+#   # baseUrl: http://127.0.0.1:11434/v1
+#   # timeoutMs: 30000
+#   # maxChars: 8000
+#   # lazyMaxDocs: 20
+#   # embedOnRun: false
+#   # licenseEnv: KNOT_SYNC_SEARCH_VECTOR_LICENSE
+#   # licenseKey: knot-sync-search-vector-dev     # tests / local only
 
 store:
   path: ./.data/store.sqlite   # one SQLite file, safe to delete

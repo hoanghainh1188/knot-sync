@@ -16,6 +16,7 @@ export const ja: MessageCatalog = {
   ui        ローカルのカタログレビュー UI を開く（127.0.0.1 のみ）
   bench     ローカルストアでトークン削減とスイート精度を計測
   optimize  FTS5 を最適化しストアの WAL をチェックポイント（アイドル時に実行）
+  embed     ベクトル検索用にドキュメントを一括埋め込み（search-vector プラグインが必要）
   plugins   読み込み済みプラグインと拡張ポイントを一覧
   serve     MCP サーバーを開始（既定は stdio。チーム向けに --http 可）
 
@@ -126,6 +127,12 @@ plugins:
     "ストア {path} を最適化しました（FTS optimize + WAL チェックポイント）。",
   "optimize.storeOpenFailed":
     "ストア {path} を開けませんでした（{detail}）。\n先に \"knot-sync init\"、\"knot-sync scan\"、\"knot-sync run\" を実行してから \"knot-sync optimize\" を再試行してください。",
+  "embed.done":
+    "ベクトル埋め込み完了: written={written}, skipped={skipped}, failed={failed}。",
+  "embed.failed":
+    "ベクトル埋め込みに失敗しました（{detail}）。search-vector の設定・ライセンス・ローカル埋め込みエンドポイントを確認して再試行してください。",
+  "embed.pluginMissing":
+    'コマンド "embed" には search-vector プラグインが必要です。\nplugins: に packages/search-vector を追加し、KNOT_SYNC_SEARCH_VECTOR_LICENSE を設定してから再試行してください。',
   "logging.unknownKey":
     '"logging" の未知のキー "{key}" です。許可キー: path, level。',
   "logging.invalidLevel":

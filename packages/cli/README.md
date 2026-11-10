@@ -220,6 +220,8 @@ Paid opt-in OAuth/scopes: enable [`packages/auth-oauth`](https://github.com/hoan
 
 Paid opt-in local LLM catalog: enable [`packages/catalog-llm`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/catalog-llm) under `plugins:` to fill blank column labels via Ollama/Docker OpenAI-compatible HTTP; never auto-marks `reviewed`.
 
+Paid opt-in vector search: enable [`packages/search-vector`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/search-vector) under `plugins:` for local embeddings + MCP `search_similar` / CLI `embed` (FTS stays).
+
 ### Local logs (system vs audit)
 
 KnotSync writes **two** local JSONL files by default under the store directory (both must stay **outside** configured sources; never document bodies / PII / API keys):
@@ -350,6 +352,7 @@ KnotSync is structured as a clean, modular TypeScript monorepo managed by `pnpm`
 | [`packages/connector-sql-enterprise`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-sql-enterprise) | Opt-in paid mssql/oracle/access/as400 connectors (license self-check) |
 | [`packages/auth-oauth`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/auth-oauth) | Opt-in paid HTTP MCP OAuth/scopes (local AS + optional JWKS) |
 | [`packages/catalog-llm`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/catalog-llm) | Opt-in paid local LLM for blank Semantic Catalog labels |
+| [`packages/search-vector`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/search-vector) | Opt-in paid local embeddings + `search_similar` / `embed` |
 | [`packages/extractor-office`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/extractor-office) | Document text & table extractor (`.xlsx`, `.docx`, `.pdf`, `.csv`, `.md`, `.txt`) |
 | [`packages/cleaner-ja-vi`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/cleaner-ja-vi) | Text normalizer: NFKC, Wareki, ISO dates, TCVN3/VNI, token reduction |
 | [`packages/pii-basic`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/pii-basic) | Rule-based PII mask/hash/drop (CCCD, My Number, MST, bank, names, phones, emails, cards) |
@@ -394,7 +397,8 @@ Development follows the [OpenSpec](https://github.com/Fission-AI/OpenSpec) speci
 - [x] **Paid 方眼紙 Excel**: Opt-in `packages/extractor-housen` (form/grid heuristics, license self-check).
 - [x] **Paid enterprise SQL**: Opt-in `packages/connector-sql-enterprise` (mssql/oracle/access/as400, license self-check).
 - [x] **Paid OAuth scopes**: Opt-in `packages/auth-oauth` (local AS + optional JWKS, tool/resource scopes; API key fallback).
-- [x] **Paid local LLM catalog**: Opt-in `packages/catalog-llm` (Ollama/Docker OpenAI-compatible; fill-empty labels; no auto-review). Later: vector search, model guardrails.
+- [x] **Paid local LLM catalog**: Opt-in `packages/catalog-llm` (Ollama/Docker OpenAI-compatible; fill-empty labels; no auto-review).
+- [x] **Paid vector search**: Opt-in `packages/search-vector` (local embeddings, SQLite + JS cosine, `search_similar` / `embed`). Later: model guardrails.
 
 ---
 
