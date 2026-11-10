@@ -120,4 +120,14 @@ plugins:
     "Đã tối ưu kho tại {path} (FTS optimize + WAL checkpoint).",
   "optimize.storeOpenFailed":
     'Không mở được kho tại {path} ({detail}).\nChạy "knot-sync init", "knot-sync scan", rồi "knot-sync run" trước, sau đó thử lại "knot-sync optimize".',
+  "logging.unknownKey":
+    'Khóa không hợp lệ "{key}" trong "logging". Chỉ cho phép: path, level.',
+  "logging.invalidLevel":
+    '"logging.level" phải là một trong: info, warn, error (nhận được {value}). Hãy sửa logging.level trong cấu hình.',
+  "logging.emptyPath":
+    '"logging.path" phải là chuỗi không rỗng. Đặt logging.path bên ngoài các nguồn đã cấu hình.',
+  "logging.pathInsideSource":
+    'Từ chối ghi system log bên trong đường dẫn nguồn "{src}". Đặt logging.path ra ngoài các nguồn đã cấu hình.',
+  "logging.writeFailed":
+    "Ghi system log thất bại: {detail}. Kết quả lệnh không đổi.",
 };

@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { appendFile, mkdir } from "node:fs/promises";
-import { dirname, resolve, sep } from "node:path";
-import { ConfigError } from "@hoanghainh/knot-sync-core";
+import { dirname } from "node:path";
+import { assertPathOutsideSources } from "@hoanghainh/knot-sync-core";
 
 export interface AuditEntry {
   timestamp: string;
@@ -42,19 +42,10 @@ export function assertAuditPathOutsideSources(
   auditPath: string,
   sourcePaths: string[],
 ): string {
-  const abs = resolve(auditPath);
-  for (const src of sourcePaths) {
-    if (!src) continue;
-    const srcAbs = resolve(src);
-    const prefix = srcAbs.endsWith(sep) ? srcAbs : srcAbs + sep;
-    if (abs === srcAbs || abs.startsWith(prefix)) {
-      throw new ConfigError(
-        `Refusing to write MCP audit log inside source path "${src}". ` +
-          `Set server.audit_log to a path outside configured sources.`,
-      );
-    }
-  }
-  return abs;
+  return assertPathOutsideSources(auditPath, sourcePaths, {
+    key: "server.audit_log",
+    label: "MCP audit log",
+  });
 }
 
 export class AuditLog {

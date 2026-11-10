@@ -13,6 +13,8 @@ import type {
   ExtractionConfig,
   GuardConfig,
   GuardMode,
+  LogLevel,
+  LoggingConfig,
   PiiConfig,
   PiiMode,
   PromptArgumentConfig,
@@ -51,12 +53,15 @@ const CORE_TOP_LEVEL_KEYS = new Set([
   "pii",
   "guard",
   "server",
+  "logging",
   "catalog",
   "prompts",
   "cli",
 ]);
 
 const SERVER_KEYS = new Set(["audit_log"]);
+const LOGGING_KEYS = new Set(["path", "level"]);
+const LOG_LEVELS = new Set<LogLevel>(["info", "warn", "error"]);
 const CLI_KEYS = new Set(["locale"]);
 const CLI_LOCALES = new Set<CliLocale>(["en", "ja", "vi"]);
 const CATALOG_KEYS = new Set([
@@ -87,6 +92,11 @@ export const DEFAULT_GUARD_MODE: GuardMode = "flag";
 
 /** Default audit log filename beside the store file. */
 export const DEFAULT_AUDIT_LOG_NAME = "mcp-audit.jsonl";
+
+/** Default operational system log filename beside the store file. */
+export const DEFAULT_SYSTEM_LOG_NAME = "system.jsonl";
+
+export const DEFAULT_LOG_LEVEL: LogLevel = "info";
 
 const CLEANING_KEYS = [
   "nfkc",
@@ -149,6 +159,7 @@ export interface StructuralConfig {
   pii: PiiConfig;
   guard: GuardConfig;
   server: ServerConfig;
+  logging: LoggingConfig;
   catalog: CatalogConfig;
   prompts: PromptConfig[];
   cli: CliConfig;
@@ -276,6 +287,47 @@ export function parseServerConfig(
     auditLog = resolvePath(baseDir, obj.audit_log);
   }
   return { auditLog };
+}
+
+/** Parse optional `logging:` section. `defaultPath` is absolute. */
+export function parseLoggingConfig(
+  raw: unknown,
+  defaultPath: string,
+  baseDir: string,
+): LoggingConfig {
+  if (raw === undefined || raw === null) {
+    return { path: defaultPath, level: DEFAULT_LOG_LEVEL };
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ConfigError(
+      '"logging" must be an object (e.g. { path: ./.data/system.jsonl, level: info }).',
+    );
+  }
+  const obj = raw as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    if (!LOGGING_KEYS.has(key)) {
+      throw new ConfigError(
+        `Unknown key "${key}" under "logging". Allowed keys: path, level.`,
+      );
+    }
+  }
+  let path = defaultPath;
+  if (obj.path !== undefined) {
+    if (typeof obj.path !== "string" || obj.path.trim() === "") {
+      throw new ConfigError('"logging.path" must be a non-empty string.');
+    }
+    path = resolvePath(baseDir, obj.path);
+  }
+  let level: LogLevel = DEFAULT_LOG_LEVEL;
+  if (obj.level !== undefined) {
+    if (typeof obj.level !== "string" || !LOG_LEVELS.has(obj.level as LogLevel)) {
+      throw new ConfigError(
+        `"logging.level" must be one of: info, warn, error (got ${JSON.stringify(obj.level)}).`,
+      );
+    }
+    level = obj.level as LogLevel;
+  }
+  return { path, level };
 }
 
 function parseDefinitionMapping(raw: unknown): CatalogDefinitionMapping {
@@ -596,6 +648,20 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
   const guard = parseGuardConfig(c.guard);
   const defaultAuditLog = resolve(dirname(storePath), DEFAULT_AUDIT_LOG_NAME);
   const server = parseServerConfig(c.server, defaultAuditLog, baseDir);
+  const defaultSystemLog = resolve(dirname(storePath), DEFAULT_SYSTEM_LOG_NAME);
+  const logging = parseLoggingConfig(c.logging, defaultSystemLog, baseDir);
+  if (logging.path === storePath) {
+    throw new ConfigError(
+      '"logging.path" must not be the same as store.path. ' +
+        "Use a separate JSONL file (e.g. ./.data/system.jsonl).",
+    );
+  }
+  if (logging.path === server.auditLog) {
+    throw new ConfigError(
+      '"logging.path" must not be the same as server.audit_log. ' +
+        "Keep operational system logs and MCP audit logs in separate files.",
+    );
+  }
   const defaultCatalogPath = resolve(baseDir, DEFAULT_CATALOG_FILE);
   const catalog = parseCatalogConfig(c.catalog, defaultCatalogPath, baseDir);
   const prompts = parsePromptsConfig(c.prompts);
@@ -621,6 +687,7 @@ export function parseConfig(yamlText: string, baseDir: string): StructuralConfig
     pii,
     guard,
     server,
+    logging,
     catalog,
     prompts,
     cli,
@@ -654,6 +721,7 @@ export function resolveConfig(structural: StructuralConfig, host: PluginHost): A
     pii: structural.pii,
     guard: structural.guard,
     server: structural.server,
+    logging: structural.logging,
     catalog: structural.catalog,
     prompts: structural.prompts,
     cli: structural.cli,
@@ -730,6 +798,12 @@ scan:
 #   audit_log: ./.data/mcp-audit.jsonl
 # For "knot-sync serve --http", set API key in the environment (never in YAML):
 #   export KNOT_SYNC_API_KEY=your-shared-secret
+
+# Optional local operational system logs (JSONL). Distinct from server.audit_log.
+# Fully local — no remote shipping / telemetry. Rotate or truncate externally if large.
+# logging:
+#   path: ./.data/system.jsonl   # default beside the store; must stay outside sources
+#   level: info                  # info | warn | error
 
 # Optional CLI locale for help/errors (en | ja | vi). Override with --lang.
 # cli:

@@ -733,3 +733,114 @@ test("ui smoke starts on loopback then exits", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("run writes system log start/end without document body", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-syslog-"));
+  try {
+    const share = join(root, "share");
+    await mkdir(share, { recursive: true });
+    const body = "請求書 1000円\n";
+    await writeFile(join(share, "note.txt"), body, "utf8");
+    const config = join(root, "cfg.yaml");
+    const logPath = join(root, "ops", "system.jsonl");
+    await writeFile(
+      config,
+      [
+        "sources:",
+        "  - id: s",
+        "    type: fs",
+        "    path: ./share",
+        "    extensions: [.txt]",
+        "store:",
+        "  path: ./.data/store.sqlite",
+        "logging:",
+        "  path: ./ops/system.jsonl",
+        "  level: info",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    let io = capture();
+    assert.equal(await main(["scan", "-c", config], io), 0);
+    io = capture();
+    assert.equal(await main(["run", "-c", config], io), 0);
+    const text = await readFile(logPath, "utf8");
+    assert.ok(!text.includes(body.trim()), "document body must not appear in system log");
+    const events = text
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { event: string; command?: string; level: string });
+    const runLines = events.filter((e) => e.command === "run");
+    assert.ok(runLines.some((e) => e.event === "command.start"));
+    assert.ok(runLines.some((e) => e.event === "command.end"));
+    assert.ok(runLines.every((e) => typeof e.level === "string"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("logging.path inside source fails with localized guidance", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-logpath-"));
+  try {
+    const share = join(root, "share");
+    await mkdir(join(share, "経理"), { recursive: true });
+    const config = join(root, "cfg.yaml");
+    await writeFile(
+      config,
+      [
+        "sources:",
+        "  - id: s",
+        "    type: fs",
+        "    path: ./share",
+        "store:",
+        "  path: ./.data/store.sqlite",
+        "logging:",
+        "  path: ./share/経理/system.jsonl",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const io = capture();
+    assert.equal(await main(["scan", "-c", config, "--lang", "ja"], io), 1);
+    const err = io.stderr.join("\n");
+    assert.match(err, /設定エラー/);
+    assert.match(err, /logging\.path/);
+    assert.match(err, /システムログ|ソース/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("logging.level invalid is localized in vi", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-loglevel-"));
+  try {
+    await mkdir(join(root, "share"), { recursive: true });
+    const config = join(root, "cfg.yaml");
+    await writeFile(
+      config,
+      [
+        "sources:",
+        "  - id: s",
+        "    type: fs",
+        "    path: ./share",
+        "store:",
+        "  path: ./.data/store.sqlite",
+        "logging:",
+        "  level: debug",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const io = capture();
+    assert.equal(await main(["scan", "-c", config, "--lang", "vi"], io), 1);
+    const err = io.stderr.join("\n");
+    assert.match(err, /Lỗi cấu hình/);
+    assert.match(err, /logging\.level/);
+    assert.match(err, /info/);
+    assert.match(err, /warn/);
+    assert.match(err, /error/);
+    assert.match(err, /debug/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

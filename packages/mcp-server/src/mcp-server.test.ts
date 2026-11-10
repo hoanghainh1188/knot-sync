@@ -80,6 +80,7 @@ function minimalConfig(sourcePath: string, auditLog: string): AppConfig {
     pii: { mode: "mask", saltPath: "/tmp/salt" },
     guard: { mode: "flag" },
     server: { auditLog },
+    logging: { path: join(sourcePath, "..", "system.jsonl"), level: "info" },
     catalog: {
       path: "/tmp/knot-sync.catalog.yaml",
       definitionMapping: {

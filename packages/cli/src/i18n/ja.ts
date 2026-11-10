@@ -120,4 +120,14 @@ plugins:
     "ストア {path} を最適化しました（FTS optimize + WAL チェックポイント）。",
   "optimize.storeOpenFailed":
     "ストア {path} を開けませんでした（{detail}）。\n先に \"knot-sync init\"、\"knot-sync scan\"、\"knot-sync run\" を実行してから \"knot-sync optimize\" を再試行してください。",
+  "logging.unknownKey":
+    '"logging" の未知のキー "{key}" です。許可キー: path, level。',
+  "logging.invalidLevel":
+    '"logging.level" は info, warn, error のいずれかです（指定: {value}）。config の logging.level を修正してください。',
+  "logging.emptyPath":
+    '"logging.path" は空でない文字列である必要があります。ソース外のパスを logging.path に設定してください。',
+  "logging.pathInsideSource":
+    'ソースパス "{src}" 内へのシステムログ書き込みを拒否しました。logging.path をソース外に設定してください。',
+  "logging.writeFailed":
+    "システムログの書き込みに失敗しました: {detail}。コマンドの結果は変わりません。",
 };

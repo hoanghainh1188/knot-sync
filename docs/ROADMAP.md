@@ -193,6 +193,7 @@ Target: Hardening KnotSync for enterprise-grade production deployments (resilien
 | 3 | `add-http-mcp-transport` | P1 | ✅ done |
 | 4 | `enhance-pii-guard` | P2 | ✅ done |
 | 5 | `scale-sqlite-store` | P2 | ✅ done |
+| 6 | `add-system-logs` | P2 | ✅ done |
 
 ### 1. harden-office-extraction (P0)
 
@@ -248,11 +249,19 @@ Add knot-sync optimize CLI command to run FTS5 optimize and PRAGMA wal_checkpoin
 Add load and stress benchmark scripts to monitor latency and memory under 50k+ document indices.
 ```
 
+### 6. add-system-logs (P2)
+
+```
+/opsx:propose add-system-logs: Local JSONL operational system logs for CLI/server lifecycle.
+Config logging.path (default beside store) and logging.level (info|warn|error). Refuse paths
+under sources. Distinct from server.audit_log. No telemetry / remote shipping. No new deps.
+```
+
 ## Later
 
 | Version | Scope |
 |---|---|
-| v0.3 | Production hardening (see section above) + system logs |
+| v0.3 | Production hardening (see section above; system logs ✅) |
 | Paid | OCR (Docling via Docker), 方眼紙 Excel, SQL Server / Oracle / Access / AS400, OAuth 2.1 + scopes, local LLM for catalog, vector search, model-based guardrails |
 | After v1.0 | Write tools / stored procedures, always with human approval |
 

@@ -119,4 +119,14 @@ plugins:
     "Optimized store at {path} (FTS optimize + WAL checkpoint).",
   "optimize.storeOpenFailed":
     'Could not open store at {path} ({detail}).\nRun "knot-sync init", "knot-sync scan", and "knot-sync run" first, then retry "knot-sync optimize".',
+  "logging.unknownKey":
+    'Unknown key "{key}" under "logging". Allowed keys: path, level.',
+  "logging.invalidLevel":
+    '"logging.level" must be one of: info, warn, error (got {value}). Fix logging.level in the config.',
+  "logging.emptyPath":
+    '"logging.path" must be a non-empty string. Set logging.path outside configured sources.',
+  "logging.pathInsideSource":
+    'Refusing to write system log inside source path "{src}". Set logging.path to a path outside configured sources.',
+  "logging.writeFailed":
+    "System log write failed: {detail}. The command result is unchanged.",
 };
