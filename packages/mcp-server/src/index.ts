@@ -20,6 +20,13 @@ export {
   readApiKeyFromEnv,
 } from "./auth.js";
 export {
+  runWithMcpAuthContext,
+  getMcpAuthContext,
+  assertToolAuthorized,
+  assertResourceAuthorized,
+  type McpAuthOk,
+} from "./auth-context.js";
+export {
   createMcpToolsPlugin,
   handleGetDocument,
   handleSearchDocuments,

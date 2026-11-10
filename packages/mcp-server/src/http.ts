@@ -1,7 +1,9 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import type { McpAuthProvider } from "@hoanghainh/knot-sync-core";
 import { checkBearerAuth, missingApiKeyMessage, readApiKeyFromEnv } from "./auth.js";
+import { runWithMcpAuthContext, type McpAuthOk } from "./auth-context.js";
 import { runWithAuditHttpContext } from "./audit.js";
 import {
   createKnotMcpServer,
@@ -18,6 +20,11 @@ export interface ServeHttpOptions extends CreateKnotMcpServerOptions {
   port?: number;
   /** Override API key (defaults to env KNOT_SYNC_API_KEY). */
   apiKey?: string;
+  /**
+   * Optional mcp-auth provider (defaults to `host.mcpAuthProvider`).
+   * When set, OAuth bearer tokens are accepted; API key remains a full-access fallback.
+   */
+  authProvider?: McpAuthProvider;
   /** Invoked after the server begins listening (tests). */
   onListening?: (info: { host: string; port: number }) => void;
   /** Optional abort to stop the HTTP server (tests). */
@@ -54,7 +61,6 @@ export function hostOnlyFromHeader(hostHeader: string): string {
     const end = lower.indexOf("]");
     return end < 0 ? lower : lower.slice(0, end + 1);
   }
-  // IPv4:port → strip port. Bare IPv6 (e.g. ::1) has multiple colons and no port.
   const colon = lower.lastIndexOf(":");
   if (colon > 0 && /^\d+$/.test(lower.slice(colon + 1)) && lower.indexOf(":") === colon) {
     return lower.slice(0, colon);
@@ -87,18 +93,39 @@ function sendJson(
   res.end(payload);
 }
 
+async function resolveAuth(
+  authorization: string | undefined,
+  apiKey: string | undefined,
+  provider: McpAuthProvider | undefined,
+): Promise<McpAuthOk | null> {
+  if (provider) {
+    const result = await provider.authenticate(authorization);
+    if (result.ok) return result;
+  }
+  if (apiKey && checkBearerAuth(authorization, apiKey)) {
+    return {
+      ok: true,
+      subject: "api-key",
+      scopes: ["tool:*", "resource:*"],
+      via: "apiKey",
+    };
+  }
+  return null;
+}
+
 /**
- * Serve MCP over Streamable HTTP at `/mcp` with Bearer API key auth.
+ * Serve MCP over Streamable HTTP at `/mcp` with Bearer API key and/or OAuth auth.
  * Resolves when the HTTP server closes (signal or close()).
  */
 export async function serveHttp(options: ServeHttpOptions): Promise<void> {
   const bindHost = options.bindHost ?? DEFAULT_HTTP_HOST;
   const port = options.port ?? DEFAULT_HTTP_PORT;
+  const authProvider = options.authProvider ?? options.host.mcpAuthProvider;
   const apiKeyRaw = options.apiKey ?? readApiKeyFromEnv();
-  if (!apiKeyRaw) {
+  if (!apiKeyRaw && !authProvider) {
     throw new Error(missingApiKeyMessage());
   }
-  const apiKey: string = apiKeyRaw;
+  const apiKey = apiKeyRaw;
 
   const sessions = new Map<string, SessionEntry>();
   const enforceLoopbackHost = isLoopbackHost(bindHost);
@@ -122,11 +149,6 @@ export async function serveHttp(options: ServeHttpOptions): Promise<void> {
     await runWithAuditHttpContext({ requestId, userAgent, clientIp }, async () => {
       try {
         const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-        if (url.pathname !== MCP_HTTP_PATH) {
-          res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-          res.end("Not found");
-          return;
-        }
 
         if (enforceLoopbackHost && !isAllowedLoopbackHostHeader(headerValue(req.headers, "host"))) {
           sendJson(res, 403, {
@@ -137,8 +159,20 @@ export async function serveHttp(options: ServeHttpOptions): Promise<void> {
           return;
         }
 
+        if (authProvider?.handleHttp) {
+          const handled = await authProvider.handleHttp(req, res, url);
+          if (handled) return;
+        }
+
+        if (url.pathname !== MCP_HTTP_PATH) {
+          res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+          res.end("Not found");
+          return;
+        }
+
         const authorization = headerValue(req.headers, "authorization");
-        if (!checkBearerAuth(authorization, apiKey)) {
+        const auth = await resolveAuth(authorization, apiKey, authProvider);
+        if (!auth) {
           res.writeHead(401, {
             "content-type": "application/json",
             "www-authenticate": 'Bearer realm="knot-sync"',
@@ -153,46 +187,52 @@ export async function serveHttp(options: ServeHttpOptions): Promise<void> {
           return;
         }
 
-        const sessionHeader = headerValue(req.headers, "mcp-session-id");
-        if (sessionHeader && sessions.has(sessionHeader)) {
-          const entry = sessions.get(sessionHeader)!;
-          await entry.transport.handleRequest(req, res);
-          return;
-        }
+        await runWithMcpAuthContext(auth, async () => {
+          const sessionHeader = headerValue(req.headers, "mcp-session-id");
+          if (sessionHeader && sessions.has(sessionHeader)) {
+            const entry = sessions.get(sessionHeader)!;
+            await entry.transport.handleRequest(req, res);
+            return;
+          }
 
-        if (req.method === "POST" && !sessionHeader) {
-          const sessionId = randomUUID();
-          const mcpServer = createKnotMcpServer(options);
-          const transport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: () => sessionId,
-          });
-          const entry: SessionEntry = {
-            transport,
-            closeServer: () => mcpServer.close(),
-          };
-          sessions.set(sessionId, entry);
-          transport.onclose = () => {
-            sessions.delete(sessionId);
-            void mcpServer.close().catch(() => undefined);
-          };
-          await mcpServer.connect(transport);
-          await transport.handleRequest(req, res);
-          return;
-        }
+          if (req.method === "POST" && !sessionHeader) {
+            const sessionId = randomUUID();
+            const mcpServer = createKnotMcpServer({
+              ...options,
+              authProvider,
+              requireAuthContext: Boolean(authProvider),
+            });
+            const transport = new StreamableHTTPServerTransport({
+              sessionIdGenerator: () => sessionId,
+            });
+            const entry: SessionEntry = {
+              transport,
+              closeServer: () => mcpServer.close(),
+            };
+            sessions.set(sessionId, entry);
+            transport.onclose = () => {
+              sessions.delete(sessionId);
+              void mcpServer.close().catch(() => undefined);
+            };
+            await mcpServer.connect(transport);
+            await transport.handleRequest(req, res);
+            return;
+          }
 
-        if (sessionHeader && !sessions.has(sessionHeader)) {
-          sendJson(res, 404, {
+          if (sessionHeader && !sessions.has(sessionHeader)) {
+            sendJson(res, 404, {
+              jsonrpc: "2.0",
+              error: { code: -32001, message: "Session not found" },
+              id: null,
+            });
+            return;
+          }
+
+          sendJson(res, 400, {
             jsonrpc: "2.0",
-            error: { code: -32001, message: "Session not found" },
+            error: { code: -32600, message: "Bad Request: invalid session or method" },
             id: null,
           });
-          return;
-        }
-
-        sendJson(res, 400, {
-          jsonrpc: "2.0",
-          error: { code: -32600, message: "Bad Request: invalid session or method" },
-          id: null,
         });
       } catch (err) {
         if (!res.headersSent) {
