@@ -1,0 +1,38 @@
+{
+  "name": "@hoanghainh/knot-sync-connector-sql-enterprise",
+  "version": "0.0.1",
+  "description": "Opt-in paid enterprise SQL connectors (mssql/oracle/access/as400) for KnotSync.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@hoanghainh/knot-sync-connector-sql": "workspace:*",
+    "@hoanghainh/knot-sync-core": "workspace:*",
+    "tedious": "^18.6.1"
+  },
+  "optionalDependencies": {
+    "odbc": "^2.4.9",
+    "oracledb": "^6.8.0"
+  },
+  "devDependencies": {
+    "@types/oracledb": "^6.5.2"
+  },
+  "author": "hoanghainh",
+  "private": true
+}

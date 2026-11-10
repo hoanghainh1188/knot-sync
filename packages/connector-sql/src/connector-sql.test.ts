@@ -79,6 +79,50 @@ test("quoteIdent handles Japanese names for postgres and mysql", () => {
   assert.equal(quoteIdent('a"b', "postgres"), `"a""b"`);
 });
 
+test("quoteIdent and buildSelectQuery cover enterprise dialects", () => {
+  assert.equal(quoteIdent("請求", "mssql"), "[請求]");
+  assert.equal(quoteIdent("a]b", "access"), "[a]]b]");
+  assert.equal(quoteIdent("受注", "oracle"), `"受注"`);
+  assert.equal(quoteIdent("hoa_don", "as400"), `"hoa_don"`);
+
+  const allowed = new Set(["金額", "ten_kh"]);
+  const mssql = buildSelectQuery({
+    dialect: "mssql",
+    table: "請求",
+    selectColumns: ["金額"],
+    allowedColumns: allowed,
+    filters: [{ op: "eq", column: "金額", value: 100 }],
+    limit: 10,
+  });
+  assert.match(mssql.text, /SELECT TOP 10 \[金額\] FROM \[請求\]/);
+  assert.match(mssql.text, /\[金額\] = \?/);
+  assert.deepEqual(mssql.values, [100]);
+
+  const oracle = buildSelectQuery({
+    dialect: "oracle",
+    table: "受注",
+    selectColumns: ["ten_kh"],
+    allowedColumns: allowed,
+    filters: [{ op: "eq", column: "ten_kh", value: "Nguyễn" }],
+    limit: 5,
+  });
+  assert.match(oracle.text, /FETCH FIRST :2 ROWS ONLY/);
+  assert.match(oracle.text, /"ten_kh" = :1/);
+  assert.deepEqual(oracle.values, ["Nguyễn", 5]);
+
+  assert.throws(
+    () =>
+      buildSelectQuery({
+        dialect: "oracle",
+        table: "受注",
+        selectColumns: ["ten_kh"],
+        allowedColumns: allowed,
+        filters: [{ op: "eq", column: "SALARY", value: 1 }],
+      }),
+    /not allow-listed/,
+  );
+});
+
 test("buildSelectQuery uses parameters and rejects unknown columns", () => {
   const allowed = new Set(["得意先名", "金額"]);
   const q = buildSelectQuery({
@@ -310,7 +354,7 @@ test("buildSelectQuery supports starts_with, between_dates, and is_null", () => 
     limit: 5,
   });
   assert.match(prefix.text, /FROM "public"\."khach"/);
-  assert.match(prefix.text, /"ten_kh" LIKE \$1/);
+  assert.match(prefix.text, /"ten_kh" LIKE \$1 ESCAPE '\\'/);
   assert.deepEqual(prefix.values, ["Nguyễn%", 5]);
   assert.doesNotMatch(prefix.text, /Nguyễn/);
 

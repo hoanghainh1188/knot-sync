@@ -30,13 +30,32 @@ export function quoteTableRef(
   return quoteIdent(table, dialect);
 }
 
-function escapeLike(s: string): string {
+function escapeLike(s: string, dialect: SqlDialect): string {
+  // Backslash escape; callers must append ESCAPE '\' for non-MySQL dialects
+  // that do not treat \ as default. Also escape '[' for mssql/access LIKE classes.
+  if (dialect === "mssql" || dialect === "access") {
+    return s.replace(/([\\%_[\]])/g, "\\$1");
+  }
   return s.replace(/([\\%_])/g, "\\$1");
+}
+
+function likeClause(col: string, ph: string, dialect: SqlDialect): string {
+  // MySQL treats \ as default escape; others need an explicit ESCAPE clause.
+  if (dialect === "mysql") {
+    return `${col} LIKE ${ph}`;
+  }
+  return `${col} LIKE ${ph} ESCAPE '\\'`;
 }
 
 /** Accept ISO date or datetime prefixes for between_dates bounds. */
 function isIsoDateBound(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}([T ][\d:.+-Z]*)?$/.test(s);
+}
+
+function nextPlaceholder(dialect: SqlDialect, index: number): string {
+  if (dialect === "postgres") return `$${index}`;
+  if (dialect === "oracle") return `:${index}`;
+  return "?";
 }
 
 /**
@@ -68,7 +87,7 @@ export function buildSelectQuery(options: {
   const where: string[] = [];
   let p = 1;
 
-  const ph = () => (dialect === "postgres" ? `$${p++}` : "?");
+  const ph = () => nextPlaceholder(dialect, p++);
 
   for (const f of options.filters ?? []) {
     if (!allowedColumns.has(f.column)) {
@@ -109,8 +128,8 @@ export function buildSelectQuery(options: {
         break;
       }
       case "contains": {
-        where.push(`${col} LIKE ${ph()}`);
-        values.push(`%${escapeLike(f.value)}%`);
+        where.push(likeClause(col, ph(), dialect));
+        values.push(`%${escapeLike(f.value, dialect)}%`);
         break;
       }
       case "starts_with": {
@@ -119,8 +138,8 @@ export function buildSelectQuery(options: {
             `starts_with filter on "${f.column}" requires a non-empty string value.`,
           );
         }
-        where.push(`${col} LIKE ${ph()}`);
-        values.push(`${escapeLike(f.value)}%`);
+        where.push(likeClause(col, ph(), dialect));
+        values.push(`${escapeLike(f.value, dialect)}%`);
         break;
       }
       case "between_dates": {
@@ -157,6 +176,28 @@ export function buildSelectQuery(options: {
   }
 
   const whereSql = where.length > 0 ? ` WHERE ${where.join(" AND ")}` : "";
+
+  // MSSQL / Access: TOP with a clamped integer (safe; never from user SQL).
+  if (dialect === "mssql" || dialect === "access") {
+    const text =
+      `SELECT TOP ${limit} ${colsSql} FROM ${tableSql}${whereSql}`;
+    return { text, values, limit };
+  }
+
+  // Oracle: FETCH FIRST :n ROWS ONLY (12c+). AS400/Db2 i: literal only.
+  if (dialect === "oracle") {
+    const limitPh = ph();
+    values.push(limit);
+    const text =
+      `SELECT ${colsSql} FROM ${tableSql}${whereSql} FETCH FIRST ${limitPh} ROWS ONLY`;
+    return { text, values, limit };
+  }
+  if (dialect === "as400") {
+    const text =
+      `SELECT ${colsSql} FROM ${tableSql}${whereSql} FETCH FIRST ${limit} ROWS ONLY`;
+    return { text, values, limit };
+  }
+
   const limitPh = ph();
   values.push(limit);
   const text = `SELECT ${colsSql} FROM ${tableSql}${whereSql} LIMIT ${limitPh}`;

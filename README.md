@@ -284,6 +284,11 @@ Add to `.cursor/mcp.json`:
 
 KnotSync connects to SQL databases in **strict read-only transaction mode** via a small connection pool (default max 4). Database credentials must be provided via environment variables (`url: env:VAR_NAME`) — never stored in plain text. Only tables and columns explicitly declared in `allow:` are exposed. Each session sets a statement timeout (default **5000ms**, override with `statementTimeoutMs`). Postgres sources may set `schema` (default **`public`**) for non-public business schemas such as `経理`.
 
+Paid opt-in engines (**SQL Server / Oracle / Access / IBM i**) live in
+[`packages/connector-sql-enterprise`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-sql-enterprise):
+list the plugin under `plugins:`, set `KNOT_SYNC_SQL_ENTERPRISE_LICENSE`, and use
+`type: mssql | oracle | access | as400` with the same `url: env:NAME` + `allow:` rules.
+
 ```yaml
 # knot-sync.config.yaml
 sources:
@@ -338,6 +343,7 @@ KnotSync is structured as a clean, modular TypeScript monorepo managed by `pnpm`
 | [`packages/core`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/core) | Data models (`Document`, `FileEntry`), config loader, plugin host API |
 | [`packages/connector-fs`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-fs) | Read-only folder walker and file inventory scanner |
 | [`packages/connector-sql`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-sql) | Read-only PostgreSQL and MySQL connector, schema introspection |
+| [`packages/connector-sql-enterprise`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-sql-enterprise) | Opt-in paid mssql/oracle/access/as400 connectors (license self-check) |
 | [`packages/extractor-office`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/extractor-office) | Document text & table extractor (`.xlsx`, `.docx`, `.pdf`, `.csv`, `.md`, `.txt`) |
 | [`packages/cleaner-ja-vi`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/cleaner-ja-vi) | Text normalizer: NFKC, Wareki, ISO dates, TCVN3/VNI, token reduction |
 | [`packages/pii-basic`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/pii-basic) | Rule-based PII mask/hash/drop (CCCD, My Number, MST, bank, names, phones, emails, cards) |
@@ -379,7 +385,8 @@ Development follows the [OpenSpec](https://github.com/Fission-AI/OpenSpec) speci
 - [x] **v0.2**: CLI i18n (EN/JA/VI), Catalog Review UI, Token/accuracy Benchmarking suite.
 - [x] **v0.3 (open-core)**: Extraction bounds, SQL schema/pools/timeouts, HTTP MCP + API key, expanded PII/guard, SQLite batch/`optimize`, system logs.
 - [x] **Paid OCR**: Opt-in `packages/extractor-ocr` (local Docker Docling, license self-check, PDF EMPTY fallthrough).
-- [x] **Paid 方眼紙 Excel**: Opt-in `packages/extractor-housen` (form/grid heuristics, license self-check). Later: OAuth 2.1, extra DB engines, vector search, local LLM catalog.
+- [x] **Paid 方眼紙 Excel**: Opt-in `packages/extractor-housen` (form/grid heuristics, license self-check).
+- [x] **Paid enterprise SQL**: Opt-in `packages/connector-sql-enterprise` (mssql/oracle/access/as400, license self-check). Later: OAuth 2.1, vector search, local LLM catalog.
 
 ---
 

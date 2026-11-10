@@ -3,6 +3,7 @@ import type {
   FileEntry,
   ScanIssue,
   SqlSourceConfig,
+  SqlSourceType,
 } from "@hoanghainh/knot-sync-core";
 import {
   DEFAULT_POSTGRES_SCHEMA,
@@ -11,11 +12,21 @@ import {
   type DriverFactory,
   type SqlDriver,
 } from "./driver.js";
+import { getRegisteredSqlDriverFactory } from "./driver-registry.js";
 import { createMysqlDriver } from "./mysql.js";
 import { createPostgresDriver } from "./postgres.js";
 
-export function defaultDriverFactory(type: "postgres" | "mysql"): DriverFactory {
-  return type === "postgres" ? createPostgresDriver : createMysqlDriver;
+export function defaultDriverFactory(type: SqlSourceType | string): DriverFactory {
+  if (type === "postgres") return createPostgresDriver;
+  if (type === "mysql") return createMysqlDriver;
+  const registered = getRegisteredSqlDriverFactory(type);
+  if (registered) return registered;
+  return async () => {
+    throw new Error(
+      `No SQL driver registered for type "${type}". ` +
+        `Enable the connector-sql-enterprise plugin under plugins: (with a valid license), then retry.`,
+    );
+  };
 }
 
 /** Build pool/session options from a parsed SQL source. */
@@ -29,7 +40,7 @@ export function driverOptionsFromSource(source: SqlSourceConfig): DriverCreateOp
   };
 }
 
-/** Effective Postgres schema for query qualification (undefined for MySQL). */
+/** Effective Postgres schema for query qualification (undefined for non-postgres). */
 export function effectiveSchema(source: SqlSourceConfig): string | undefined {
   if (source.type !== "postgres") return undefined;
   return source.schema?.trim() || DEFAULT_POSTGRES_SCHEMA;
