@@ -184,6 +184,16 @@ export interface ServerConfig {
   auditLog: string;
 }
 
+/** Operational system log level (`logging.level`). */
+export type LogLevel = "info" | "warn" | "error";
+
+/** Local operational logging settings (`logging:` in config). */
+export interface LoggingConfig {
+  /** Absolute path to the system JSONL log after config loading. */
+  path: string;
+  level: LogLevel;
+}
+
 /** Supported CLI message locales (`cli.locale` in config). */
 export type CliLocale = "en" | "ja" | "vi";
 
@@ -240,6 +250,7 @@ export interface AppConfig {
   pii: PiiConfig;
   guard: GuardConfig;
   server: ServerConfig;
+  logging: LoggingConfig;
   catalog: CatalogConfig;
   prompts: PromptConfig[];
   cli: CliConfig;

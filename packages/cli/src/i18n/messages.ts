@@ -53,6 +53,11 @@ export type MessageKey =
   | "bench.catalogSummary"
   | "bench.catalogSkipped"
   | "optimize.done"
-  | "optimize.storeOpenFailed";
+  | "optimize.storeOpenFailed"
+  | "logging.unknownKey"
+  | "logging.invalidLevel"
+  | "logging.emptyPath"
+  | "logging.pathInsideSource"
+  | "logging.writeFailed";
 
 export type MessageCatalog = Record<MessageKey, string>;

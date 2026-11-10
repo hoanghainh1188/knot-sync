@@ -8,6 +8,7 @@ import {
   DEFAULT_CONFIG_FILE,
   loadConfig,
   resolveConfig,
+  sourceRootPaths,
   starterConfigYaml,
   type CliLocale,
   type Document,
@@ -44,6 +45,7 @@ import {
   normalizeReportArgv,
   writeScanReportHtml,
 } from "./report.js";
+import { appendSystemLogSafe, withSystemLog } from "./system-log-run.js";
 
 const PII_SAMPLE_EXTS = new Set([".txt", ".md", ".csv", ".tsv"]);
 const PII_SAMPLE_MAX_BYTES = 256 * 1024;
@@ -202,7 +204,11 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
     }
   } catch (err) {
     if (err instanceof ConfigError) {
-      io.err(t(activeLocale, "error.configPrefix", { message: err.message }));
+      io.err(
+        t(activeLocale, "error.configPrefix", {
+          message: formatLoggingConfigError(activeLocale, err.message),
+        }),
+      );
       return 1;
     }
     if (err instanceof CatalogError) {
@@ -223,6 +229,26 @@ function localeForConfig(
   configLocale: CliLocale | undefined,
 ): CliLocale {
   return resolveLocale({ flag: langFlag, configLocale, env: process.env });
+}
+
+/** Localize known logging.* ConfigError messages; pass others through. */
+function formatLoggingConfigError(locale: CliLocale, message: string): string {
+  const unknown = /^Unknown key "([^"]+)" under "logging"/.exec(message);
+  if (unknown) return t(locale, "logging.unknownKey", { key: unknown[1]! });
+  if (message.includes('"logging.level" must be one of')) {
+    const got = /\(got (.+)\)\.?$/.exec(message);
+    return t(locale, "logging.invalidLevel", { value: got?.[1] ?? "?" });
+  }
+  if (message.includes('"logging.path" must be a non-empty')) {
+    return t(locale, "logging.emptyPath");
+  }
+  const inside = /^Refusing to write system log inside source path "([^"]+)"/.exec(message);
+  if (inside) return t(locale, "logging.pathInsideSource", { src: inside[1]! });
+  return message;
+}
+
+function formatSystemLogWriteFailed(locale: CliLocale): (detail: string) => string {
+  return (detail) => t(locale, "logging.writeFailed", { detail });
 }
 
 async function cmdDescribeEntry(
@@ -333,89 +359,102 @@ async function cmdScan(
   onLocale(locale);
   const host = await loadAppPlugins(structural);
   const config = resolveConfig(structural, host);
-  const store = new Store(config.store.path);
-  const results: ScanResult[] = [];
+  return withSystemLog(
+    {
+      command: "scan",
+      logging: config.logging,
+      sourcePaths: sourceRootPaths(config.sources),
+      io,
+      formatWriteFailed: formatSystemLogWriteFailed(locale),
+    },
+    async () => {
+      const store = new Store(config.store.path);
+      const results: ScanResult[] = [];
 
-  try {
-    for (const source of config.sources) {
-      const connector = host.getConnector(source.type);
-      if (!connector) {
-        throw new ConfigError(
-          `No connector registered for source type "${source.type}". ` +
-            `Registered: ${host.listConnectorIds().join(", ") || "(none)"}.`,
-        );
-      }
+      try {
+        for (const source of config.sources) {
+          const connector = host.getConnector(source.type);
+          if (!connector) {
+            throw new ConfigError(
+              `No connector registered for source type "${source.type}". ` +
+                `Registered: ${host.listConnectorIds().join(", ") || "(none)"}.`,
+            );
+          }
 
-      const files: FileEntry[] = [];
-      const issues: ScanIssue[] = [];
-      let lastShown = 0;
+          const files: FileEntry[] = [];
+          const issues: ScanIssue[] = [];
+          let lastShown = 0;
 
-      for await (const entry of connector.scan(source, {
-        hash: config.scan.hash,
-        onIssue: (i) => issues.push(i),
-      })) {
-        files.push(entry);
-        if (io.progress && files.length - lastShown >= 200) {
-          lastShown = files.length;
-          process.stderr.write(
-            "\r" +
-              t(locale, "scan.progressFiles", {
-                sourceId: source.id,
-                count: formatCount(files.length),
-              }),
-          );
+          for await (const entry of connector.scan(source, {
+            hash: config.scan.hash,
+            onIssue: (i) => issues.push(i),
+          })) {
+            files.push(entry);
+            if (io.progress && files.length - lastShown >= 200) {
+              lastShown = files.length;
+              process.stderr.write(
+                "\r" +
+                  t(locale, "scan.progressFiles", {
+                    sourceId: source.id,
+                    count: formatCount(files.length),
+                  }),
+              );
+            }
+          }
+          if (io.progress && lastShown > 0) process.stderr.write("\r\x1b[K");
+
+          store.replaceScan(source.id, files, issues);
+          const row: ScanResult = {
+            stats: store.stats(source.id, config.scan.oldFileYears),
+            issues,
+            topDuplicates: store.duplicateGroups(source.id, 5),
+          };
+          if (piiEstimate) {
+            row.piiLikelyFiles = await estimatePiiLikelyFiles(files, host);
+          }
+          results.push(row);
         }
+      } finally {
+        store.close();
       }
-      if (io.progress && lastShown > 0) process.stderr.write("\r\x1b[K");
 
-      store.replaceScan(source.id, files, issues);
-      const row: ScanResult = {
-        stats: store.stats(source.id, config.scan.oldFileYears),
-        issues,
-        topDuplicates: store.duplicateGroups(source.id, 5),
-      };
-      if (piiEstimate) {
-        row.piiLikelyFiles = await estimatePiiLikelyFiles(files, host);
+      if (json) {
+        io.out(
+          JSON.stringify({ version: VERSION, store: config.store.path, sources: results }, null, 2),
+        );
+      } else {
+        for (const r of results) printStats(r, config.scan.oldFileYears, io, locale);
+        io.out(t(locale, "scan.inventorySaved", { path: config.store.path }));
       }
-      results.push(row);
-    }
-  } finally {
-    store.close();
-  }
-
-  if (json) {
-    io.out(JSON.stringify({ version: VERSION, store: config.store.path, sources: results }, null, 2));
-  } else {
-    for (const r of results) printStats(r, config.scan.oldFileYears, io, locale);
-    io.out(t(locale, "scan.inventorySaved", { path: config.store.path }));
-  }
-  if (reportPath !== undefined) {
-    const abs = assertReportPathOutsideSources(
-      reportPath,
-      config.sources.map((s) => ("path" in s ? String(s.path) : "")).filter(Boolean),
-    );
-    const written = await writeScanReportHtml(abs, {
-      version: VERSION,
-      storePath: config.store.path,
-      generatedAt: new Date().toISOString(),
-      oldFileYears: config.scan.oldFileYears,
-      sources: results.map((r) => ({
-        stats: r.stats,
-        issues: r.issues.map((i) => ({
-          path: i.path,
-          code: i.code,
-          message: i.message,
-        })),
-        topDuplicates: r.topDuplicates.map((g) => ({
-          size: g.size,
-          paths: g.paths,
-        })),
-        ...(r.piiLikelyFiles !== undefined ? { piiLikelyFiles: r.piiLikelyFiles } : {}),
-      })),
-    });
-    io.out(t(locale, "scan.htmlReport", { path: written }));
-  }
-  return 0;
+      if (reportPath !== undefined) {
+        const abs = assertReportPathOutsideSources(
+          reportPath,
+          sourceRootPaths(config.sources),
+        );
+        const written = await writeScanReportHtml(abs, {
+          version: VERSION,
+          storePath: config.store.path,
+          generatedAt: new Date().toISOString(),
+          oldFileYears: config.scan.oldFileYears,
+          sources: results.map((r) => ({
+            stats: r.stats,
+            issues: r.issues.map((i) => ({
+              path: i.path,
+              code: i.code,
+              message: i.message,
+            })),
+            topDuplicates: r.topDuplicates.map((g) => ({
+              size: g.size,
+              paths: g.paths,
+            })),
+            ...(r.piiLikelyFiles !== undefined ? { piiLikelyFiles: r.piiLikelyFiles } : {}),
+          })),
+        });
+        io.out(t(locale, "scan.htmlReport", { path: written }));
+      }
+      return 0;
+    },
+  );
 }
 
 async function cmdRun(
@@ -428,7 +467,16 @@ async function cmdRun(
   const locale = localeForConfig(langFlag, structural.cli.locale);
   onLocale(locale);
   const host = await loadAppPlugins(structural);
-  resolveConfig(structural, host); // validate sources even though run uses inventory
+  const config = resolveConfig(structural, host); // validate sources even though run uses inventory
+  return withSystemLog(
+    {
+      command: "run",
+      logging: config.logging,
+      sourcePaths: sourceRootPaths(config.sources),
+      io,
+      formatWriteFailed: formatSystemLogWriteFailed(locale),
+    },
+    async () => {
   const store = new Store(structural.store.path);
 
   try {
@@ -689,6 +737,8 @@ async function cmdRun(
   } finally {
     store.close();
   }
+    },
+  );
 }
 
 async function cmdUi(
@@ -742,25 +792,38 @@ async function cmdOptimize(
   const structural = await loadConfig(configPath);
   const locale = localeForConfig(langFlag, structural.cli.locale);
   onLocale(locale);
-  let store: Store;
-  try {
-    store = new Store(structural.store.path);
-  } catch (err) {
-    io.err(
-      t(locale, "optimize.storeOpenFailed", {
-        path: structural.store.path,
-        detail: (err as Error).message || String(err),
-      }),
-    );
-    return 1;
-  }
-  try {
-    store.optimize();
-    io.out(t(locale, "optimize.done", { path: structural.store.path }));
-    return 0;
-  } finally {
-    store.close();
-  }
+  const host = await loadAppPlugins(structural);
+  const config = resolveConfig(structural, host);
+  return withSystemLog(
+    {
+      command: "optimize",
+      logging: config.logging,
+      sourcePaths: sourceRootPaths(config.sources),
+      io,
+      formatWriteFailed: formatSystemLogWriteFailed(locale),
+    },
+    async () => {
+      let store: Store;
+      try {
+        store = new Store(structural.store.path);
+      } catch (err) {
+        io.err(
+          t(locale, "optimize.storeOpenFailed", {
+            path: structural.store.path,
+            detail: (err as Error).message || String(err),
+          }),
+        );
+        return 1;
+      }
+      try {
+        store.optimize();
+        io.out(t(locale, "optimize.done", { path: structural.store.path }));
+        return 0;
+      } finally {
+        store.close();
+      }
+    },
+  );
 }
 
 async function cmdPlugins(
@@ -814,54 +877,118 @@ async function cmdServe(
   onLocale(locale);
   const pluginHost = await loadAppPlugins(structural);
   const config = resolveConfig(structural, pluginHost);
-  const catalog = await loadCatalogIfPresent(config.catalog.path);
-  const store = new Store(config.store.path);
+  const writeFailed = formatSystemLogWriteFailed(locale);
+  return withSystemLog(
+    {
+      command: "serve",
+      logging: config.logging,
+      sourcePaths: sourceRootPaths(config.sources),
+      io,
+      formatWriteFailed: writeFailed,
+    },
+    async (log) => {
+      const catalog = await loadCatalogIfPresent(config.catalog.path);
+      const store = new Store(config.store.path);
 
-  try {
-    if (flags.http) {
-      if (!readApiKeyFromEnv()) {
-        throw new ConfigError(missingApiKeyMessage());
-      }
-      let port = DEFAULT_HTTP_PORT;
-      if (flags.port !== undefined) {
-        const n = Number(flags.port);
-        if (!Number.isInteger(n) || n <= 0 || n > 65535) {
-          throw new ConfigError(
-            t(locale, "serve.invalidPort", { value: String(flags.port) }),
+      try {
+        if (flags.http) {
+          if (!readApiKeyFromEnv()) {
+            throw new ConfigError(missingApiKeyMessage());
+          }
+          let port = DEFAULT_HTTP_PORT;
+          if (flags.port !== undefined) {
+            const n = Number(flags.port);
+            if (!Number.isInteger(n) || n <= 0 || n > 65535) {
+              throw new ConfigError(
+                t(locale, "serve.invalidPort", { value: String(flags.port) }),
+              );
+            }
+            port = n;
+          }
+          const bindHost = flags.host?.trim() || DEFAULT_HTTP_HOST;
+          io.err(
+            t(locale, "serve.listeningHttp", {
+              host: bindHost,
+              port: String(port),
+              store: config.store.path,
+              audit: config.server.auditLog,
+            }) + (catalog ? t(locale, "serve.catalogSuffix", { path: config.catalog.path }) : ""),
           );
+          await appendSystemLogSafe(
+            log,
+            io,
+            {
+              level: "info",
+              event: "serve.listen",
+              command: "serve",
+              host: bindHost,
+              port,
+              storePath: config.store.path,
+            },
+            writeFailed,
+          );
+          try {
+            await serveHttp({
+              store,
+              config,
+              host: pluginHost,
+              catalog,
+              bindHost,
+              port,
+            });
+          } finally {
+            await appendSystemLogSafe(
+              log,
+              io,
+              {
+                level: "info",
+                event: "serve.shutdown",
+                command: "serve",
+                storePath: config.store.path,
+              },
+              writeFailed,
+            );
+          }
+        } else {
+          io.err(
+            t(locale, "serve.listening", {
+              store: config.store.path,
+              audit: config.server.auditLog,
+            }) + (catalog ? t(locale, "serve.catalogSuffix", { path: config.catalog.path }) : ""),
+          );
+          await appendSystemLogSafe(
+            log,
+            io,
+            {
+              level: "info",
+              event: "serve.listen",
+              command: "serve",
+              storePath: config.store.path,
+            },
+            writeFailed,
+          );
+          try {
+            await serveStdio({ store, config, host: pluginHost, catalog });
+          } finally {
+            await appendSystemLogSafe(
+              log,
+              io,
+              {
+                level: "info",
+                event: "serve.shutdown",
+                command: "serve",
+                storePath: config.store.path,
+              },
+              writeFailed,
+            );
+          }
         }
-        port = n;
+      } finally {
+        store.close();
       }
-      const bindHost = flags.host?.trim() || DEFAULT_HTTP_HOST;
-      io.err(
-        t(locale, "serve.listeningHttp", {
-          host: bindHost,
-          port: String(port),
-          store: config.store.path,
-          audit: config.server.auditLog,
-        }) + (catalog ? t(locale, "serve.catalogSuffix", { path: config.catalog.path }) : ""),
-      );
-      await serveHttp({
-        store,
-        config,
-        host: pluginHost,
-        catalog,
-        bindHost,
-        port,
-      });
-    } else {
-      io.err(
-        t(locale, "serve.listening", {
-          store: config.store.path,
-          audit: config.server.auditLog,
-        }) + (catalog ? t(locale, "serve.catalogSuffix", { path: config.catalog.path }) : ""),
-      );
-      await serveStdio({ store, config, host: pluginHost, catalog });
-    }
-  } finally {
-    store.close();
-  }
-  return 0;
+      return 0;
+    },
+  );
 }
 
 function printStats(r: ScanResult, oldYears: number, io: Io, locale: CliLocale): void {

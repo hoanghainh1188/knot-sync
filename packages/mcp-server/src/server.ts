@@ -15,6 +15,7 @@ import {
 } from "@hoanghainh/knot-sync-connector-sql";
 import {
   isSqlSource,
+  sourceRootPaths,
   type AppConfig,
   type McpPrompt,
   type PluginHost,
@@ -102,7 +103,7 @@ function enrichSchemaForResource(
 }
 
 function sourcePaths(sources: SourceConfig[]): string[] {
-  return sources.map((s) => ("path" in s ? String(s.path) : "")).filter(Boolean);
+  return sourceRootPaths(sources);
 }
 
 function mergePrompts(

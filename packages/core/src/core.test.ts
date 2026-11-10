@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import {
   ConfigError,
   DEFAULT_CLEANING_CONFIG,
@@ -12,6 +14,7 @@ import {
   parseConfig,
   parseExtractionConfig,
   parseGuardConfig,
+  parseLoggingConfig,
   parsePiiConfig,
   parsePromptsConfig,
   parseServerConfig,
@@ -21,7 +24,9 @@ import {
 } from "./config.js";
 import { extOf, isJunkFile, typeFromExt } from "./filetype.js";
 import { documentId, sha256 } from "./hash.js";
+import { assertPathOutsideSources } from "./paths.js";
 import { PLUGIN_API_VERSION, createPluginHost, type KnotSyncPlugin } from "./plugin.js";
+import { createSystemLogger } from "./system-log.js";
 import { isFsSource, type FsSourceConfig } from "./types.js";
 
 function fsPlugin(): KnotSyncPlugin {
@@ -96,6 +101,9 @@ test("starter config parses", () => {
   assert.equal(cfg.guard.mode, DEFAULT_GUARD_MODE);
   assert.match(starterConfigYaml(), /extraction:/);
   assert.match(starterConfigYaml(), /maxFileSizeMb/);
+  assert.match(starterConfigYaml(), /logging:/);
+  assert.match(starterConfigYaml(), /system\.jsonl/);
+  assert.match(starterConfigYaml(), /server\.audit_log/);
 });
 
 test("pii defaults to mask when omitted", () => {
@@ -129,6 +137,144 @@ test("server defaults audit_log beside store when omitted", () => {
   const structural = parseConfig("sources:\n  - id: a\n    type: fs\n    path: /x\n", "/work");
   assert.equal(structural.server.auditLog, resolve("/work", ".data/mcp-audit.jsonl"));
   assert.deepEqual(structural.prompts, []);
+});
+
+test("logging defaults path beside store and level info when omitted", () => {
+  const structural = parseConfig("sources:\n  - id: a\n    type: fs\n    path: /x\n", "/work");
+  assert.equal(structural.logging.path, resolve("/work", ".data/system.jsonl"));
+  assert.equal(structural.logging.level, "info");
+});
+
+test("logging rejects unknown keys, empty path, and bad level", () => {
+  assert.throws(
+    () => parseLoggingConfig({ syslog: true }, "/default.jsonl", "/base"),
+    /Unknown key "syslog".*logging/,
+  );
+  assert.throws(
+    () => parseLoggingConfig({ path: "" }, "/default.jsonl", "/base"),
+    /logging\.path.*non-empty/,
+  );
+  assert.throws(
+    () => parseLoggingConfig({ level: "debug" }, "/default.jsonl", "/base"),
+    /logging\.level.*info, warn, error/,
+  );
+});
+
+test("logging.path under Japanese source root is rejected", () => {
+  const share = resolve("/work", "経理");
+  assert.throws(
+    () =>
+      assertPathOutsideSources(join(share, "system.jsonl"), [share], {
+        key: "logging.path",
+        label: "system log",
+      }),
+    /logging\.path/,
+  );
+});
+
+test("logging.path rejects store and audit collisions", () => {
+  assert.throws(
+    () =>
+      parseConfig(
+        [
+          "sources:",
+          "  - id: a",
+          "    type: fs",
+          "    path: /x",
+          "store:",
+          "  path: ./.data/store.sqlite",
+          "logging:",
+          "  path: ./.data/store.sqlite",
+          "",
+        ].join("\n"),
+        "/work",
+      ),
+    /logging\.path.*store\.path/,
+  );
+  assert.throws(
+    () =>
+      parseConfig(
+        [
+          "sources:",
+          "  - id: a",
+          "    type: fs",
+          "    path: /x",
+          "server:",
+          "  audit_log: ./.data/mcp-audit.jsonl",
+          "logging:",
+          "  path: ./.data/mcp-audit.jsonl",
+          "",
+        ].join("\n"),
+        "/work",
+      ),
+    /logging\.path.*server\.audit_log/,
+  );
+});
+
+test("assertPathOutsideSources follows symlink into source", async () => {
+  const root = await mkdtemp(join(tmpdir(), "knot-symlink-"));
+  try {
+    const share = join(root, "share");
+    const link = join(root, "lnk");
+    const { mkdir, symlink } = await import("node:fs/promises");
+    await mkdir(share, { recursive: true });
+    await symlink(share, link);
+    assert.throws(
+      () =>
+        assertPathOutsideSources(join(link, "system.jsonl"), [share], {
+          key: "logging.path",
+          label: "system log",
+        }),
+      /logging\.path/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("SystemLogger filters by level and writes JSONL without content field", async () => {
+  const root = await mkdtemp(join(tmpdir(), "knot-syslog-"));
+  try {
+    const logPath = join(root, "system.jsonl");
+    const logger = createSystemLogger({
+      path: logPath,
+      level: "warn",
+      sourcePaths: [join(root, "share")],
+    });
+    await logger.append({ level: "info", event: "command.start", command: "run" });
+    const jpPath = join(root, "経理", "請求書.xlsx");
+    await logger.append({
+      level: "warn",
+      event: "command.end",
+      command: "run",
+      path: jpPath,
+    });
+    const text = await readFile(logPath, "utf8");
+    const lines = text.trim().split("\n");
+    assert.equal(lines.length, 1);
+    const row = JSON.parse(lines[0]!) as {
+      level: string;
+      event: string;
+      path: string;
+      content?: unknown;
+    };
+    assert.equal(row.level, "warn");
+    assert.equal(row.event, "command.end");
+    assert.equal(row.path, jpPath);
+    assert.match(row.path, /経理/);
+    assert.match(row.path, /請求書\.xlsx/);
+    assert.equal(row.content, undefined);
+    // Public API is typed without `content`; extra junk cannot be passed as a field.
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(
+        { level: "info", event: "x" } satisfies import("./system-log.js").SystemLogRecord,
+        "content",
+      ),
+      false,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("catalog defaults path beside config when omitted", () => {

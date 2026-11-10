@@ -80,7 +80,8 @@ flowchart LR
 - ⚡ **First-Class MCP Server (`serve`)**:
   - Exposes documents and SQL tables as native MCP Resources (`knot://...`) and Tools (`search_documents`, `get_document`, `describe_table`, `query_table`).
   - Strict input validation via Zod; all document content is wrapped in an `UNTRUSTED DATA` frame to prevent jailbreaks.
-  - Appends every tool invocation to an append-only JSONL audit log.
+  - Appends every tool invocation to an append-only JSONL audit log (`server.audit_log`).
+  - Separate local operational system logs (`logging.path`) for CLI/server lifecycle — no telemetry.
 - 🔌 **Extensible Plugin System**:
   - Add custom connectors, extractors, cleaners, PII rules, and MCP tools. Plugins run in-process with full trust.
 
@@ -211,6 +212,26 @@ npx @hoanghainh/knot-sync serve --http --port 3000
 ```
 
 Clients must send `Authorization: Bearer <KNOT_SYNC_API_KEY>`. The API key is **environment-only** (never put it in YAML). Default bind is loopback; use a reverse proxy / firewall if you bind `0.0.0.0`. Transport is MCP **Streamable HTTP** at `/mcp` (SDK’s current HTTP mode; legacy SSE is not required).
+
+### Local logs (system vs audit)
+
+KnotSync writes **two** local JSONL files by default under the store directory (both must stay **outside** configured sources; never document bodies / PII / API keys):
+
+| File | Config | Purpose |
+|---|---|---|
+| `system.jsonl` | `logging.path` / `logging.level` (`info` \| `warn` \| `error`) | CLI/server lifecycle (`command.start` / `end` / `error`, `serve.listen`) |
+| `mcp-audit.jsonl` | `server.audit_log` | MCP tool/resource calls (and HTTP client metadata when `--http`) |
+
+Fully local — no remote shipping. Rotate or truncate externally if the files grow large.
+
+```yaml
+# optional — defaults shown
+logging:
+  path: ./.data/system.jsonl
+  level: info
+server:
+  audit_log: ./.data/mcp-audit.jsonl
+```
 
 ### MCP Surfaces Exposed
 

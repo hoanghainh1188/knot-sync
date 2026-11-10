@@ -423,6 +423,7 @@ test("describe and query handlers frame untrusted content", async () => {
     pii: { mode: "mask" as const, saltPath: "/tmp/salt" },
     guard: { mode: "flag" as const },
     server: { auditLog: "/tmp/a.jsonl" },
+    logging: { path: "/tmp/system.jsonl", level: "info" as const },
     catalog: {
       path: "/tmp/knot-sync.catalog.yaml",
       definitionMapping: {
@@ -523,6 +524,7 @@ test("query_table resolves catalog business labels and validates enums", async (
     pii: { mode: "mask" as const, saltPath: "/tmp/salt" },
     guard: { mode: "flag" as const },
     server: { auditLog: "/tmp/a.jsonl" },
+    logging: { path: "/tmp/system.jsonl", level: "info" as const },
     catalog: {
       path: "/tmp/knot-sync.catalog.yaml",
       definitionMapping: {
