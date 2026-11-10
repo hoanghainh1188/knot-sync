@@ -760,8 +760,18 @@ sources:
 # Optional extra plugins (npm package names or paths relative to this file).
 # Built-in plugins (fs connector) always load. Plugins run in-process with full trust —
 # install only plugins you trust. Paid plugins check their own license keys.
+# OCR (Docling via local Docker) — not a built-in; enable explicitly:
+#   docker pull quay.io/docling-project/docling-serve-cpu:v1.38.2
+#   export KNOT_SYNC_OCR_LICENSE=your-key
 # plugins:
 #   - ./plugins/mask-company-id.mjs
+#   - ../packages/extractor-ocr/dist/index.js   # monorepo path example
+# extractor-ocr:
+#   # image: quay.io/docling-project/docling-serve-cpu:v1.38.2
+#   # timeoutSeconds: 120
+#   # licenseEnv: KNOT_SYNC_OCR_LICENSE
+#   # licenseKey: knot-sync-ocr-dev   # tests / local only
+#   # maxInputMb: 50
 
 store:
   path: ./.data/store.sqlite   # one SQLite file, safe to delete

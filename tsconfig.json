@@ -5,6 +5,7 @@
     { "path": "packages/connector-fs" },
     { "path": "packages/connector-sql" },
     { "path": "packages/extractor-office" },
+    { "path": "packages/extractor-ocr" },
     { "path": "packages/cleaner-ja-vi" },
     { "path": "packages/pii-basic" },
     { "path": "packages/guard" },

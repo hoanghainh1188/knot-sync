@@ -83,6 +83,10 @@ plugins:
   "run.issuesHeader": "\n問題:",
   "run.andMoreIssues": "  … ほか {n} 件",
   "run.documentsSaved": "ドキュメントを {path} に保存しました",
+  "run.issueLicense":
+    "OCR ライセンスが未設定または無効です。KNOT_SYNC_OCR_LICENSE（または extractor-ocr.licenseKey）を設定してから knot-sync run を再実行してください。",
+  "run.issueDocker":
+    "OCR には Docker が必要です。Docker をインストール／起動し、quay.io/docling-project/docling-serve-cpu:v1.38.2 を pull してから knot-sync run を再実行してください。",
   "plugins.header":
     "読み込み済みプラグイン（プロセス内・フル権限 — 信頼できるものだけインストール）:",
   "plugins.none": "  （なし）",

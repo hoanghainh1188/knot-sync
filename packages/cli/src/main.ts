@@ -39,6 +39,7 @@ import { cmdBench } from "./bench/run.js";
 import { CatalogError, cmdDescribe } from "./describe.js";
 import { formatBytes, formatCount, table } from "./format.js";
 import { resolveLocale, t } from "./i18n/index.js";
+import { extractWithOcrFallback } from "./ocr-fallback.js";
 import { findExtractor, loadAppPlugins } from "./plugins.js";
 import {
   assertReportPathOutsideSources,
@@ -46,6 +47,7 @@ import {
   writeScanReportHtml,
 } from "./report.js";
 import { appendSystemLogSafe, withSystemLog } from "./system-log-run.js";
+import type { MessageKey } from "./i18n/messages.js";
 
 const PII_SAMPLE_EXTS = new Set([".txt", ".md", ".csv", ".tsv"]);
 const PII_SAMPLE_MAX_BYTES = 256 * 1024;
@@ -249,6 +251,22 @@ function formatLoggingConfigError(locale: CliLocale, message: string): string {
 
 function formatSystemLogWriteFailed(locale: CliLocale): (detail: string) => string {
   return (detail) => t(locale, "logging.writeFailed", { detail });
+}
+
+/** Localize OCR LICENSE/DOCKER issue lines; other codes keep extractor message. */
+function formatRunIssue(
+  locale: CliLocale,
+  issue: { path: string; code: string; message: string },
+): string {
+  const ocrKeys: Record<string, MessageKey> = {
+    LICENSE: "run.issueLicense",
+    DOCKER: "run.issueDocker",
+  };
+  const key = ocrKeys[issue.code];
+  if (key) {
+    return `  [${issue.code}] ${issue.path}: ${t(locale, key)}`;
+  }
+  return `  [${issue.code}] ${issue.path}: ${issue.message}`;
 }
 
 async function cmdDescribeEntry(
@@ -538,12 +556,13 @@ async function cmdRun(
         `Raise extraction.timeoutSeconds or exclude the file, then retry "knot-sync run".`;
 
       try {
+        const extractCtx = {
+          signal,
+          maxFileSizeBytes,
+          maxTextChars: structural.extraction.maxTextChars,
+        };
         const result = await Promise.race([
-          extractor.extract(file, {
-            signal,
-            maxFileSizeBytes,
-            maxTextChars: structural.extraction.maxTextChars,
-          }),
+          extractWithOcrFallback(host, file, extractor, extractCtx),
           new Promise<never>((_, reject) => {
             const onAbort = () => {
               signal.removeEventListener("abort", onAbort);
@@ -726,7 +745,7 @@ async function cmdRun(
     if (issues.length > 0) {
       io.out(t(locale, "run.issuesHeader"));
       for (const i of issues.slice(0, 20)) {
-        io.out(`  [${i.code}] ${i.path}: ${i.message}`);
+        io.out(formatRunIssue(locale, i));
       }
       if (issues.length > 20) {
         io.out(t(locale, "run.andMoreIssues", { n: issues.length - 20 }));
