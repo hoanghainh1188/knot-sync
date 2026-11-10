@@ -763,14 +763,23 @@ sources:
 # OCR (Docling via local Docker) — not a built-in; enable explicitly:
 #   docker pull quay.io/docling-project/docling-serve-cpu:v1.38.2
 #   export KNOT_SYNC_OCR_LICENSE=your-key
+# 方眼紙 / form Excel (heuristics) — not a built-in; enable explicitly:
+#   export KNOT_SYNC_HOUSEN_LICENSE=your-key
 # plugins:
 #   - ./plugins/mask-company-id.mjs
 #   - ../packages/extractor-ocr/dist/index.js   # monorepo path example
+#   - ../packages/extractor-housen/dist/index.js
 # extractor-ocr:
 #   # image: quay.io/docling-project/docling-serve-cpu:v1.38.2
 #   # timeoutSeconds: 120
 #   # licenseEnv: KNOT_SYNC_OCR_LICENSE
 #   # licenseKey: knot-sync-ocr-dev   # tests / local only
+#   # maxInputMb: 50
+# extractor-housen:
+#   # formThreshold: 0.42
+#   # timeoutSeconds: 30
+#   # licenseEnv: KNOT_SYNC_HOUSEN_LICENSE
+#   # licenseKey: knot-sync-housen-dev   # tests / local only
 #   # maxInputMb: 50
 
 store:

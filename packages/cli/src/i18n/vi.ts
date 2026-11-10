@@ -85,6 +85,8 @@ plugins:
   "run.documentsSaved": "Đã lưu tài liệu vào {path}",
   "run.issueLicense":
     "Thiếu hoặc sai giấy phép OCR. Đặt KNOT_SYNC_OCR_LICENSE (hoặc extractor-ocr.licenseKey), rồi chạy lại knot-sync run.",
+  "run.issueHousenLicense":
+    "Thiếu hoặc sai giấy phép Housen Excel. Đặt KNOT_SYNC_HOUSEN_LICENSE (hoặc extractor-housen.licenseKey), rồi chạy lại knot-sync run.",
   "run.issueDocker":
     "OCR cần Docker. Cài/khởi động Docker, pull quay.io/docling-project/docling-serve-cpu:v1.38.2, rồi chạy lại knot-sync run.",
   "plugins.header":
