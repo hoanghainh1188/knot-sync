@@ -3,14 +3,14 @@
 ## Purpose
 
 Makes KnotSync workspace packages publishable as Apache-2.0 npm packages at
-version 0.1.2 with self-contained metadata and a changelog.
+version 0.1.3 with self-contained metadata and a changelog.
 
 ## Requirements
 
-### Requirement: Version 0.1.1 on publishable packages
+### Requirement: Version on publishable package
 
 The only npm-publishable package in this repository SHALL be
-`@hoanghainh/knot-sync` under `packages/cli`, at version `0.1.2` (until a later
+`@hoanghainh/knot-sync` under `packages/cli`, at version `0.1.3` (until a later
 release bumps it). Every other package under `packages/*` SHALL set
 `"private": true` so it is not published to the registry. The monorepo root
 remains private.
@@ -18,7 +18,7 @@ remains private.
 #### Scenario: CLI package version
 
 - **WHEN** `packages/cli/package.json` is inspected
-- **THEN** its `version` field is `0.1.2`
+- **THEN** its `version` field is `0.1.3`
 - **AND** its `name` is `@hoanghainh/knot-sync`
 - **AND** it is not marked `"private": true`
 
@@ -89,7 +89,7 @@ and MUST NOT list unpublished workspace package names as runtime dependencies.
 
 #### Scenario: npx works from the single package
 
-- **WHEN** a clean environment installs only `@hoanghainh/knot-sync@0.1.2` from
+- **WHEN** a clean environment installs only `@hoanghainh/knot-sync@0.1.3` from
   the registry (or an equivalent packed tarball)
 - **THEN** `knot-sync --version` exits 0 and prints the package version
 

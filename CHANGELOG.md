@@ -2,6 +2,29 @@
 
 All notable changes to KnotSync are documented in this file.
 
+## 0.1.3 — 2026-11-10
+
+Production hardening (v0.3 open-core) bundled into the single CLI package.
+
+### Added
+
+- Extraction bounds: `extraction.maxFileSizeMb` / `timeoutSeconds` / `maxTextChars`,
+  soft-skip oversized files, streaming-friendly large `.xlsx` handling
+- SQL connector: configurable Postgres `schema`, connection pools, statement
+  timeout, and extra `query_table` filters (`starts_with`, `between_dates`, `is_null`)
+- Optional MCP HTTP transport: `knot-sync serve --http` with
+  `KNOT_SYNC_API_KEY` Bearer auth and richer audit fields
+- PII/guard expansions: Vietnamese MST, bank-account heuristics, JP/VN
+  person-name hints; Base64 / markdown-exfil / zero-width flood guard rules
+- Store scale: batched document upserts (500), `knot-sync optimize`, offline
+  `pnpm store:stress` load script
+- Local operational system logs: config `logging.path` / `logging.level`
+  (JSONL, distinct from `server.audit_log`, no telemetry)
+
+### Notes
+
+- Verify after publish: `npx @hoanghainh/knot-sync@0.1.3 --version`
+
 ## 0.1.2 — 2026-11-09
 
 ### Changed

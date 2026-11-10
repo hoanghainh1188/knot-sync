@@ -163,8 +163,9 @@ CI matrix (Node 22/24 × Linux/macOS/Windows), license gate, tag publish with
 npm provenance. **Shipped:** `@hoanghainh/knot-sync@0.1.1` on npm.
 
 Follow-up `improve-npm-package-page`: ship the product README +
-`repository`/`homepage` on the npm page; bump to **`0.1.2`** for the refresh
-(`npx @hoanghainh/knot-sync@0.1.2 --version` after tag publish).
+`repository`/`homepage` on the npm page (**`0.1.2`**). Production hardening
+track ships as **`0.1.3`** (`npx @hoanghainh/knot-sync@0.1.3 --version` after
+tag publish).
 
 ## v0.2 changes
 

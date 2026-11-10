@@ -1,6 +1,6 @@
 {
   "name": "@hoanghainh/knot-sync",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Local semantic layer for legacy JP/VN office files and SQL: clean, mask PII, catalog cryptic fields, serve AI agents via MCP.",
   "license": "Apache-2.0",
   "type": "module",
