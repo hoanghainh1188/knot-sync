@@ -185,7 +185,8 @@ Keep command names, flags, --json keys and --version in English. No new deps.
 
 ## Production readiness (v0.3 & Enterprise Hardening)
 
-Target: Hardening KnotSync for enterprise-grade production deployments (resilience, security, scalability, and multi-tenant access).
+Target: Harden KnotSync for production deployments (resilience, security,
+scalability). Multi-tenant OAuth remains paid.
 
 | # | Change | Priority | Status |
 |---|---|:---:|---|
@@ -262,7 +263,7 @@ under sources. Distinct from server.audit_log. No telemetry / remote shipping. N
 
 | Version | Scope |
 |---|---|
-| v0.3 | Production hardening (see section above; system logs ✅) |
+| v0.3 | Production hardening complete in open-core (see section above) ✅ |
 | Paid | OCR (Docling via Docker), 方眼紙 Excel, SQL Server / Oracle / Access / AS400, OAuth 2.1 + scopes, local LLM for catalog, vector search, model-based guardrails |
 | After v1.0 | Write tools / stored procedures, always with human approval |
 

@@ -7,8 +7,10 @@ PostgreSQL / MySQL…) và cung cấp cho AI agent qua
 ## Điều kiện
 
 - Node.js ≥ 22.13
-- Chạy **hoàn toàn trên máy của bạn** (không telemetry)
+- Chạy **hoàn toàn trên máy của bạn** (không telemetry, không gọi mạng khi chạy)
 - Nguồn dữ liệu chỉ **đọc**, không ghi đè / không sửa file hay database khách hàng
+- Chỉ số hiệu quả (token, độ chính xác tìm kiếm…) đo bằng `knot-sync bench` trên
+  dữ liệu của bạn — không dùng số % marketing chung
 
 ## Cài đặt
 
@@ -18,8 +20,10 @@ npx @hoanghainh/knot-sync scan
 npx @hoanghainh/knot-sync run
 npx @hoanghainh/knot-sync describe   # Nếu có SQL: tạo Semantic Catalog
 npx @hoanghainh/knot-sync ui         # Duyệt catalog (chỉ 127.0.0.1)
-npx @hoanghainh/knot-sync bench      # Token + độ chính xác suite (cục bộ)
+npx @hoanghainh/knot-sync bench      # Token + suite (cục bộ)
+npx @hoanghainh/knot-sync optimize   # FTS / WAL khi máy rảnh
 npx @hoanghainh/knot-sync serve      # MCP (stdio)
+# Tuỳ chọn: export KNOT_SYNC_API_KEY=... && knot-sync serve --http
 ```
 
 Sau khi publish, kiểm tra:
@@ -37,12 +41,14 @@ npx @hoanghainh/knot-sync@0.1.3 --version
 | `run` | Trích xuất văn bản/bảng vào store cục bộ |
 | `describe` | Sinh/cập nhật Semantic Catalog cho SQL (`knot-sync.catalog.yaml`) |
 | `ui` | UI cục bộ để duyệt catalog / lưu `reviewed` (127.0.0.1) |
-| `bench` | Ước lượng token trước/sau làm sạch và độ chính xác suite (search/catalog) |
+| `bench` | Ước lượng token trước/sau làm sạch và suite (search/catalog) |
+| `optimize` | FTS5 optimize + WAL checkpoint cho store |
 | `plugins` | Liệt kê plugin đã nạp |
-| `serve` | Chạy MCP server (stdio) |
+| `serve` | Chạy MCP server (stdio, hoặc `--http` + API key) |
 
 `bench` đọc store sau `scan` / `run`. Tuỳ chọn chạy `knot-sync.bench.yaml` cạnh
-config (hoặc `--suite`). Không ghi vào thư mục/nguồn khách hàng.
+config (hoặc `--suite`). Không ghi vào thư mục/nguồn khách hàng. Kết quả phụ
+thuộc dữ liệu; không có “% tiết kiệm token” cố định trên trang marketing.
 
 ### Ngôn ngữ thông báo
 

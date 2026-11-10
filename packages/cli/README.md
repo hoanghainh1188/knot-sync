@@ -20,9 +20,9 @@ Legacy enterprise data is a goldmine for internal AI agents, but feeding it dire
 - **Legacy Japanese & Vietnamese Data**: Documents are riddled with old font encodings (TCVN3, VNI), Japanese era names (和暦 - Meiji/Taisho/Showa/Heisei/Reiwa), full-width digits, and non-standard dates that distort LLM reasoning.
 - **Cryptic Databases**: Legacy schemas use abbreviated column names (`TKSK_CD`, `ma_kh`) that lead agents to hallucinate incorrect queries.
 - **Security & Privacy Risks**: Sensitive PII (CCCD, My Number, credit cards) and prompt injection traps (hidden white-on-white text, zero-width instructions) slip unnoticed into AI prompts.
-- **Token Inefficiency**: Messy spreadsheets with repeated blank rows and unnormalized tables waste a large share of your LLM context budget.
+- **Token Inefficiency**: Messy spreadsheets with repeated blank rows and unnormalized tables inflate prompt size. Measure before/after on *your* store with `knot-sync bench` — we do not publish generic “% tokens saved” claims.
 
-**KnotSync acts as a local semantic shield and data adapter**: It ingests your legacy files and databases, normalizes text, strips PII, blocks prompt injections, enriches schemas with human business labels, and serves clean context via MCP — **100% on-premises, completely read-only, and zero internet required**.
+**KnotSync acts as a local semantic shield and data adapter**: It ingests your legacy files and databases, normalizes text, strips PII, blocks prompt injections, enriches schemas with human business labels, and serves clean context via MCP — **fully on-premises, read-only to sources, and no outbound network at runtime**.
 
 ---
 
@@ -64,21 +64,22 @@ flowchart LR
 
 ## Key Features
 
-- 🛡️ **100% On-Premise & Zero-Trust**: Everything runs on your local machine using Node.js built-ins. Zero telemetry, no cloud dependencies, and zero internet calls. Sources are strictly **read-only**.
+- 🛡️ **Local-first & read-only sources**: Runs on your machine with Node.js built-ins. No telemetry, no cloud dependency, no outbound calls at runtime. Configured folders and databases are never written.
 - 🇯🇵 🇻🇳 **Deep Japanese & Vietnamese Legacy Support**:
   - Automatically converts Japanese imperial eras (和暦: 明治, 大正, 昭和, 平成, 令和 including 元年) to Gregorian dates.
   - Detects and converts legacy Vietnamese encodings (TCVN3, VNI-Windows) to clean UTF-8.
   - Normalizes full-width alphanumeric characters (NFKC) and unifies heterogeneous date formats to ISO 8601.
-  - Collapses empty spreadsheet rows/columns and repeated headers/footers to reduce tokens (measure with `knot-sync bench`).
+  - Collapses empty spreadsheet rows/columns and repeated headers/footers; use `knot-sync bench` for token before/after on your data.
 - 🏷️ **Semantic Catalog (Explain Cryptic Fields)**:
   - Introspects SQL tables and maps cryptic column names (`TKSK_CD` → "得意先コード" / "customer code", `ma_kh` → "mã khách hàng").
   - Ingests company-specific dictionary files or legacy Excel table definitions (テーブル定義書 / 項目定義書).
   - Includes a local web UI (`knot-sync ui`) to review, label, and approve mappings.
 - 🔒 **PII Masking & Safety Guard**:
-  - Mask, hash, or drop PII: Japanese My Number (with checksum), Vietnamese CCCD (12 digits), phone numbers (JP/VN), emails, and credit cards (Luhn).
-  - Blocks indirect prompt injections: detects instruction overrides in English, Japanese, and Vietnamese, zero-width / bidi controls (including floods), suspicious Base64 payloads, markdown exfil links/images, and extractor-exposed hidden text.
+  - Mask, hash, or drop PII: Japanese My Number (with checksum), Vietnamese CCCD / MST, bank-account heuristics, JP/VN name cues, phones, emails, and credit cards (Luhn).
+  - Blocks indirect prompt injections: instruction overrides (EN/JA/VI), zero-width / bidi floods, suspicious Base64 payloads, markdown exfil links/images, and extractor-exposed hidden text.
 - ⚡ **First-Class MCP Server (`serve`)**:
   - Exposes documents and SQL tables as native MCP Resources (`knot://...`) and Tools (`search_documents`, `get_document`, `describe_table`, `query_table`).
+  - Stdio by default; optional `serve --http` with shared Bearer key (`KNOT_SYNC_API_KEY`) for team/LAN use.
   - Strict input validation via Zod; all document content is wrapped in an `UNTRUSTED DATA` frame to prevent jailbreaks.
   - Appends every tool invocation to an append-only JSONL audit log (`server.audit_log`).
   - Separate local operational system logs (`logging.path`) for CLI/server lifecycle — no telemetry.
@@ -91,7 +92,7 @@ flowchart LR
 
 | Feature | Raw File Ingestion / Basic RAG | Cloud Parsers (Unstructured, LlamaParse) | **KnotSync** |
 |---|:---:|:---:|:---:|
-| **Deployment** | Local scripts | ❌ Cloud API (Sends data over Internet) | ✅ **100% Local & Air-gapped** |
+| **Deployment** | Local scripts | ❌ Cloud API (Sends data over Internet) | ✅ **Local & air-gapped (no runtime network)** |
 | **Source Safety** | Manual precaution | Read-only | ✅ **Enforced Read-Only (Session level)** |
 | **Japanese Wareki (和暦)** | ❌ Distorts years | ❌ Limited / Raw text only | ✅ **Native conversion to Gregorian** |
 | **Vietnamese TCVN3 / VNI** | ❌ Unreadable garbled text | ❌ Unsupported | ✅ **Auto-detect & convert to Unicode** |
@@ -177,7 +178,9 @@ npx @hoanghainh/knot-sync ui --lang ja
 ```
 
 ### 4. `bench`: Measure Token Reduction & Accuracy
-Measures before/after token reduction and runs benchmark suites (`knot-sync.bench.yaml`) to verify search accuracy and catalog resolution offline:
+Measures **your** store’s before/after token estimates and optional suite accuracy
+(`knot-sync.bench.yaml`) for search and catalog resolution. Results are local and
+data-dependent — not marketing averages:
 ```bash
 npx @hoanghainh/knot-sync bench
 npx @hoanghainh/knot-sync bench --suite ./examples/sample.bench.yaml
@@ -356,15 +359,15 @@ pnpm install
 # Build all packages and UI client
 pnpm build
 
-# Run unit and integration tests (100% pass)
+# Run unit and integration tests
 pnpm test
 
 # Test scan against sample data
 pnpm scan:sample
 ```
 
-- **Zero native dependencies**: Uses Node.js 22 built-in `node:sqlite`, ensuring blazing-fast installation with zero build toolchain requirements.
-- **Strictly vetted dependencies**: External libraries are kept to an absolute minimum (`yaml`, `@modelcontextprotocol/sdk`, `zod`, `exceljs`, `mammoth`, `unpdf`, `pg`, `mysql2`).
+- **No native addons**: Uses Node.js 22 built-in `node:sqlite` so installs do not need a C/C++ toolchain.
+- **Minimal third-party surface**: Runtime deps stay limited (`yaml`, `@modelcontextprotocol/sdk`, `zod`, `exceljs`, `mammoth`, `unpdf`, `pg`, `mysql2`, plus React for the local UI).
 
 ---
 
@@ -374,7 +377,7 @@ Development follows the [OpenSpec](https://github.com/Fission-AI/OpenSpec) speci
 
 - [x] **v0.1**: Core pipeline, Office extractors, JA/VI cleaners, PII masking, Injection guard, MCP Server, SQL connectors, Semantic Catalog.
 - [x] **v0.2**: CLI i18n (EN/JA/VI), Catalog Review UI, Token/accuracy Benchmarking suite.
-- [ ] **v0.3**: Production Hardening (OOM/timeout protection, custom SQL schemas, HTTP/SSE MCP with API key auth, expanded regional PII). OAuth 2.1 remains paid.
+- [x] **v0.3 (open-core)**: Extraction bounds, SQL schema/pools/timeouts, HTTP MCP + API key, expanded PII/guard, SQLite batch/`optimize`, system logs. **Paid later:** OAuth 2.1, OCR, extra DB engines, vector search, local LLM catalog.
 
 ---
 
