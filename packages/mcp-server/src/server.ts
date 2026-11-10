@@ -343,6 +343,7 @@ export function createKnotMcpServer(options: CreateKnotMcpServerOptions): McpSer
   const getTool = host.mcpTools.get("get_document");
   const describeTool = host.mcpTools.get("describe_table");
   const queryTool = host.mcpTools.get("query_table");
+  const searchSimilarTool = host.mcpTools.get("search_similar");
 
   server.registerTool(
     "search_documents",
@@ -527,6 +528,56 @@ export function createKnotMcpServer(options: CreateKnotMcpServerOptions): McpSer
       }
     },
   );
+
+  if (searchSimilarTool) {
+    const searchSimilarInput = {
+      query: z.string().describe("Natural-language similarity query"),
+      source: z.string().optional().describe("Optional source id filter"),
+      limit: z.number().int().positive().max(100).optional().describe("Max hits (1-100)"),
+    };
+    server.registerTool(
+      "search_similar",
+      {
+        title: "Search similar documents",
+        description: searchSimilarTool.description,
+        inputSchema: searchSimilarInput,
+      },
+      async (args) => {
+        try {
+          assertToolAuthorized(
+            "search_similar",
+            authProvider?.authorizeTool.bind(authProvider),
+            authRequired,
+          );
+          const result = await searchSimilarTool.handler(args, toolCtx);
+          await auditSafe(audit, {
+            timestamp: new Date().toISOString(),
+            kind: "tool",
+            name: "search_similar",
+            arguments: {
+              query: args.query,
+              source: args.source,
+              limit: args.limit,
+            },
+            resultCount: Number(result.meta?.resultCount ?? 0),
+            status: "ok",
+          });
+          return { content: [{ type: "text", text: result.content }] };
+        } catch (err) {
+          await auditSafe(audit, {
+            timestamp: new Date().toISOString(),
+            kind: "tool",
+            name: "search_similar",
+            arguments: { query: args.query },
+            resultCount: 0,
+            status: "error",
+            error: (err as Error).message,
+          });
+          throw err;
+        }
+      },
+    );
+  }
 
   for (const prompt of mergePrompts(host, config.prompts)) {
     const argsSchema: Record<string, z.ZodTypeAny> = {};

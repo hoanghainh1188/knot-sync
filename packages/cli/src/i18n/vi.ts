@@ -16,6 +16,7 @@ Lệnh:
   ui        Mở UI duyệt catalog cục bộ (chỉ 127.0.0.1)
   bench     Đo giảm token và độ chính xác suite trên kho cục bộ
   optimize  Nén FTS5 và checkpoint WAL của kho (chạy khi không ghi)
+  embed     Nhúng hàng loạt tài liệu cho tìm kiếm vector (cần plugin search-vector)
   plugins   Liệt kê plugin đã tải và điểm mở rộng
   serve     Khởi động MCP server (mặc định stdio; tùy chọn --http cho team/LAN)
 
@@ -126,6 +127,12 @@ plugins:
     "Đã tối ưu kho tại {path} (FTS optimize + WAL checkpoint).",
   "optimize.storeOpenFailed":
     'Không mở được kho tại {path} ({detail}).\nChạy "knot-sync init", "knot-sync scan", rồi "knot-sync run" trước, sau đó thử lại "knot-sync optimize".',
+  "embed.done":
+    "Đã nhúng vector: written={written}, skipped={skipped}, failed={failed}.",
+  "embed.failed":
+    "Nhúng vector thất bại ({detail}). Kiểm tra cấu hình search-vector, license và endpoint nhúng cục bộ, rồi thử lại.",
+  "embed.pluginMissing":
+    'Lệnh "embed" cần plugin search-vector.\nThêm packages/search-vector vào plugins:, đặt KNOT_SYNC_SEARCH_VECTOR_LICENSE, rồi thử lại.',
   "logging.unknownKey":
     'Khóa không hợp lệ "{key}" trong "logging". Chỉ cho phép: path, level.',
   "logging.invalidLevel":

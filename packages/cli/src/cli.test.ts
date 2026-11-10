@@ -593,6 +593,27 @@ test("help lists optimize command in en/ja", async () => {
   assert.match(out, /FTS5|最適化/);
 });
 
+test("help lists embed; embed without plugin exits 2", async () => {
+  let io = capture();
+  assert.equal(await main(["--help", "--lang", "en"], io), 0);
+  assert.match(io.stdout.join("\n"), /\bembed\b/);
+
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-embed-"));
+  try {
+    const share = join(root, "share");
+    await mkdir(share, { recursive: true });
+    await writeFile(join(share, "note.txt"), "x\n", "utf8");
+    const config = join(root, "cfg.yaml");
+    io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], io), 0);
+    io = capture();
+    assert.equal(await main(["embed", "-c", config], io), 2);
+    assert.match(io.stderr.join("\n"), /search-vector|embed/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("optimize succeeds after run and fails when store path is invalid", async () => {
   const root = await mkdtemp(join(tmpdir(), "mcpn-cli-opt-"));
   try {

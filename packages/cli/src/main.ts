@@ -182,6 +182,10 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         return await cmdOptimize(configPath, io, langFlag, (l) => {
           activeLocale = l;
         });
+      case "embed":
+        return await cmdEmbed(configPath, io, langFlag, (l) => {
+          activeLocale = l;
+        });
       case "plugins":
         return await cmdPlugins(configPath, io, langFlag, (l) => {
           activeLocale = l;
@@ -768,12 +772,74 @@ async function cmdRun(
       }
     }
     io.out(t(locale, "run.documentsSaved", { path: structural.store.path }));
+
+    const embedTool = host.mcpTools.get("embed_documents");
+    if (embedTool) {
+      try {
+        const embedResult = await embedTool.handler({ onRun: true }, { store, config });
+        if (!embedResult.meta?.skippedBySetting) {
+          io.out(
+            t(locale, "embed.done", {
+              written: String(embedResult.meta?.written ?? 0),
+              skipped: String(embedResult.meta?.skipped ?? 0),
+              failed: String(embedResult.meta?.failed ?? 0),
+            }),
+          );
+        }
+      } catch (err) {
+        io.err(
+          t(locale, "embed.failed", {
+            detail: (err as Error).message || String(err),
+          }),
+        );
+      }
+    }
+
     return 0;
   } finally {
     store.close();
   }
     },
   );
+}
+
+async function cmdEmbed(
+  configPath: string,
+  io: Io,
+  langFlag: string | undefined,
+  onLocale: (locale: CliLocale) => void,
+): Promise<number> {
+  const structural = await loadConfig(configPath);
+  const locale = localeForConfig(langFlag, structural.cli.locale);
+  onLocale(locale);
+  const host = await loadAppPlugins(structural);
+  const config = resolveConfig(structural, host);
+  const embedTool = host.mcpTools.get("embed_documents");
+  if (!embedTool) {
+    io.err(t(locale, "embed.pluginMissing"));
+    return 2;
+  }
+  const store = new Store(structural.store.path);
+  try {
+    const result = await embedTool.handler({}, { store, config });
+    io.out(
+      t(locale, "embed.done", {
+        written: String(result.meta?.written ?? 0),
+        skipped: String(result.meta?.skipped ?? 0),
+        failed: String(result.meta?.failed ?? 0),
+      }),
+    );
+    return 0;
+  } catch (err) {
+    io.err(
+      t(locale, "embed.failed", {
+        detail: (err as Error).message || String(err),
+      }),
+    );
+    return 1;
+  } finally {
+    store.close();
+  }
 }
 
 async function cmdUi(

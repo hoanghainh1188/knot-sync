@@ -130,3 +130,16 @@ MUST NOT require network access or write into customer source folders.
 - **WHEN** an operator runs the documented load script targeting ≥50k documents
 - **THEN** it completes without network calls
 - **AND** it prints latency (and memory if available) for at least one search
+
+### Requirement: FTS remains independent of vector search
+
+Keyword FTS5 search (`search` / `search_documents`) SHALL continue to work
+without the search-vector plugin and WITHOUT requiring a local embedding
+endpoint. Vector retrieval is additive and MUST NOT replace or break FTS
+behavior for Japanese/Vietnamese short terms.
+
+#### Scenario: FTS works with vector plugin unloaded
+
+- **GIVEN** no search-vector plugin under `plugins:`
+- **WHEN** the operator searches for `請求書` via FTS
+- **THEN** matching cleaned documents are returned as today

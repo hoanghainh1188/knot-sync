@@ -16,6 +16,7 @@ Commands:
   ui        Open local catalog review UI (127.0.0.1 only)
   bench     Measure token reduction and suite accuracy on the local store
   optimize  Compact FTS5 and checkpoint the store WAL (run when idle)
+  embed     Batch-embed documents for vector search (requires search-vector plugin)
   plugins   List loaded plugins and their extension points
   serve     Start the MCP server (stdio by default; optional --http for team/LAN)
 
@@ -125,6 +126,12 @@ plugins:
     "Optimized store at {path} (FTS optimize + WAL checkpoint).",
   "optimize.storeOpenFailed":
     'Could not open store at {path} ({detail}).\nRun "knot-sync init", "knot-sync scan", and "knot-sync run" first, then retry "knot-sync optimize".',
+  "embed.done":
+    "Vector embed finished: written={written}, skipped={skipped}, failed={failed}.",
+  "embed.failed":
+    "Vector embed failed ({detail}). Check search-vector settings, license, and the local embedding endpoint, then retry.",
+  "embed.pluginMissing":
+    'Command "embed" requires the search-vector plugin.\nAdd packages/search-vector under plugins:, set KNOT_SYNC_SEARCH_VECTOR_LICENSE, then retry.',
   "logging.unknownKey":
     'Unknown key "{key}" under "logging". Allowed keys: path, level.',
   "logging.invalidLevel":

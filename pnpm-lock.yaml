@@ -242,6 +242,15 @@ importers:
 
   packages/report-html: {}
 
+  packages/search-vector:
+    dependencies:
+      '@hoanghainh/knot-sync-core':
+        specifier: workspace:*
+        version: link:../core
+      '@hoanghainh/knot-sync-store-sqlite':
+        specifier: workspace:*
+        version: link:../store-sqlite
+
   packages/store-sqlite:
     dependencies:
       '@hoanghainh/knot-sync-core':
