@@ -391,7 +391,7 @@ pnpm scan:sample
 
 ## Roadmap
 
-Development follows the [OpenSpec](https://github.com/Fission-AI/OpenSpec) specification process. See [docs/ROADMAP.md](https://github.com/hoanghainh1188/knot-sync/blob/main/docs/ROADMAP.md) for the active roadmap and upcoming milestones:
+Development follows the [OpenSpec](https://github.com/Fission-AI/OpenSpec) specification process. See [docs/ROADMAP.md](https://github.com/hoanghainh1188/knot-sync/blob/main/docs/ROADMAP.md) for status and milestones. Open-core **v0.1–v0.3** and Paid **#1–#7** are complete; next planned scope is **After v1.0** write tools (human approval).
 
 - [x] **v0.1**: Core pipeline, Office extractors, JA/VI cleaners, PII masking, Injection guard, MCP Server, SQL connectors, Semantic Catalog.
 - [x] **v0.2**: CLI i18n (EN/JA/VI), Catalog Review UI, Token/accuracy Benchmarking suite.
