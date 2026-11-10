@@ -242,11 +242,12 @@ test("SystemLogger filters by level and writes JSONL without content field", asy
       sourcePaths: [join(root, "share")],
     });
     await logger.append({ level: "info", event: "command.start", command: "run" });
+    const jpPath = join(root, "経理", "請求書.xlsx");
     await logger.append({
       level: "warn",
       event: "command.end",
       command: "run",
-      path: join(root, "経理/請求書.xlsx"),
+      path: jpPath,
     });
     const text = await readFile(logPath, "utf8");
     const lines = text.trim().split("\n");
@@ -259,7 +260,9 @@ test("SystemLogger filters by level and writes JSONL without content field", asy
     };
     assert.equal(row.level, "warn");
     assert.equal(row.event, "command.end");
-    assert.match(row.path, /経理\/請求書\.xlsx/);
+    assert.equal(row.path, jpPath);
+    assert.match(row.path, /経理/);
+    assert.match(row.path, /請求書\.xlsx/);
     assert.equal(row.content, undefined);
     // Public API is typed without `content`; extra junk cannot be passed as a field.
     assert.equal(
