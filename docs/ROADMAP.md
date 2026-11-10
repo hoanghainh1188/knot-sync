@@ -264,7 +264,30 @@ under sources. Distinct from server.audit_log. No telemetry / remote shipping. N
 | Version | Scope |
 |---|---|
 | v0.3 | Production hardening complete in open-core (see section above) ✅ |
-| Paid | OCR (Docling via Docker), 方眼紙 Excel, SQL Server / Oracle / Access / AS400, OAuth 2.1 + scopes, local LLM for catalog, vector search, model-based guardrails |
+| Paid | Separate plugin packages (license checked by the plugin, never by core). Details below. |
 | After v1.0 | Write tools / stored procedures, always with human approval |
+
+### Paid edition (planned capabilities)
+
+Open-core stays Apache-2.0 and fully local. Paid work ships as **trusted plugins**
+that register through the existing plugin API. Each item below is a product
+capability, not yet an OpenSpec change name.
+
+| # | Capability | What it does | Why paid / deferred |
+|---|---|---|---|
+| 1 | **OCR (Docling via Docker)** | Turn scanned PDFs / images into text (and tables where possible) so `run` / search / MCP can use papers that have no text layer. Likely a side-car Docker process; KnotSync stays read-only to the source files. | Heavy native/ML stack; not a Node built-in; ops burden (Docker). Free core only extracts **text-based** PDFs. |
+| 2 | **方眼紙 Excel** | Detect grid / form-like spreadsheet layouts common in JP ops sheets and emit structured Markdown/tables instead of a flat cell dump. | Layout AI / heuristics beyond normal `.xlsx` extract; called out as paid since `add-office-extraction`. |
+| 3 | **SQL Server / Oracle / Access / AS400** | New connector plugins (`type:` values) with the same discipline as Postgres/MySQL: URL from env, read-only session, `allow:` table/column allow-list, `describe_table` / `query_table` only — no free SQL. | Extra drivers, dialects, and enterprise packaging; free core covers Postgres + MySQL only. |
+| 4 | **OAuth 2.1 + scopes** | Replace (or sit above) shared `KNOT_SYNC_API_KEY` for HTTP MCP: real identity, per-client scopes (e.g. which tools/resources), multi-tenant / team access control. | Identity product, not “a transport flag”; open-core HTTP already ships with shared Bearer key. |
+| 5 | **Local LLM for Semantic Catalog** | Suggest business labels / descriptions for cryptic columns (`TKSK_CD`, `ma_kh`, …) using a **local** model; human review via `knot-sync ui` / `reviewed` still required. | Model runtime + quality ops; free catalog uses dictionaries + テーブル定義書 Excel only. |
+| 6 | **Vector search** | Embedding-based retrieval alongside (or above) FTS5 trigram for semantic “find similar” queries over cleaned documents. | Embeddings, storage, and ranking product; free search stays SQLite FTS5 trigram. |
+| 7 | **Model-based guardrails** | LLM/classifier layer on top of rule-based `guard` / PII (phrases, controls, Base64, markdown exfil, etc.) for subtler injection and sensitive-content cases. | Needs model inference; free core stays deterministic rules with no network. |
+
+**Shared paid constraints (same as open-core product rules):**
+
+- Still **read-only** to customer sources (no silent writes).
+- Prefer **on-prem / local** runtimes; no telemetry. OCR/LLM may use local Docker/models, not cloud APIs by default.
+- MCP text remains **untrusted document content**, never instructions.
+- Core **never** checks license keys; each paid plugin validates its own license.
 
 Do not use unverified effectiveness numbers in marketing; `bench` produces real ones.
