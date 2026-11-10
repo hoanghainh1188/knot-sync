@@ -31,7 +31,7 @@ npx @hoanghainh/knot-sync serve      # MCP (stdio)
 Sau khi publish, kiểm tra:
 
 ```bash
-npx @hoanghainh/knot-sync@0.1.3 --version
+npx @hoanghainh/knot-sync@0.2.0 --version
 ```
 
 ## Lệnh chính
