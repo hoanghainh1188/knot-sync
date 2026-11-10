@@ -784,6 +784,7 @@ sources:
 #   - ../packages/extractor-housen/dist/index.js
 #   - ../packages/connector-sql-enterprise/dist/index.js
 #   - ../packages/auth-oauth/dist/index.js
+#   - ../packages/catalog-llm/dist/index.js
 # extractor-ocr:
 #   # image: quay.io/docling-project/docling-serve-cpu:v1.38.2
 #   # timeoutSeconds: 120
@@ -807,6 +808,15 @@ sources:
 #   # tokenPath: /oauth/token
 #   # jwksUrl: https://keycloak.internal/.../certs   # optional on-prem IdP
 #   # defaultScopes: [tool:*, resource:*]
+# catalog-llm:   # local LLM for blank catalog columns (Ollama / Docker OpenAI-compatible)
+#   # export KNOT_SYNC_CATALOG_LLM_LICENSE=your-key
+#   # model: llama3.2
+#   # baseUrl: http://127.0.0.1:11434/v1          # Ollama default
+#   # baseUrl: http://127.0.0.1:8080/v1           # Docker example
+#   # timeoutMs: 30000
+#   # includeSamples: false
+#   # licenseEnv: KNOT_SYNC_CATALOG_LLM_LICENSE
+#   # licenseKey: knot-sync-catalog-llm-dev       # tests / local only
 
 store:
   path: ./.data/store.sqlite   # one SQLite file, safe to delete
