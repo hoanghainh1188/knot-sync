@@ -22,7 +22,7 @@ Legacy enterprise data is a goldmine for internal AI agents, but feeding it dire
 - **Security & Privacy Risks**: Sensitive PII (CCCD, My Number, credit cards) and prompt injection traps (hidden white-on-white text, zero-width instructions) slip unnoticed into AI prompts.
 - **Token Inefficiency**: Messy spreadsheets with repeated blank rows and unnormalized tables inflate prompt size. Measure before/after on *your* store with `knot-sync bench` — we do not publish generic “% tokens saved” claims.
 
-**KnotSync acts as a local semantic shield and data adapter**: It ingests your legacy files and databases, normalizes text, strips PII, blocks prompt injections, enriches schemas with human business labels, and serves clean context via MCP — **fully on-premises, read-only to sources, and no outbound network at runtime**.
+**KnotSync acts as a local semantic shield and data adapter**: It ingests your legacy files and databases, normalizes text, strips PII, blocks prompt injections, enriches schemas with human business labels, and serves clean context via MCP — **fully on-premises and read-only to sources**. The free core makes **no outbound network calls** and ships no telemetry; opt-in paid plugins may call **local** inference/OCR endpoints you run (Ollama/Docker on loopback or on-prem LAN).
 
 ---
 
@@ -35,11 +35,11 @@ flowchart LR
         DB["SQL Databases<br/>(PostgreSQL, MySQL)"]
     end
 
-    subgraph KnotSync["KnotSync (Local & Offline)"]
+    subgraph KnotSync["KnotSync (Local-first)"]
         direction TB
         Scan["scan: inventory & health"]
-        Run["run: extract → JA/VI clean → PII → guard"]
-        Store[("Local SQLite FTS5<br/>(Trigram Search)")]
+        Run["run: extract → clean → PII → guard<br/>(+ optional paid enrichers)"]
+        Store[("Local SQLite FTS5<br/>(+ optional vectors)")]
         Catalog["describe / ui:<br/>Semantic Catalog"]
 
         Scan --> Run --> Store
@@ -55,16 +55,16 @@ flowchart LR
     FS --> Scan
     DB --> Scan
     DB --> Catalog
-    Store -->|"MCP stdio / Tools & Resources"| Claude
-    Store -->|"MCP stdio / Tools & Resources"| Cursor
-    Store -->|"MCP stdio / Tools & Resources"| Custom
+    Store -->|"MCP stdio or HTTP"| Claude
+    Store -->|"MCP stdio or HTTP"| Cursor
+    Store -->|"MCP stdio or HTTP"| Custom
 ```
 
 ---
 
 ## Key Features
 
-- 🛡️ **Local-first & read-only sources**: Runs on your machine with Node.js built-ins. No telemetry, no cloud dependency, no outbound calls at runtime. Configured folders and databases are never written.
+- 🛡️ **Local-first & read-only sources**: Runs on your machine with Node.js built-ins. No telemetry and no cloud APIs by default. Configured folders and databases are never written.
 - 🇯🇵 🇻🇳 **Deep Japanese & Vietnamese Legacy Support**:
   - Automatically converts Japanese imperial eras (和暦: 明治, 大正, 昭和, 平成, 令和 including 元年) to Gregorian dates.
   - Detects and converts legacy Vietnamese encodings (TCVN3, VNI-Windows) to clean UTF-8.
@@ -74,17 +74,19 @@ flowchart LR
   - Introspects SQL tables and maps cryptic column names (`TKSK_CD` → "得意先コード" / "customer code", `ma_kh` → "mã khách hàng").
   - Ingests company-specific dictionary files or legacy Excel table definitions (テーブル定義書 / 項目定義書).
   - Includes a local web UI (`knot-sync ui`) to review, label, and approve mappings.
+  - Optional paid local-LLM fill for blank labels (`packages/catalog-llm`).
 - 🔒 **PII Masking & Safety Guard**:
   - Mask, hash, or drop PII: Japanese My Number (with checksum), Vietnamese CCCD / MST, bank-account heuristics, JP/VN name cues, phones, emails, and credit cards (Luhn).
   - Blocks indirect prompt injections: instruction overrides (EN/JA/VI), zero-width / bidi floods, suspicious Base64 payloads, markdown exfil links/images, and extractor-exposed hidden text.
+  - Optional paid local-LLM enricher after rules (`packages/guard-llm`).
 - ⚡ **First-Class MCP Server (`serve`)**:
-  - Exposes documents and SQL tables as native MCP Resources (`knot://...`) and Tools (`search_documents`, `get_document`, `describe_table`, `query_table`).
-  - Stdio by default; optional `serve --http` with shared Bearer key (`KNOT_SYNC_API_KEY`) for team/LAN use.
-  - Strict input validation via Zod; all document content is wrapped in an `UNTRUSTED DATA` frame to prevent jailbreaks.
+  - Exposes documents and SQL tables as MCP Resources (`knot://...`) and Tools (`search_documents`, `get_document`, `describe_table`, `query_table`; optional `search_similar` with vector plugin).
+  - Stdio by default; optional `serve --http` with shared Bearer key (`KNOT_SYNC_API_KEY`); optional paid OAuth/scopes.
+  - Strict input validation via Zod; all document content is wrapped in an `UNTRUSTED DATA` frame.
   - Appends every tool invocation to an append-only JSONL audit log (`server.audit_log`).
-  - Separate local operational system logs (`logging.path`) for CLI/server lifecycle — no telemetry.
+  - Separate local operational system logs (`logging.path`) — no telemetry.
 - 🔌 **Extensible Plugin System**:
-  - Add custom connectors, extractors, cleaners, PII rules, and MCP tools. Plugins run in-process with full trust.
+  - Connectors, extractors, cleaners, PII/guard rules, catalog sources, MCP tools/prompts, document enrichers, and auth providers. Built-ins load by default; paid features are opt-in under `plugins:` and self-check their own licenses.
 
 ---
 
@@ -92,7 +94,7 @@ flowchart LR
 
 | Feature | Raw File Ingestion / Basic RAG | Cloud Parsers (Unstructured, LlamaParse) | **KnotSync** |
 |---|:---:|:---:|:---:|
-| **Deployment** | Local scripts | ❌ Cloud API (Sends data over Internet) | ✅ **Local & air-gapped (no runtime network)** |
+| **Deployment** | Local scripts | ❌ Cloud API (Sends data over Internet) | ✅ **Local-first (free path offline; opt-in local plugins)** |
 | **Source Safety** | Manual precaution | Read-only | ✅ **Enforced Read-Only (Session level)** |
 | **Japanese Wareki (和暦)** | ❌ Distorts years | ❌ Limited / Raw text only | ✅ **Native conversion to Gregorian** |
 | **Vietnamese TCVN3 / VNI** | ❌ Unreadable garbled text | ❌ Unsupported | ✅ **Auto-detect & convert to Unicode** |
@@ -124,6 +126,7 @@ npx @hoanghainh/knot-sync describe
 
 # 5. Start the MCP server over stdio for AI agents
 npx @hoanghainh/knot-sync serve
+# Optional: export KNOT_SYNC_API_KEY=... && knot-sync serve --http
 ```
 
 ---
@@ -165,6 +168,8 @@ Extracts text and tables from `.xlsx`, `.docx`, `.pdf` (text-based), `.csv`, `.t
 - **Cleaning**: NFKC normalization, Wareki $\rightarrow$ Gregorian, ISO 8601 dates, TCVN3/VNI conversion, and whitespace/empty-row token reduction.
 - **PII Masking**: Mask (`***`), hash, or drop sensitive numbers.
 - **Guardrails**: Flags prompt-injection patterns, zero-width chars, and hidden cells.
+- **Optional paid steps** (when listed under `plugins:`): Docling OCR, 方眼紙 Excel rewrite,
+  and/or local-LLM enricher after PII→guard (`guard-llm`).
 - **Incremental**: Unchanged files (matching SHA-256 hash) are skipped automatically.
 - **Hardened extraction**: `extraction.maxFileSizeMb` (default 50) skips oversized files with
   `SKIPPED_TOO_LARGE`; `timeoutSeconds` (default 30) soft-fails hung extracts; large `.xlsx`
@@ -216,13 +221,22 @@ npx @hoanghainh/knot-sync serve --http --port 3000
 
 Clients must send `Authorization: Bearer <KNOT_SYNC_API_KEY>`. The API key is **environment-only** (never put it in YAML). Default bind is loopback; use a reverse proxy / firewall if you bind `0.0.0.0`. Transport is MCP **Streamable HTTP** at `/mcp` (SDK’s current HTTP mode; legacy SSE is not required).
 
-Paid opt-in OAuth/scopes: enable [`packages/auth-oauth`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/auth-oauth) under `plugins:` for local token issuance (`/oauth/token`) or on-prem JWKS validation; `KNOT_SYNC_API_KEY` remains a full-access fallback.
+### Paid plugins (opt-in)
 
-Paid opt-in local LLM catalog: enable [`packages/catalog-llm`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/catalog-llm) under `plugins:` to fill blank column labels via Ollama/Docker OpenAI-compatible HTTP; never auto-marks `reviewed`.
+List package paths under config `plugins:` and set each plugin’s license env. Core never
+checks licenses. Defaults stay offline; these may talk to **local** Ollama/Docker/OCR only.
 
-Paid opt-in vector search: enable [`packages/search-vector`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/search-vector) under `plugins:` for local embeddings + MCP `search_similar` / CLI `embed` (FTS stays).
+| Plugin | What you get | License env (default) |
+|---|---|---|
+| [`extractor-ocr`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/extractor-ocr) | Docling OCR for scanned PDF/images | `KNOT_SYNC_OCR_LICENSE` |
+| [`extractor-housen`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/extractor-housen) | 方眼紙 / form-like `.xlsx` layout | `KNOT_SYNC_HOUSEN_LICENSE` |
+| [`connector-sql-enterprise`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-sql-enterprise) | mssql / oracle / access / as400 | `KNOT_SYNC_SQL_ENTERPRISE_LICENSE` |
+| [`auth-oauth`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/auth-oauth) | HTTP OAuth/scopes; API key fallback | `KNOT_SYNC_OAUTH_LICENSE` |
+| [`catalog-llm`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/catalog-llm) | Local LLM blank catalog labels | `KNOT_SYNC_CATALOG_LLM_LICENSE` |
+| [`search-vector`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/search-vector) | Embeddings + `search_similar` / `embed` | `KNOT_SYNC_SEARCH_VECTOR_LICENSE` |
+| [`guard-llm`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/guard-llm) | Local LLM enricher after PII/guard | `KNOT_SYNC_GUARD_LLM_LICENSE` |
 
-Paid opt-in model guardrails: enable [`packages/guard-llm`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/guard-llm) under `plugins:` for a local-LLM enricher after rule-based PII/guard (Ollama/Docker); soft-fail when the endpoint is down.
+Details and starter comments: each package README and `knot-sync init` sample config.
 
 ### Local logs (system vs audit)
 
@@ -255,6 +269,7 @@ server:
 | **Tool** | `get_document` | Fetch document by its unique ID |
 | **Tool** | `describe_table` | Inspect allowed columns, data types, and business descriptions |
 | **Tool** | `query_table` | Parameterized SQL query with safe filters (`eq`, `in`, `range`, `contains`, `starts_with`, `between_dates`, `is_null`) |
+| **Tool** | `search_similar` | Semantic similarity search (only when `search-vector` plugin is loaded) |
 
 ### Registering in Claude Desktop
 
@@ -292,10 +307,9 @@ Add to `.cursor/mcp.json`:
 
 KnotSync connects to SQL databases in **strict read-only transaction mode** via a small connection pool (default max 4). Database credentials must be provided via environment variables (`url: env:VAR_NAME`) — never stored in plain text. Only tables and columns explicitly declared in `allow:` are exposed. Each session sets a statement timeout (default **5000ms**, override with `statementTimeoutMs`). Postgres sources may set `schema` (default **`public`**) for non-public business schemas such as `経理`.
 
-Paid opt-in engines (**SQL Server / Oracle / Access / IBM i**) live in
-[`packages/connector-sql-enterprise`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-sql-enterprise):
-list the plugin under `plugins:`, set `KNOT_SYNC_SQL_ENTERPRISE_LICENSE`, and use
-`type: mssql | oracle | access | as400` with the same `url: env:NAME` + `allow:` rules.
+Enterprise engines (**SQL Server / Oracle / Access / IBM i**) use the paid
+`connector-sql-enterprise` plugin (`type: mssql | oracle | access | as400`) with the same
+`url: env:NAME` + `allow:` rules — see the Paid plugins table above.
 
 ```yaml
 # knot-sync.config.yaml
@@ -357,13 +371,15 @@ KnotSync is structured as a clean, modular TypeScript monorepo managed by `pnpm`
 | [`packages/search-vector`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/search-vector) | Opt-in paid local embeddings + `search_similar` / `embed` |
 | [`packages/guard-llm`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/guard-llm) | Opt-in paid local-LLM enricher after rule-based PII/guard |
 | [`packages/extractor-office`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/extractor-office) | Document text & table extractor (`.xlsx`, `.docx`, `.pdf`, `.csv`, `.md`, `.txt`) |
+| [`packages/extractor-ocr`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/extractor-ocr) | Opt-in paid Docling OCR (scanned PDF/images via local Docker) |
+| [`packages/extractor-housen`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/extractor-housen) | Opt-in paid 方眼紙 / form-like Excel layout heuristics |
 | [`packages/cleaner-ja-vi`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/cleaner-ja-vi) | Text normalizer: NFKC, Wareki, ISO dates, TCVN3/VNI, token reduction |
 | [`packages/pii-basic`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/pii-basic) | Rule-based PII mask/hash/drop (CCCD, My Number, MST, bank, names, phones, emails, cards) |
 | [`packages/guard`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/guard) | Multi-lingual injection guard (phrases, controls/flood, Base64, markdown exfil) |
 | [`packages/store-sqlite`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/store-sqlite) | `node:sqlite` store with FTS5 trigram search |
 | [`packages/catalog`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/catalog) | Semantic Catalog YAML manager, dictionary resolver, Excel definition parser |
 | [`packages/ui`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/ui) | Bundled React catalog review UI (runs on loopback `127.0.0.1`) |
-| [`packages/mcp-server`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/mcp-server) | Official Model Context Protocol stdio server |
+| [`packages/mcp-server`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/mcp-server) | MCP server (stdio + optional HTTP) |
 | [`packages/report-html`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/report-html) | Self-contained, zero-dependency offline HTML scan report |
 | [`packages/cli`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/cli) | Unified CLI entrypoint (`knot-sync`) |
 
@@ -384,8 +400,8 @@ pnpm test
 pnpm scan:sample
 ```
 
-- **No native addons**: Uses Node.js 22 built-in `node:sqlite` so installs do not need a C/C++ toolchain.
-- **Minimal third-party surface**: Runtime deps stay limited (`yaml`, `@modelcontextprotocol/sdk`, `zod`, `exceljs`, `mammoth`, `unpdf`, `pg`, `mysql2`, plus React for the local UI).
+- **No native addons in the free CLI path**: Uses Node.js 22 built-in `node:sqlite`. Optional paid SQL drivers (`odbc` / `oracledb`) are not required for Postgres/MySQL.
+- **Minimal third-party surface**: Free runtime deps stay limited (`yaml`, `@modelcontextprotocol/sdk`, `zod`, `exceljs`, `mammoth`, `unpdf`, `pg`, `mysql2`, plus React for the local UI).
 
 ---
 

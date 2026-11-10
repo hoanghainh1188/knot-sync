@@ -7,10 +7,12 @@ PostgreSQL / MySQL…) và cung cấp cho AI agent qua
 ## Điều kiện
 
 - Node.js ≥ 22.13
-- Chạy **hoàn toàn trên máy của bạn** (không telemetry, không gọi mạng khi chạy)
+- Chạy **ưu tiên cục bộ** (không telemetry; free core không gọi mạng ra ngoài khi chạy)
+- Plugin trả phí (tuỳ chọn) có thể gọi **Ollama / Docker / OCR cục bộ** trên máy hoặc LAN
 - Nguồn dữ liệu chỉ **đọc**, không ghi đè / không sửa file hay database khách hàng
 - Chỉ số hiệu quả (token, độ chính xác tìm kiếm…) đo bằng `knot-sync bench` trên
   dữ liệu của bạn — không dùng số % marketing chung
+- Hiện tại: open-core v0.1–v0.3 và Paid #1–#7 đã xong. Tiếp theo: After v1.0 (write tools, có duyệt người). Chi tiết [docs/ROADMAP.md](../ROADMAP.md)
 
 ## Cài đặt
 
@@ -45,10 +47,15 @@ npx @hoanghainh/knot-sync@0.1.3 --version
 | `optimize` | FTS5 optimize + WAL checkpoint cho store |
 | `plugins` | Liệt kê plugin đã nạp |
 | `serve` | Chạy MCP server (stdio, hoặc `--http` + API key) |
+| `embed` | Nhúng vector hàng loạt (cần plugin `search-vector`) |
 
 `bench` đọc store sau `scan` / `run`. Tuỳ chọn chạy `knot-sync.bench.yaml` cạnh
 config (hoặc `--suite`). Không ghi vào thư mục/nguồn khách hàng. Kết quả phụ
 thuộc dữ liệu; không có “% tiết kiệm token” cố định trên trang marketing.
+
+Plugin trả phí (OCR / 方眼紙 / SQL doanh nghiệp / OAuth / catalog-llm /
+search-vector / guard-llm) bật bằng `plugins:` + biến môi trường license. Chi tiết
+tiếng Anh: bảng Paid plugins trong [README.md](../../README.md).
 
 ### Ngôn ngữ thông báo
 

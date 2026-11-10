@@ -7,10 +7,12 @@ AI エージェントに渡すためのツールです。
 ## 前提
 
 - Node.js 22.13 以上
-- **完全にローカル**で動作します（テレメトリなし・実行時の外向き通信なし）
+- **ローカル優先**で動作します（テレメトリなし。無料コアは実行時に外向き通信しません）
+- 有料プラグインを有効にすると、手元の Ollama / Docker / OCR など**ローカル推論**へ接続できます
 - データソースは**読み取り専用**です。ファイルやデータベースの内容を変更しません
 - 効果指標（トークン削減・検索精度など）は公開の平均値ではなく、手元の
   `knot-sync bench` で測ってください
+- 現状: open-core v0.1–v0.3 と Paid #1–#7 は完了。次は After v1.0（書き込みツール、人の承認付き）。詳細は [docs/ROADMAP.md](../ROADMAP.md)
 
 ## インストール
 
@@ -45,10 +47,15 @@ npx @hoanghainh/knot-sync@0.1.3 --version
 | `optimize` | ストアの FTS5 optimize と WAL チェックポイント |
 | `plugins` | 読み込み済みプラグインを表示 |
 | `serve` | MCP サーバー（stdio、または `--http` + API キー） |
+| `embed` | ベクトル埋め込み一括作成（`search-vector` プラグインが必要） |
 
 `bench` は `scan` / `run` 後のストアを読みます。任意で設定と同じ場所の
 `knot-sync.bench.yaml`（または `--suite`）を実行します。ソースへは書き込みません。
 結果はデータ依存です。マーケティング用の固定％は掲載しません。
+
+有料プラグイン（OCR / 方眼紙 / 企業 SQL / OAuth / catalog-llm / search-vector /
+guard-llm）は `plugins:` と各ライセンス環境変数で有効化します。英語の詳細は
+[README.md](../../README.md) の Paid plugins 表を参照。
 
 ### メッセージ言語
 
