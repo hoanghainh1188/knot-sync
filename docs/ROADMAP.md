@@ -170,8 +170,9 @@ npm provenance. **Shipped:** `@hoanghainh/knot-sync@0.1.1` on npm.
 
 Follow-up `improve-npm-package-page`: ship the product README +
 `repository`/`homepage` on the npm page (**`0.1.2`**). Production hardening
-track ships as **`0.1.3`** (`npx @hoanghainh/knot-sync@0.1.3 --version` after
-tag publish).
+track ships as **`0.1.3`**. Paid edition surface + enricher/`embed` hooks ship
+as **`0.2.0`** (`npx @hoanghainh/knot-sync@0.2.0 --version` after tag publish).
+
 
 ## v0.2 changes
 

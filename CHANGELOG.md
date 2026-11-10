@@ -2,6 +2,31 @@
 
 All notable changes to KnotSync are documented in this file.
 
+## 0.2.0 — 2026-11-11
+
+Open-core hooks for the shipped Paid edition surface, plus docs aligned with
+local-first wording. Paid packages remain private workspace plugins (license
+self-check); this npm release updates the free bundled CLI.
+
+### Added
+
+- Plugin `DocumentEnricher` extension point (runs after rule-based PII → guard)
+- CLI `embed` command and optional MCP `search_similar` when a vector plugin
+  is loaded
+- Config / init stubs for opt-in paid plugins (OCR, 方眼紙, enterprise SQL,
+  OAuth, catalog-llm, search-vector, guard-llm)
+
+### Changed
+
+- README (en) and ja/vi overviews: local-first (not air-gapped-only), Paid
+  plugins table, MCP HTTP / `search_similar`, roadmap status through Paid #7
+
+### Notes
+
+- Verify after publish: `npx @hoanghainh/knot-sync@0.2.0 --version`
+- Paid plugins are not published as separate npm packages in this release;
+  enable them from the monorepo via `plugins:` + license env vars
+
 ## 0.1.3 — 2026-11-10
 
 Production hardening (v0.3 open-core) bundled into the single CLI package.
