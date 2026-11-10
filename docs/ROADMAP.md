@@ -4,6 +4,11 @@ Positioning: **a semantic layer for legacy data.** Cleaning is preparation; the
 Semantic Catalog (business names, descriptions, valid values for cryptic fields
 like `TKSK_CD` or `ma_kh`) is the core value.
 
+**Current status (2026-11-11):** open-core **v0.1–v0.3** ✅ and Paid edition
+capabilities **#1–#7** ✅ are shipped in this repo (archived OpenSpec changes;
+no active `openspec/changes/` work). Next planned open-core item: **After v1.0**
+write tools / stored procedures (human approval). See the tables below.
+
 Pipeline (4 stages):
 
 1. **Ingest & clean** — extract, normalize JP/VN text, reduce tokens, mask PII, flag prompt injection
@@ -108,7 +113,8 @@ injection in document text with rules: instruction-like phrases in English, Japa
 Vietnamese ("ignore previous instructions", "以前の指示を無視", "bỏ qua hướng dẫn trước"…),
 zero-width and bidi control characters, hidden text (white or hidden cells/runs in Excel/Word
 when the extractor exposes it). Config `guard.mode`: flag, strip, block. Results saved per
-document (risk level + flagged spans). Paid edition will add model-based guardrails; out of scope.
+document (risk level + flagged spans). Model-based guardrails shipped later as paid
+`add-model-guardrails` / `packages/guard-llm` (out of scope for this free change).
 ```
 
 ### 6. add-html-scan-report
@@ -264,14 +270,14 @@ under sources. Distinct from server.audit_log. No telemetry / remote shipping. N
 | Version | Scope |
 |---|---|
 | v0.3 | Production hardening complete in open-core (see section above) ✅ |
-| Paid | Separate plugin packages (license checked by the plugin, never by core). Details below. |
+| Paid | Separate plugin packages (license checked by the plugin, never by core) ✅ #1–#7 below |
 | After v1.0 | Write tools / stored procedures, always with human approval |
 
-### Paid edition (planned capabilities)
+### Paid edition (shipped capabilities)
 
 Open-core stays Apache-2.0 and fully local. Paid work ships as **trusted plugins**
-that register through the existing plugin API. Each item below is a product
-capability, not yet an OpenSpec change name.
+that register through the existing plugin API. All seven capabilities below are
+implemented and archived; keep this table as the product inventory.
 
 | # | Capability | What it does | Why paid / deferred |
 |---|---|---|---|

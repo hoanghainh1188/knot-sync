@@ -5,7 +5,8 @@ legacy enterprise data (office files, scanned papers, old databases) into contex
 AI agents understand correctly, served over MCP. Free Apache-2.0 core in this repo.
 
 - Product constraints and per-artifact rules: `openspec/config.yaml` (read it first).
-- What to build next, in order: `docs/ROADMAP.md`.
+- What to build next, in order: `docs/ROADMAP.md` (open-core v0.1–v0.3 and Paid
+  #1–#7 are done; next is After v1.0 write tools unless a new change is proposed).
 - Current behavior contracts: `openspec/specs/`.
 
 ## Workflow (OpenSpec)
@@ -50,7 +51,7 @@ New packages: `packages/<name>`, npm name `@hoanghainh/knot-sync-<name>`, add to
   license (MIT / BSD / Apache / ISC only).
 - Tests live next to code as `src/*.test.ts` using `node:test` + `node:assert/strict`.
   Build test fixtures in code (e.g. write a real .xlsx in a temp dir) instead of committing binaries.
-- CLI output text is English for now (i18n is planned for v0.2). Errors must say what to do next.
+- CLI messages: en/ja/vi via `--lang` / `cli.locale` (`add-cli-i18n`). Errors must say what to do next.
 - Exit codes: 0 ok, 1 runtime/config error, 2 usage error or not-yet-available command.
 - `bin.ts` hides only Node's "SQLite is experimental" warning and handles EPIPE. Keep it that way.
 
