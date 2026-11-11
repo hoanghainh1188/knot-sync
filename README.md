@@ -223,8 +223,11 @@ Clients must send `Authorization: Bearer <KNOT_SYNC_API_KEY>`. The API key is **
 
 ### Paid plugins (opt-in)
 
-List package paths under config `plugins:` and set each plugin’s license env. Core never
-checks licenses. Defaults stay offline; these may talk to **local** Ollama/Docker/OCR only.
+Paid edition plugins are **not** separate npm packages on the registry. Only
+`@hoanghainh/knot-sync` is published. Enable Paid features from this monorepo by
+listing package paths under config `plugins:` and setting each plugin’s license
+environment variable. Core never checks licenses. Defaults stay offline; these
+may talk to **local** Ollama/Docker/OCR only.
 
 | Plugin | What you get | License env (default) |
 |---|---|---|
@@ -405,9 +408,29 @@ pnpm scan:sample
 
 ---
 
+## Public contract (toward 1.0)
+
+The latest published package is **`@hoanghainh/knot-sync@0.2.0`**. **1.0.0 is not
+published yet.** Customer sources remain read-only; write tools are planned only
+after 1.0 (with human approval).
+
+**Stable CLI commands:** `init`, `scan`, `run`, `describe`, `ui`, `bench`,
+`optimize`, `embed`, `plugins`, `serve` (plus global `--config`, `--lang`,
+`--help`, `--version`).
+
+**Stable MCP surface:** resources `knot://sources`,
+`knot://docs/{source}/{doc_id}`, `knot://db/{source}/{table}/schema` (SQL when
+configured); tools `search_documents`, `get_document`, `describe_table`,
+`query_table`. Optional `search_similar` appears only when the search-vector
+plugin is loaded.
+
+**Plugin host:** `apiVersion` **1**. After a future **1.0.0** release, breaking
+changes to this public surface require a **major** version bump; additive
+changes may ship in minor/patch releases.
+
 ## Roadmap
 
-Development follows the [OpenSpec](https://github.com/Fission-AI/OpenSpec) specification process. See [docs/ROADMAP.md](https://github.com/hoanghainh1188/knot-sync/blob/main/docs/ROADMAP.md) for status and milestones. Open-core **v0.1–v0.3** and Paid **#1–#7** are complete; next planned scope is **After v1.0** write tools (human approval).
+Development follows the [OpenSpec](https://github.com/Fission-AI/OpenSpec) specification process. See [docs/ROADMAP.md](https://github.com/hoanghainh1188/knot-sync/blob/main/docs/ROADMAP.md) for status and milestones. Open-core **v0.1–v0.3** and Paid **#1–#7** are complete; `prepare-v1-public-contract` is archived; next planned feature scope is **After v1.0** write tools (human approval).
 
 - [x] **v0.1**: Core pipeline, Office extractors, JA/VI cleaners, PII masking, Injection guard, MCP Server, SQL connectors, Semantic Catalog.
 - [x] **v0.2**: CLI i18n (EN/JA/VI), Catalog Review UI, Token/accuracy Benchmarking suite.

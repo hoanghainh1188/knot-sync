@@ -54,7 +54,9 @@ npx @hoanghainh/knot-sync@0.2.0 --version
 結果はデータ依存です。マーケティング用の固定％は掲載しません。
 
 有料プラグイン（OCR / 方眼紙 / 企業 SQL / OAuth / catalog-llm / search-vector /
-guard-llm）は `plugins:` と各ライセンス環境変数で有効化します。英語の詳細は
+guard-llm）は **npm 上の別パッケージとしては公開されません**。モノレポの
+パッケージパスを設定の `plugins:` に列挙し、各ライセンス環境変数を設定して
+有効化します（コアはライセンスを検査しません）。英語の詳細は
 [README.md](../../README.md) の Paid plugins 表を参照。
 
 ### メッセージ言語

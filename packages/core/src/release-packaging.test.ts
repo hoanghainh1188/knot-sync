@@ -55,16 +55,22 @@ test("CHANGELOG 0.1.0 mentions describe / Semantic Catalog", () => {
   assert.match(text, /Semantic Catalog|describe/i);
 });
 
-test("docs/ja and docs/vi cover read-only and commands", () => {
+test("docs/ja and docs/vi cover read-only, commands, and Paid not on npm", () => {
   const ja = readFileSync(join(repoRoot, "docs/ja/README.md"), "utf8");
   assert.match(ja, /読み取り専用/);
   assert.match(ja, /serve/);
   assert.match(ja, /describe/);
+  assert.match(ja, /npm 上の別パッケージとしては公開されません/);
+  assert.match(ja, /plugins:/);
+  assert.match(ja, /ライセンス環境変数/);
 
   const vi = readFileSync(join(repoRoot, "docs/vi/README.md"), "utf8");
   assert.match(vi, /không ghi đè|không sửa/i);
   assert.match(vi, /scan/);
   assert.match(vi, /serve/);
+  assert.match(vi, /không phải gói npm riêng/i);
+  assert.match(vi, /plugins:/);
+  assert.match(vi, /biến môi trường license/i);
 });
 
 test("CI workflow matrix includes Node 22/24 and three OSes", () => {
@@ -90,6 +96,26 @@ test("root README links ja/vi docs and documents npx verification", () => {
   assert.match(readme, /docs\/vi/);
   assert.match(readme, /npx @hoanghainh\/knot-sync/);
   assert.match(readme, /single npm package|one npm package|only package/i);
+});
+
+test("product README documents public contract and Paid not on npm", () => {
+  const readme = readFileSync(join(repoRoot, "README.md"), "utf8");
+  assert.match(readme, /## Public contract \(toward 1\.0\)/);
+  assert.match(readme, /1\.0\.0 is not\s+published yet/i);
+  assert.match(readme, /apiVersion/);
+  assert.match(readme, /are \*\*not\*\* separate npm packages/);
+  assert.match(readme, /Core never checks licenses/i);
+
+  const cliReadme = readFileSync(join(packagesDir, "cli", "README.md"), "utf8");
+  assert.match(cliReadme, /## Public contract \(toward 1\.0\)/);
+  assert.match(cliReadme, /are \*\*not\*\* separate npm packages/i);
+});
+
+test("ROADMAP status mentions public-contract prep", () => {
+  const roadmap = readFileSync(join(repoRoot, "docs/ROADMAP.md"), "utf8");
+  assert.match(roadmap, /prepare-v1-public-contract/);
+  assert.match(roadmap, /Paid npm|npm clarity/i);
+  assert.match(roadmap, /do not.*tag.*1\.0\.0|1\.0\.0.*pilot/i);
 });
 
 test("ui package keeps static assets without CDN refs", () => {
