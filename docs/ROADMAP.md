@@ -290,7 +290,7 @@ Target: Close data lifecycle and analytical gaps before running customer pilots,
 |---|---|:---:|---|
 | 1 | `prune-deleted-documents` | P0 | ✅ done |
 | 2 | `enhance-sql-query-analytics` | P0 | ✅ done |
-| 3 | `slim-document-store` | P1 | ⏳ planned |
+| 3 | `slim-document-store` | P1 | ✅ done |
 | 4 | `add-periodic-sync` | P1 | ⏳ planned |
 
 ### 1. prune-deleted-documents (P0)

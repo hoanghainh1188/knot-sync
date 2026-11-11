@@ -32,10 +32,13 @@ function doc(content: string, tables: Document["tables"] = []): Document {
   };
 }
 
-test("NFKC full-width digits", () => {
+test("NFKC full-width digits omits originalContent by default", () => {
   const out = cleanDocument(doc("年２０２４"), DEFAULT_CLEANING_CONFIG);
   assert.match(out.content, /2024/);
-  assert.equal(out.metadata.originalContent, "年２０２４");
+  assert.equal(out.metadata.originalContent, undefined);
+  assert.equal(out.metadata.originalTables, undefined);
+  assert.equal(typeof out.metadata.tokensBefore, "number");
+  assert.equal(typeof out.metadata.tokensAfter, "number");
 });
 
 test("wareki Reiwa and gannen", () => {
@@ -142,7 +145,7 @@ test("token reduction collapses whitespace and empty rows", () => {
   );
 });
 
-test("all steps off keeps content identity", () => {
+test("all steps off keeps content identity and omits originals unless keepOriginalText is true", () => {
   const input = "令和5年  ２０２４  and TCVN";
   const out = cleanDocument(doc(input), {
     nfkc: false,
@@ -152,8 +155,57 @@ test("all steps off keeps content identity", () => {
     tokenReduce: false,
   });
   assert.equal(out.content, input);
-  assert.equal(out.metadata.originalContent, input);
+  assert.equal(out.metadata.originalContent, undefined);
   assert.equal(estimateTokens("abcd"), 1);
+
+  const retained = cleanDocument(doc(input), {
+    nfkc: false,
+    wareki: false,
+    datesIso: false,
+    legacyVietnamese: false,
+    tokenReduce: false,
+    keepOriginalText: true,
+  });
+  assert.equal(retained.metadata.originalContent, input);
+});
+
+test("default keepOriginalText=false omits originalContent/originalTables and strips stale copies", () => {
+  const tcvnCell = encodeTcvn3ForTest("Hà Nội đã có bà và các ả ạ");
+  const inputDoc: Document = {
+    ...doc("契約 令和5年4月1日 金額２０２４円", [
+      { headers: ["Ngày", "Giá trị"], rows: [[tcvnCell, "２０２４"]] },
+    ]),
+    metadata: {
+      originalContent: "stale original",
+      originalTables: "[{\"headers\":[\"stale\"],\"rows\":[]}]",
+    },
+  };
+  const out = cleanDocument(inputDoc, DEFAULT_CLEANING_CONFIG);
+  assert.match(out.content, /2023-04-01/);
+  assert.match(out.content, /2024/);
+  assert.equal(out.tables[0]?.rows[0]?.[0], "Hà Nội đã có bà và các ả ạ");
+  assert.equal(out.metadata.originalContent, undefined);
+  assert.equal(out.metadata.originalTables, undefined);
+  assert.equal("originalContent" in out.metadata, false);
+  assert.equal("originalTables" in out.metadata, false);
+  assert.equal(typeof out.metadata.tokensBefore, "number");
+  assert.equal(typeof out.metadata.tokensAfter, "number");
+});
+
+test("keepOriginalText=true retains originalContent and modified originalTables", () => {
+  const input = "契約 令和5年4月1日 金額２０２４円";
+  const tables: Document["tables"] = [
+    { headers: ["Niên hiệu", "Số tiền"], rows: [["令和5年4月1日", "２０２４"]] },
+  ];
+  const out = cleanDocument(doc(input, tables), {
+    ...DEFAULT_CLEANING_CONFIG,
+    keepOriginalText: true,
+  });
+  assert.match(out.content, /2023-04-01/);
+  assert.equal(out.metadata.originalContent, input);
+  assert.equal(out.metadata.originalTables, JSON.stringify(tables));
+  assert.equal(typeof out.metadata.tokensBefore, "number");
+  assert.equal(typeof out.metadata.tokensAfter, "number");
 });
 
 test("createJaViCleaner exposes id", async () => {
@@ -161,4 +213,5 @@ test("createJaViCleaner exposes id", async () => {
   assert.equal(cleaner.id, "cleaner-ja-vi");
   const cleaned = await cleaner.clean(doc("２０２４"));
   assert.match(cleaned.content, /2024/);
+  assert.equal(cleaned.metadata.originalContent, undefined);
 });

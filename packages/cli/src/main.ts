@@ -641,7 +641,8 @@ async function cmdRun(
               ...restMeta,
               status: "error",
               errorMessage: message,
-              ...(host.piiRules.size === 0
+              ...(host.piiRules.size === 0 &&
+              structural.cleaning.keepOriginalText === true
                 ? {
                     originalContent:
                       result.document.metadata.originalContent ??

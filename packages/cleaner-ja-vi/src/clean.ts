@@ -75,11 +75,17 @@ export function cleanDocument(document: Document, settings: CleaningConfig): Doc
 
   const tokensAfter = estimateTokens(flattenDocumentText(content, tables));
   const metadata: Document["metadata"] = { ...document.metadata };
-  if (metadata.originalContent === undefined) {
-    metadata.originalContent = originalContent;
-  }
-  if (!tablesEqual(originalTables, tables) && metadata.originalTables === undefined) {
-    metadata.originalTables = JSON.stringify(originalTables);
+  if (settings.keepOriginalText === true) {
+    if (metadata.originalContent === undefined) {
+      metadata.originalContent = originalContent;
+    }
+    if (!tablesEqual(originalTables, tables) && metadata.originalTables === undefined) {
+      metadata.originalTables = JSON.stringify(originalTables);
+    }
+  } else {
+    // Strip any stale pre-clean copies inherited from extractors or earlier passes.
+    delete metadata.originalContent;
+    delete metadata.originalTables;
   }
   metadata.tokensBefore = tokensBefore;
   metadata.tokensAfter = tokensAfter;
