@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { createServer } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { main, type Io } from "./main.js";
@@ -1051,6 +1052,344 @@ test("run prunes deleted JP/VI files, handles empty scanned folder, and logs run
     assert.equal(pruneEvents[0]?.count, 1);
     assert.equal(pruneEvents[1]?.count, 1);
   } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+async function reserveFreePort(): Promise<number> {
+  return await new Promise<number>((resolve, reject) => {
+    const srv = createServer();
+    srv.once("error", reject);
+    srv.listen(0, "127.0.0.1", () => {
+      const addr = srv.address();
+      const port = typeof addr === "object" && addr ? addr.port : 0;
+      srv.close((err) => (err ? reject(err) : resolve(port)));
+    });
+  });
+}
+
+async function waitUntil(
+  predicate: () => Promise<boolean> | boolean,
+  timeoutMs = 5000,
+  stepMs = 25,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await new Promise((r) => setTimeout(r, stepMs));
+  }
+  throw new Error(`Timed out waiting for condition after ${timeoutMs}ms`);
+}
+
+async function initMcpHttpSession(port: number, apiKey: string): Promise<string> {
+  const res = await fetch(`http://127.0.0.1:${port}/mcp`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+      authorization: `Bearer ${apiKey}`,
+      host: "127.0.0.1",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "cli-e2e", version: "1.0" },
+      },
+    }),
+  });
+  assert.equal(res.status, 200);
+  const sessionId = res.headers.get("mcp-session-id");
+  assert.ok(sessionId);
+  return sessionId;
+}
+
+async function callMcpHttpTool(
+  port: number,
+  apiKey: string,
+  sessionId: string,
+  id: number,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  const res = await fetch(`http://127.0.0.1:${port}/mcp`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+      authorization: `Bearer ${apiKey}`,
+      host: "127.0.0.1",
+      "mcp-session-id": sessionId,
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id,
+      method: "tools/call",
+      params: { name, arguments: args },
+    }),
+  });
+  assert.equal(res.status, 200);
+  return await res.text();
+}
+
+test("serve help mentions --sync-interval and invalid values fail cleanly across locales", async () => {
+  for (const lang of ["en", "ja", "vi"] as const) {
+    const helpIo = capture();
+    assert.equal(await main(["--help", "--lang", lang], helpIo), 0);
+    assert.match(helpIo.stdout.join("\n"), /--sync-interval/);
+  }
+
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-sync-bad-"));
+  try {
+    const config = join(root, "cfg.yaml");
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], capture()), 0);
+
+    for (const [lang, pattern] of [
+      ["en", /--sync-interval.*positive/i],
+      ["ja", /--sync-interval.*0 より大きい/],
+      ["vi", /--sync-interval.*không hợp lệ/i],
+    ] as const) {
+      for (const bad of ["0", "abc", "NaN", ""]) {
+        const io = capture();
+        assert.equal(
+          await main(["serve", "-c", config, "--sync-interval", bad, "--lang", lang], io),
+          1,
+        );
+        assert.match(io.stderr.join("\n"), pattern);
+      }
+      const negIo = capture();
+      assert.equal(
+        await main(["serve", "-c", config, "--sync-interval=-5", "--lang", lang], negIo),
+        1,
+      );
+      assert.match(negIo.stderr.join("\n"), pattern);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("serve --http --sync-interval indexes added VI/JA files, prunes deletions, and logs sync telemetry without PII", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-periodic-"));
+  const share = join(root, "share");
+  await mkdir(share, { recursive: true });
+  const config = join(root, "cfg.yaml");
+  const logPath = join(root, "ops", "system.jsonl");
+  const storePath = join(root, ".data", "store.sqlite");
+  await writeFile(
+    config,
+    [
+      "sources:",
+      "  - id: docs",
+      "    type: fs",
+      "    path: ./share",
+      "    extensions: [.txt]",
+      "store:",
+      "  path: ./.data/store.sqlite",
+      "server:",
+      "  sync_interval_seconds: 999",
+      "logging:",
+      "  path: ./ops/system.jsonl",
+      "  level: info",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  const prevKey = process.env.KNOT_SYNC_API_KEY;
+  process.env.KNOT_SYNC_API_KEY = "periodic-e2e-secret";
+  const port = await reserveFreePort();
+  const controller = new AbortController();
+  const io: Io & { stdout: string[]; stderr: string[] } = {
+    ...capture(),
+    signal: controller.signal,
+  };
+
+  try {
+    const servePromise = main(
+      ["serve", "-c", config, "--http", "--port", String(port), "--sync-interval", "0.08"],
+      io,
+    );
+
+    await waitUntil(() => io.stderr.some((line) => line.includes("/mcp")));
+    assert.match(io.stderr.join("\n"), /0\.08s/);
+
+    const sessionId = await initMcpHttpSession(port, "periodic-e2e-secret");
+    const emptySearch = await callMcpHttpTool(port, "periodic-e2e-secret", sessionId, 2, "search_documents", {
+      query: "契約更新案",
+    });
+    assert.ok(!emptySearch.includes("契約更新案"));
+
+    // Add Japanese and Vietnamese documents while server is running.
+    await writeFile(join(share, "契約.txt"), "令和7年度 契約更新案 B社\n", "utf8");
+    await writeFile(
+      join(share, "hoadon.txt"),
+      "Hợp đồng mới Trần Văn Anh SĐT 0912345678\n",
+      "utf8",
+    );
+
+    await waitUntil(async () => {
+      const res = await callMcpHttpTool(port, "periodic-e2e-secret", sessionId, 3, "search_documents", {
+        query: "契約更新案",
+      });
+      return res.includes("契約.txt");
+    });
+
+    const viSearch = await callMcpHttpTool(port, "periodic-e2e-secret", sessionId, 4, "search_documents", {
+      query: "Hợp đồng mới",
+    });
+    assert.match(viSearch, /hoadon\.txt/);
+
+    // Remove the Japanese file and confirm background periodic sync prunes it.
+    await rm(join(share, "契約.txt"));
+    await waitUntil(async () => {
+      const res = await callMcpHttpTool(port, "periodic-e2e-secret", sessionId, 5, "search_documents", {
+        query: "契約更新案",
+      });
+      return !res.includes("契約.txt");
+    });
+
+    controller.abort();
+    assert.equal(await servePromise, 0);
+    assert.equal(io.stdout.length, 0, "HTTP server must not emit unexpected stdout");
+
+    const { Store } = await import("@hoanghainh/knot-sync-store-sqlite");
+    const store = new Store(storePath);
+    assert.equal(store.documentCount(), 1);
+    store.close();
+
+    const logText = await readFile(logPath, "utf8");
+    assert.ok(!logText.includes("契約更新案"), "system.jsonl must not contain document content");
+    assert.ok(!logText.includes("0912345678"), "system.jsonl must not contain phone PII");
+
+    const records = logText
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as {
+        event: string;
+        command?: string;
+        scanned?: number;
+        extracted?: number;
+        skipped?: number;
+        pruned?: number;
+        failed?: number;
+        durationMs?: number;
+      });
+    assert.ok(records.some((r) => r.event === "serve.listen"));
+    assert.ok(records.some((r) => r.event === "serve.shutdown"));
+    assert.ok(records.filter((r) => r.event === "sync.start").length >= 2);
+    const ends = records.filter((r) => r.event === "sync.end");
+    assert.ok(ends.length >= 2);
+    assert.ok(ends.some((e) => (e.extracted ?? 0) >= 2));
+    assert.ok(ends.some((e) => (e.pruned ?? 0) >= 1));
+    assert.ok(typeof ends[0]?.durationMs === "number");
+  } finally {
+    controller.abort();
+    if (prevKey === undefined) delete process.env.KNOT_SYNC_API_KEY;
+    else process.env.KNOT_SYNC_API_KEY = prevKey;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("serve --http --sync-interval logs sync.error and stays healthy when a cycle fails", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-periodic-err-"));
+  const pluginFile = join(root, "failing-connector.mjs");
+  const config = join(root, "cfg.yaml");
+  const logPath = join(root, "ops", "system.jsonl");
+
+  await writeFile(
+    pluginFile,
+    [
+      "export default {",
+      '  name: "failing-connector",',
+      '  version: "0.1.0",',
+      "  apiVersion: 1,",
+      "  register(api) {",
+      "    api.registerConnector({",
+      '      id: "failing",',
+      "      parseSource(raw) {",
+      '        return { id: String(raw.id ?? "bad"), type: "failing" };',
+      "      },",
+      "      async *scan() {",
+      '        throw new Error("simulated source offline");',
+      "      },",
+      "    });",
+      "  },",
+      "};",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  await writeFile(
+    config,
+    [
+      "plugins:",
+      "  - ./failing-connector.mjs",
+      "sources:",
+      "  - id: bad",
+      "    type: failing",
+      "store:",
+      "  path: ./.data/store.sqlite",
+      "logging:",
+      "  path: ./ops/system.jsonl",
+      "  level: info",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  const prevKey = process.env.KNOT_SYNC_API_KEY;
+  process.env.KNOT_SYNC_API_KEY = "periodic-err-secret";
+  const port = await reserveFreePort();
+  const controller = new AbortController();
+  const io: Io & { stdout: string[]; stderr: string[] } = {
+    ...capture(),
+    signal: controller.signal,
+  };
+
+  try {
+    const servePromise = main(
+      ["serve", "-c", config, "--http", "--port", String(port), "--sync-interval", "0.05"],
+      io,
+    );
+
+    await waitUntil(() => io.stderr.some((line) => line.includes("/mcp")));
+    await waitUntil(async () => {
+      try {
+        const text = await readFile(logPath, "utf8");
+        return text.includes('"event":"sync.error"');
+      } catch {
+        return false;
+      }
+    });
+
+    // Server remains responsive after sync.error.
+    const sessionId = await initMcpHttpSession(port, "periodic-err-secret");
+    const searchRes = await callMcpHttpTool(port, "periodic-err-secret", sessionId, 2, "search_documents", {
+      query: "anything",
+    });
+    assert.ok(searchRes.length > 0);
+
+    controller.abort();
+    assert.equal(await servePromise, 0);
+
+    const logText = await readFile(logPath, "utf8");
+    const errRec = logText
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { event: string; level?: string; error?: string; durationMs?: number })
+      .find((r) => r.event === "sync.error");
+    assert.ok(errRec);
+    assert.equal(errRec.level, "error");
+    assert.match(errRec.error ?? "", /simulated source offline/);
+    assert.equal(typeof errRec.durationMs, "number");
+  } finally {
+    controller.abort();
+    if (prevKey === undefined) delete process.env.KNOT_SYNC_API_KEY;
+    else process.env.KNOT_SYNC_API_KEY = prevKey;
     await rm(root, { recursive: true, force: true });
   }
 });

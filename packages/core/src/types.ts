@@ -212,6 +212,8 @@ export interface GuardConfig {
 export interface ServerConfig {
   /** Absolute path to the JSONL audit log after config loading. */
   auditLog: string;
+  /** Optional periodic scan+run interval in seconds for `knot-sync serve`. */
+  syncIntervalSeconds?: number;
 }
 
 /** Operational system log level (`logging.level`). */

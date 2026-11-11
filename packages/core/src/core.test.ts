@@ -277,6 +277,39 @@ test("SystemLogger filters by level and writes JSONL without content field", asy
   }
 });
 
+test("SystemLogger serializes periodic sync summary counters when provided", async () => {
+  const root = await mkdtemp(join(tmpdir(), "knot-syslog-sync-"));
+  try {
+    const logPath = join(root, "system.jsonl");
+    const logger = createSystemLogger({
+      path: logPath,
+      level: "info",
+      sourcePaths: [join(root, "share")],
+    });
+    await logger.append({
+      level: "info",
+      event: "sync.end",
+      command: "serve",
+      durationMs: 42,
+      scanned: 10,
+      extracted: 3,
+      skipped: 7,
+      pruned: 1,
+      failed: 0,
+    });
+    const row = JSON.parse((await readFile(logPath, "utf8")).trim()) as Record<string, unknown>;
+    assert.equal(row.event, "sync.end");
+    assert.equal(row.durationMs, 42);
+    assert.equal(row.scanned, 10);
+    assert.equal(row.extracted, 3);
+    assert.equal(row.skipped, 7);
+    assert.equal(row.pruned, 1);
+    assert.equal(row.failed, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("catalog defaults path beside config when omitted", () => {
   const structural = parseConfig("sources:\n  - id: a\n    type: fs\n    path: /x\n", "/work");
   assert.equal(structural.catalog.path, resolve("/work", "knot-sync.catalog.yaml"));
@@ -315,6 +348,39 @@ test("server rejects unknown keys", () => {
     () => parseServerConfig({ port: 8080 }, "/default.jsonl", "/base"),
     /Unknown key "port".*server/,
   );
+});
+
+test("server parses valid sync_interval_seconds and rejects invalid values", () => {
+  const parsed = parseServerConfig(
+    { audit_log: "./audit.jsonl", sync_interval_seconds: 120 },
+    "/default.jsonl",
+    "/base",
+  );
+  assert.equal(parsed.auditLog, resolve("/base", "./audit.jsonl"));
+  assert.equal(parsed.syncIntervalSeconds, 120);
+
+  const fractional = parseServerConfig(
+    { sync_interval_seconds: 0.5 },
+    "/default.jsonl",
+    "/base",
+  );
+  assert.equal(fractional.syncIntervalSeconds, 0.5);
+
+  const omitted = parseServerConfig({}, "/default.jsonl", "/base");
+  assert.equal(omitted.syncIntervalSeconds, undefined);
+
+  for (const bad of [0, -5, Number.NaN, Number.POSITIVE_INFINITY, "60", true, null]) {
+    assert.throws(
+      () => parseServerConfig({ sync_interval_seconds: bad }, "/default.jsonl", "/base"),
+      /server\.sync_interval_seconds.*positive number/,
+    );
+  }
+
+  const full = parseConfig(
+    "sources:\n  - id: a\n    type: fs\n    path: /x\nserver:\n  sync_interval_seconds: 300\n",
+    "/work",
+  );
+  assert.equal(full.server.syncIntervalSeconds, 300);
 });
 
 test("cli defaults to empty when omitted", () => {

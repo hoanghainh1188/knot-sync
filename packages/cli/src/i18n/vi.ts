@@ -50,10 +50,11 @@ Tùy chọn ui:
   --port <number>       Cổng loopback (mặc định: 8787)
 
 Tùy chọn serve:
-  --http                Phục vụ MCP qua HTTP (Streamable HTTP tại /mcp)
-  --port <number>       Cổng HTTP (mặc định: 3000; ui cũng dùng)
-  --host <address>      Địa chỉ bind HTTP (mặc định: 127.0.0.1)
-  Env KNOT_SYNC_API_KEY Bắt buộc khi dùng --http (Bearer token dùng chung)
+  --http                   Phục vụ MCP qua HTTP (Streamable HTTP tại /mcp)
+  --port <number>          Cổng HTTP (mặc định: 3000; ui cũng dùng)
+  --host <address>         Địa chỉ bind HTTP (mặc định: 127.0.0.1)
+  --sync-interval <giây>   Tự động scan+sync định kỳ nền (hoặc server.sync_interval_seconds)
+  Env KNOT_SYNC_API_KEY    Bắt buộc khi dùng --http (Bearer token dùng chung)
 
 plugins:
   Plugin chạy in-process với toàn quyền. Chỉ cài plugin bạn tin tưởng.
@@ -111,7 +112,10 @@ plugins:
     "KnotSync MCP server tại http://{host}:{port}/mcp (Bearer). Store: {store}. Audit: {audit}.",
   "serve.invalidPort":
     'Giá trị --port "{value}" không hợp lệ. Dùng số nguyên từ 1 đến 65535.',
+  "serve.invalidSyncInterval":
+    'Giá trị --sync-interval "{value}" không hợp lệ. Dùng số giây dương.',
   "serve.catalogSuffix": " Catalog: {path}.",
+  "serve.syncSuffix": " Đồng bộ định kỳ: mỗi {seconds} giây.",
   "describe.noSql":
     'Không có nguồn postgres/mysql. Thêm nguồn SQL kèm danh sách "allow", rồi chạy lại describe.',
   "describe.moreWarnings": "…và {n} cảnh báo bỏ qua sample nữa",
