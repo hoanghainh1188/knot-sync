@@ -6,11 +6,11 @@ like `TKSK_CD` or `ma_kh`) is the core value.
 
 **Current status (2026-11-11):** open-core **v0.1–v0.3** ✅ and Paid edition
 capabilities **#1–#7** ✅ are shipped in this repo. Docs prep
-`prepare-v1-public-contract` and `improve-onboarding-and-demo` are archived ✅
-(**do not** tag `1.0.0` until a real pilot). Next planned tracks in order:
-**v0.4 (Pilot Readiness & Data Hygiene)** → **v1.0 (Commercialization &
-Operator Governance)** → **v1.1+ (Safe Write Tools & Connectors)**. See the
-tables below.
+`prepare-v1-public-contract` (1.0 public surface + Paid npm clarity; **do not**
+tag `1.0.0` until a real pilot) and `improve-onboarding-and-demo` are archived
+✅. Next planned tracks in order: **v0.4 (Pilot Readiness & Data Hygiene)** →
+**v1.0 (Commercialization & Operator Governance)** → **v1.1+ (Safe Write Tools
+& Connectors)**. See the tables below.
 
 Pipeline (4 stages):
 
