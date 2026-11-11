@@ -6,12 +6,11 @@ like `TKSK_CD` or `ma_kh`) is the core value.
 
 **Current status (2026-11-11):** open-core **v0.1–v0.3** ✅ and Paid edition
 capabilities **#1–#7** ✅ are shipped in this repo. Docs prep
-`prepare-v1-public-contract` is archived (1.0 public surface + Paid npm
-clarity; **do not** tag `1.0.0` until a real pilot), and
-`improve-onboarding-and-demo` adds system-context docs, runnable JA/VI demo
-data (`pnpm demo:prepare`), workflow-grouped CLI help/hints, and the UI context
-banner. Next planned feature scope: **After v1.0** write tools / stored
-procedures (human approval). See the tables below.
+`prepare-v1-public-contract` and `improve-onboarding-and-demo` are archived ✅
+(**do not** tag `1.0.0` until a real pilot). Next planned tracks in order:
+**v0.4 (Pilot Readiness & Data Hygiene)** → **v1.0 (Commercialization &
+Operator Governance)** → **v1.1+ (Safe Write Tools & Connectors)**. See the
+tables below.
 
 Pipeline (4 stages):
 
@@ -276,7 +275,87 @@ under sources. Distinct from server.audit_log. No telemetry / remote shipping. N
 |---|---|
 | v0.3 | Production hardening complete in open-core (see section above) ✅ |
 | Paid | Separate plugin packages (license checked by the plugin, never by core) ✅ #1–#7 below |
-| After v1.0 | Write tools / stored procedures, always with human approval |
+| Onboarding | `prepare-v1-public-contract` ✅ + `improve-onboarding-and-demo` ✅ |
+| v0.4 | Pilot readiness & data hygiene (prune deleted docs, SQL sort/aggregates, slim store, periodic sync) |
+| v1.0 | Commercialization & governance (Ed25519 offline licensing, UI document explorer, `.xls`/`.doc`, `1.0.0` release) |
+| v1.1+ (After v1.0) | Write tools / stored procedures (always with human approval) & enterprise SaaS connectors |
+
+---
+
+## v0.4 — Pilot Readiness & Data Hygiene
+
+Target: Close data lifecycle and analytical gaps before running customer pilots, while keeping the 1.0 public CLI/MCP contract backward-compatible (additive only).
+
+| # | Change | Priority | Status |
+|---|---|:---:|---|
+| 1 | `prune-deleted-documents` | P0 | ⏳ planned |
+| 2 | `enhance-sql-query-analytics` | P0 | ⏳ planned |
+| 3 | `slim-document-store` | P1 | ⏳ planned |
+| 4 | `add-periodic-sync` | P1 | ⏳ planned |
+
+### 1. prune-deleted-documents (P0)
+
+```
+/opsx:propose prune-deleted-documents: Prune stale documents from the local SQLite store (and vector embeddings when present) during `knot-sync run` when their source files are no longer present in the latest `scan` inventory for that source. Keep customer sources strictly read-only. Report the number of pruned documents in `run` output and system logs (`en`/`ja`/`vi`). No new dependencies.
+```
+
+### 2. enhance-sql-query-analytics (P0)
+
+```
+/opsx:propose enhance-sql-query-analytics: Add additive, allow-listed `orderBy` (`column`, `dir: asc|desc`) and safe aggregation support (`COUNT`, `SUM`, `AVG`, `MIN`, `MAX` with optional `GROUP BY` on allow-listed columns) to `query_table` in `packages/connector-sql`. Resolve both physical and reviewed Semantic Catalog business labels (JA/VI/EN) in `orderBy` and `groupBy` just like `filters`. Keep read-only transactions, parameterized queries, and statement timeouts enforced. No new dependencies.
+```
+
+### 3. slim-document-store (P1)
+
+```
+/opsx:propose slim-document-store: Add `cleaning.keepOriginalText` (default `false`) so `cleaner-ja-vi` and `store-sqlite` do not persist full `metadata.originalContent` copies by default, cutting SQLite store size roughly in half while keeping `tokensBefore`, `tokensAfter`, and cleaning step metadata for `knot-sync bench`. Preserve opt-in `keepOriginalText: true` (still PII-masked) when operators want full before/after text in metadata. No new dependencies.
+```
+
+### 4. add-periodic-sync (P1)
+
+```
+/opsx:propose add-periodic-sync: Add optional background sync interval (`--sync-interval <seconds>` or config `server.sync_interval_seconds`) to `knot-sync serve` so shared LAN deployments automatically run incremental `scan` + `run` + prune without an external cron job. Log each background sync cycle to `system.jsonl` without interrupting active MCP requests. No new dependencies.
+```
+
+---
+
+## v1.0 — Commercialization & Operator Governance
+
+Target: Production-grade offline licensing for Paid plugins, read-only document/issue inspection in the local UI for PMs/IT admins, legacy binary Office support, and tagging `@hoanghainh/knot-sync@1.0.0` after pilot verification.
+
+| # | Change | Priority | Status |
+|---|---|:---:|---|
+| 1 | `cryptographic-plugin-licensing` | P1 (Paid) | ⏳ planned |
+| 2 | `expand-ui-document-explorer` | P2 | ⏳ planned |
+| 3 | `legacy-xls-doc-conversion` | P2 | ⏳ planned |
+| 4 | `release-v1-0-0` | P1 | ⏳ after pilot |
+
+### 1. cryptographic-plugin-licensing (Paid P1)
+
+```
+/opsx:propose cryptographic-plugin-licensing: Upgrade Paid plugins (#1–#7) from non-empty string checks to offline Ed25519 signed license tokens verified with Node.js built-in `node:crypto` (validating licensee, allowed plugin IDs, and expiration timestamp `exp`). Keep the core package 100% license-unaware, preserve test sentinels for unit tests, and add a local keygen/signing script plus distributable Paid plugin bundle script. No new third-party dependencies.
+```
+
+### 2. expand-ui-document-explorer (P2)
+
+```
+/opsx:propose expand-ui-document-explorer: Add a read-only "Documents & Health" tab in `packages/ui` (`knot-sync ui`, loopback-only, zero CDN) so PMs and IT admins can browse extracted document titles, PII/guard badges, scan/run issues, and sanitized text snippets alongside the Semantic Catalog review screen (`en`/`ja`/`vi`). Never expose unmasked PII or write to customer sources.
+```
+
+### 3. legacy-xls-doc-conversion (P2)
+
+```
+/opsx:propose legacy-xls-doc-conversion: Support legacy binary `.xls` and `.doc` files common in Japanese and Vietnamese enterprises—either via a permissive-licensed pure-JS parser or an opt-in local conversion step—feeding extracted text/tables through the standard JA/VI cleaner, PII masker, and injection guard.
+```
+
+---
+
+## v1.1+ (After v1.0) — Safe Write Tools & Enterprise Connectors
+
+| # | Change | Scope | Status |
+|---|---|---|---|
+| 1 | `human-approved-write-tools` | Opt-in MCP action/stored-procedure tools requiring a 2-step dry-run + explicit human approval token in UI/CLI and full JSONL audit logging | ⏳ planned (After v1.0) |
+| 2 | `enterprise-saas-connectors` | Read-only connectors for regional enterprise tools (Kintone, Backlog, SharePoint / OneDrive / Google Drive folders) feeding the same local JA/VI + PII + Guard pipeline | ⏳ planned (After v1.0) |
 
 ### Paid edition (shipped capabilities)
 
