@@ -8,17 +8,24 @@ export const ja: MessageCatalog = {
 使い方:
   knot-sync <command> [options]
 
-コマンド:
-  init      カレントフォルダに設定ファイルを作成
-  scan      ソースを棚卸し（種類・サイズ・重複・古いファイル）
-  run       直近の scan 結果からテキスト/表を抽出してドキュメントストアへ
-  describe  SQL ソース向け knot-sync.catalog.yaml を生成/更新
-  ui        ローカルのカタログレビュー UI を開く（127.0.0.1 のみ）
-  bench     ローカルストアでトークン削減とスイート精度を計測
-  optimize  FTS5 を最適化しストアの WAL をチェックポイント（アイドル時に実行）
-  embed     ベクトル検索用にドキュメントを一括埋め込み（search-vector プラグインが必要）
-  plugins   読み込み済みプラグインと拡張ポイントを一覧
-  serve     MCP サーバーを開始（既定は stdio。チーム向けに --http 可）
+コマンド（作業順）:
+  1. 準備・棚卸し:
+    init      カレントフォルダに設定ファイルを作成
+    scan      ソースを棚卸し（種類・サイズ・重複・古いファイル）
+
+  2. データ整備:
+    run       直近の scan 結果からテキスト/表を抽出してドキュメントストアへ
+    describe  （SQL）knot-sync.catalog.yaml を生成/更新
+    ui        （SQL）ローカルのカタログレビュー UI を開く（127.0.0.1 のみ）
+
+  3. AI へ配信:
+    serve     MCP サーバーを開始（既定は stdio。チーム向けに --http 可）
+
+  任意・運用:
+    bench     ローカルストアでトークン削減とスイート精度を計測
+    optimize  FTS5 を最適化しストアの WAL をチェックポイント（アイドル時に実行）
+    embed     ベクトル検索用にドキュメントを一括埋め込み（search-vector プラグインが必要）
+    plugins   読み込み済みプラグインと拡張ポイントを一覧
 
 オプション:
   -c, --config <file>   設定ファイル（既定: {configFile}）
@@ -77,6 +84,8 @@ plugins:
   "scan.andMorePaths": "      … ほか {n} 件",
   "scan.couldNotRead": "\n  読めなかったもの:",
   "scan.andMoreIssues": "    … ほか {n} 件",
+  "scan.next":
+    "次: `knot-sync run` を実行して抽出・正規化・PII マスクをローカルストアに保存してください（HTML 出力は `--report`）。",
   "run.noInventory":
     '{path} に scan インベントリがありません。\n先に "knot-sync scan" を実行してから "knot-sync run" してください。',
   "run.complete":
@@ -84,6 +93,8 @@ plugins:
   "run.issuesHeader": "\n問題:",
   "run.andMoreIssues": "  … ほか {n} 件",
   "run.documentsSaved": "ドキュメントを {path} に保存しました",
+  "run.next":
+    "次: `knot-sync serve` を実行して MCP 経由で AI エージェントを接続してください（効果計測は `knot-sync bench`）。",
   "run.issueLicense":
     "OCR ライセンスが未設定または無効です。KNOT_SYNC_OCR_LICENSE（または extractor-ocr.licenseKey）を設定してから knot-sync run を再実行してください。",
   "run.issueHousenLicense":

@@ -109,6 +109,7 @@ export function App() {
       <header>
         <h1>{t(locale, "title")}</h1>
         <p>{t(locale, "subtitle")}</p>
+        <p className="context-banner">{t(locale, "contextBanner")}</p>
       </header>
 
       {error ? <p className="status err">{error}</p> : null}

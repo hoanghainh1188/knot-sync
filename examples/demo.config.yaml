@@ -1,0 +1,17 @@
+# Demo config for running scan, run, and ui end-to-end.
+# First generate files with: pnpm demo:prepare
+sources:
+  - id: demo_docs
+    type: fs
+    path: ./.demo-data
+    extensions: [.xlsx, .docx, .pdf, .csv, .txt]
+
+store:
+  path: ./.data/demo-store.sqlite
+
+catalog:
+  path: ./demo-catalog.yaml
+
+scan:
+  old_file_years: 5
+  hash: true

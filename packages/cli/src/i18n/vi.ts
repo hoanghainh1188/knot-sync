@@ -8,17 +8,24 @@ Mọi thứ chạy trên máy này. Nguồn chỉ được đọc, không bị t
 Cách dùng:
   knot-sync <command> [options]
 
-Lệnh:
-  init      Tạo file cấu hình trong thư mục hiện tại
-  scan      Kiểm kê nguồn: loại file, kích thước, trùng lặp, file cũ
-  run       Trích xuất text/bảng từ lần scan gần nhất vào kho tài liệu
-  describe  Tạo/cập nhật knot-sync.catalog.yaml cho nguồn SQL
-  ui        Mở UI duyệt catalog cục bộ (chỉ 127.0.0.1)
-  bench     Đo giảm token và độ chính xác suite trên kho cục bộ
-  optimize  Nén FTS5 và checkpoint WAL của kho (chạy khi không ghi)
-  embed     Nhúng hàng loạt tài liệu cho tìm kiếm vector (cần plugin search-vector)
-  plugins   Liệt kê plugin đã tải và điểm mở rộng
-  serve     Khởi động MCP server (mặc định stdio; tùy chọn --http cho team/LAN)
+Lệnh (theo quy trình):
+  1. Thiết lập & Kiểm kê:
+    init      Tạo file cấu hình trong thư mục hiện tại
+    scan      Kiểm kê nguồn: loại file, kích thước, trùng lặp, file cũ
+
+  2. Chuẩn bị dữ liệu:
+    run       Trích xuất text/bảng từ lần scan gần nhất vào kho tài liệu
+    describe  (SQL) Tạo/cập nhật knot-sync.catalog.yaml cho nguồn SQL
+    ui        (SQL) Mở UI duyệt catalog cục bộ (chỉ 127.0.0.1)
+
+  3. Phục vụ AI:
+    serve     Khởi động MCP server (mặc định stdio; tùy chọn --http cho team/LAN)
+
+  Tùy chọn / Bảo trì:
+    bench     Đo giảm token và độ chính xác suite trên kho cục bộ
+    optimize  Nén FTS5 và checkpoint WAL của kho (chạy khi không ghi)
+    embed     Nhúng hàng loạt tài liệu cho tìm kiếm vector (cần plugin search-vector)
+    plugins   Liệt kê plugin đã tải và điểm mở rộng
 
 Tùy chọn:
   -c, --config <file>   File cấu hình (mặc định: {configFile})
@@ -77,6 +84,8 @@ plugins:
   "scan.andMorePaths": "      … và {n} nữa",
   "scan.couldNotRead": "\n  Không đọc được:",
   "scan.andMoreIssues": "    … và {n} nữa",
+  "scan.next":
+    "Tiếp theo: chạy `knot-sync run` để trích xuất, làm sạch và che PII vào kho cục bộ (hoặc thêm `--report` để xuất HTML).",
   "run.noInventory":
     'Không tìm thấy kiểm kê scan trong {path}.\nChạy "knot-sync scan" trước, rồi "knot-sync run".',
   "run.complete":
@@ -84,6 +93,8 @@ plugins:
   "run.issuesHeader": "\nSự cố:",
   "run.andMoreIssues": "  … và {n} nữa",
   "run.documentsSaved": "Đã lưu tài liệu vào {path}",
+  "run.next":
+    "Tiếp theo: chạy `knot-sync serve` để kết nối AI agent qua MCP (hoặc `knot-sync bench` để đo mức giảm token).",
   "run.issueLicense":
     "Thiếu hoặc sai giấy phép OCR. Đặt KNOT_SYNC_OCR_LICENSE (hoặc extractor-ocr.licenseKey), rồi chạy lại knot-sync run.",
   "run.issueHousenLicense":
