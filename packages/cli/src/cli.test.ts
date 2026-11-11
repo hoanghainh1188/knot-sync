@@ -174,15 +174,20 @@ test("plugins loads example mask-company-id plugin", async () => {
   }
 });
 
-test("run cleans JP/VN text and retains original plus tokens", async () => {
+test("run cleans JP/VN text and omits originals by default while keeping tokens and bench", async () => {
   const { Store } = await import("@hoanghainh/knot-sync-store-sqlite");
+  const { DatabaseSync } = await import("node:sqlite");
   const root = await mkdtemp(join(tmpdir(), "mcpn-cli-clean-"));
   try {
     const share = join(root, "share");
     await mkdir(share, { recursive: true });
+    const noteBody =
+      "契約 令和5年4月1日 金額２０２４円 contact secret@example.com " +
+      "Báo cáo tháng 4 năm 2024 tại Hà Nội.\n";
+    await writeFile(join(share, "note.txt"), noteBody, "utf8");
     await writeFile(
-      join(share, "note.txt"),
-      "契約 令和5年4月1日 金額２０２４円\n",
+      join(share, "sheet.csv"),
+      "Tên,Số tiền\nKhách hàng A,２０２４\n",
       "utf8",
     );
 
@@ -194,18 +199,102 @@ test("run cleans JP/VN text and retains original plus tokens", async () => {
     io = capture();
     assert.equal(await main(["run", "-c", config], io), 0);
 
-    const store = new Store(join(root, ".data/store.sqlite"));
+    const storePath = join(root, ".data/store.sqlite");
+    const store = new Store(storePath);
     const hits = store.search("2023-04-01");
     assert.ok(hits.length >= 1, "cleaned ISO date is searchable");
     const doc = store.getDocument(hits[0]!.id);
     assert.ok(doc);
     assert.match(doc!.content, /2023-04-01/);
     assert.match(doc!.content, /2024/);
-    assert.match(String(doc!.metadata.originalContent), /令和5年4月1日/);
-    assert.match(String(doc!.metadata.originalContent), /２０２４/);
+    assert.equal(doc!.metadata.originalContent, undefined);
+    assert.equal(doc!.metadata.originalTables, undefined);
+    assert.equal("originalContent" in doc!.metadata, false);
+    assert.equal("originalTables" in doc!.metadata, false);
     assert.equal(typeof doc!.metadata.tokensBefore, "number");
     assert.equal(typeof doc!.metadata.tokensAfter, "number");
+
+    const csvHits = store.search("Khách");
+    assert.ok(csvHits.length >= 1, "cleaned CSV table row is searchable");
+    const csvDoc = store.getDocument(csvHits[0]!.id);
+    assert.ok(csvDoc);
+    assert.equal(csvDoc!.tables[0]?.rows[0]?.[1], "2024");
+    assert.equal(csvDoc!.metadata.originalTables, undefined);
+    assert.equal("originalTables" in csvDoc!.metadata, false);
     store.close();
+
+    // Verify knot-sync bench works with slim metadata (tokensBefore / tokensAfter).
+    io = capture();
+    assert.equal(await main(["bench", "-c", config, "--json"], io), 0);
+    const benchOut = JSON.parse(io.stdout.join("\n")) as {
+      tokens?: { before?: number; after?: number; documents?: number };
+    };
+    assert.ok((benchOut.tokens?.documents ?? 0) >= 2);
+    assert.ok((benchOut.tokens?.before ?? 0) > 0);
+    assert.ok((benchOut.tokens?.after ?? 0) > 0);
+
+    // Measure default metadata_json byte size, then opt in with keepOriginalText: true.
+    const readMetaBytes = (id: string): number => {
+      const db = new DatabaseSync(storePath, { readOnly: true });
+      try {
+        const row = db
+          .prepare("SELECT length(CAST(metadata_json AS BLOB)) AS bytes FROM documents WHERE id = ?")
+          .get(id) as { bytes: number } | undefined;
+        return row?.bytes ?? 0;
+      } finally {
+        db.close();
+      }
+    };
+    const defaultNoteMetaBytes = readMetaBytes(doc!.id);
+    const defaultCsvMetaBytes = readMetaBytes(csvDoc!.id);
+
+    const optInConfig = join(root, "cfg-keep.yaml");
+    const baseYaml = await readFile(config, "utf8");
+    const optInDataDir = join(root, ".data-keep");
+    await writeFile(
+      optInConfig,
+      baseYaml
+        .replace("./.data/store.sqlite", join(optInDataDir, "store.sqlite"))
+        .concat("\ncleaning:\n  keepOriginalText: true\n"),
+      "utf8",
+    );
+    io = capture();
+    assert.equal(await main(["scan", "-c", optInConfig], io), 0);
+    io = capture();
+    assert.equal(await main(["run", "-c", optInConfig], io), 0);
+
+    const optInStorePath = join(optInDataDir, "store.sqlite");
+    const optInStore = new Store(optInStorePath);
+    const optInDoc = optInStore.getDocument(doc!.id);
+    assert.ok(optInDoc);
+    assert.match(String(optInDoc!.metadata.originalContent), /令和5年4月1日/);
+    assert.match(String(optInDoc!.metadata.originalContent), /２０２４/);
+    assert.doesNotMatch(String(optInDoc!.metadata.originalContent), /secret@example.com/);
+    assert.match(String(optInDoc!.metadata.originalContent), /\*\*\*/);
+    const optInCsv = optInStore.getDocument(csvDoc!.id);
+    assert.ok(optInCsv);
+    assert.match(String(optInCsv!.metadata.originalTables), /２０２４/);
+    optInStore.close();
+
+    const optInDb = new DatabaseSync(optInStorePath, { readOnly: true });
+    try {
+      const noteRow = optInDb
+        .prepare("SELECT length(CAST(metadata_json AS BLOB)) AS bytes FROM documents WHERE id = ?")
+        .get(doc!.id) as { bytes: number };
+      const csvRow = optInDb
+        .prepare("SELECT length(CAST(metadata_json AS BLOB)) AS bytes FROM documents WHERE id = ?")
+        .get(csvDoc!.id) as { bytes: number };
+      assert.ok(
+        defaultNoteMetaBytes < noteRow.bytes,
+        `expected default note metadata (${defaultNoteMetaBytes}) < keepOriginalText (${noteRow.bytes})`,
+      );
+      assert.ok(
+        defaultCsvMetaBytes < csvRow.bytes,
+        `expected default csv metadata (${defaultCsvMetaBytes}) < keepOriginalText (${csvRow.bytes})`,
+      );
+    } finally {
+      optInDb.close();
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }

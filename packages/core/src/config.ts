@@ -104,6 +104,7 @@ const CLEANING_KEYS = [
   "datesIso",
   "legacyVietnamese",
   "tokenReduce",
+  "keepOriginalText",
 ] as const;
 
 export const DEFAULT_CLEANING_CONFIG: CleaningConfig = {
@@ -112,6 +113,7 @@ export const DEFAULT_CLEANING_CONFIG: CleaningConfig = {
   datesIso: true,
   legacyVietnamese: true,
   tokenReduce: true,
+  keepOriginalText: false,
 };
 
 const EXTRACTION_KEYS = ["maxFileSizeMb", "timeoutSeconds", "maxTextChars"] as const;
@@ -499,7 +501,7 @@ function parsePromptArguments(raw: unknown, promptIndex: number): PromptArgument
   return out;
 }
 
-/** Parse optional `cleaning:` section; omitted keys default to true. */
+/** Parse optional `cleaning:` section; step toggles default to true and `keepOriginalText` defaults to false. */
 export function parseCleaningConfig(raw: unknown): CleaningConfig {
   if (raw === undefined || raw === null) {
     return { ...DEFAULT_CLEANING_CONFIG };
@@ -528,6 +530,8 @@ export function parseCleaningConfig(raw: unknown): CleaningConfig {
     legacyVietnamese:
       typeof obj.legacyVietnamese === "boolean" ? obj.legacyVietnamese : true,
     tokenReduce: typeof obj.tokenReduce === "boolean" ? obj.tokenReduce : true,
+    keepOriginalText:
+      typeof obj.keepOriginalText === "boolean" ? obj.keepOriginalText : false,
   };
 }
 
@@ -846,13 +850,14 @@ scan:
   old_file_years: 5            # files older than this are reported as "old"
   hash: true                   # sha256 for duplicate detection (slower on big shares)
 
-# Optional JA/VN cleaning steps applied by "knot-sync run" after extract (all true by default).
+# Optional JA/VN cleaning steps applied by "knot-sync run" after extract (steps true, keepOriginalText false by default).
 # cleaning:
 #   nfkc: true
 #   wareki: true
 #   datesIso: true
 #   legacyVietnamese: true
 #   tokenReduce: true
+#   keepOriginalText: false
 
 # Optional extraction limits for "knot-sync run" (soft-fail oversized / timed-out files).
 # extraction:

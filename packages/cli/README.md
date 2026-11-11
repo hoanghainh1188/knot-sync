@@ -292,7 +292,7 @@ Example terminal output:
 
 #### 2. `run`: Ingest & Normalize Pipeline
 Extracts text and tables from `.xlsx`, `.docx`, `.pdf` (text-based), `.csv`, `.tsv`, `.txt`, `.md` into a local SQLite store (`node:sqlite`).
-- **Cleaning**: NFKC normalization, Wareki $\rightarrow$ Gregorian, ISO 8601 dates, TCVN3/VNI conversion, and whitespace/empty-row token reduction.
+- **Cleaning**: NFKC normalization, Wareki $\rightarrow$ Gregorian, ISO 8601 dates, TCVN3/VNI conversion, and whitespace/empty-row token reduction. Pre-clean copies (`originalContent` / `originalTables`) are omitted by default (`cleaning.keepOriginalText: false`) to keep the SQLite store compact while recording `tokensBefore` / `tokensAfter` for `bench`; set `cleaning.keepOriginalText: true` in config to retain PII-masked originals in metadata.
 - **PII Masking**: Mask (`***`), hash, or drop sensitive numbers.
 - **Guardrails**: Flags prompt-injection patterns, zero-width chars, and hidden cells.
 - **Optional paid steps** (when listed under `plugins:`): Docling OCR, 方眼紙 Excel rewrite, and/or local-LLM enricher after PII→guard (`guard-llm`).

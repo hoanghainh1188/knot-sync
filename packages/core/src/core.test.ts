@@ -369,13 +369,14 @@ test("prompts accept valid entry and reject duplicates / missing template", () =
   );
 });
 
-test("cleaning defaults to all true when omitted", () => {
+test("cleaning defaults when omitted", () => {
+  assert.equal(DEFAULT_CLEANING_CONFIG.keepOriginalText, false);
   assert.deepEqual(parseCleaningConfig(undefined), DEFAULT_CLEANING_CONFIG);
   const structural = parseConfig("sources:\n  - id: a\n    type: fs\n    path: /x\n", "/");
   assert.deepEqual(structural.cleaning, DEFAULT_CLEANING_CONFIG);
 });
 
-test("cleaning partial override keeps other steps enabled", () => {
+test("cleaning partial override keeps other steps enabled and keepOriginalText false", () => {
   const structural = parseConfig(
     [
       "sources:",
@@ -393,6 +394,24 @@ test("cleaning partial override keeps other steps enabled", () => {
   assert.equal(structural.cleaning.datesIso, true);
   assert.equal(structural.cleaning.legacyVietnamese, true);
   assert.equal(structural.cleaning.tokenReduce, true);
+  assert.equal(structural.cleaning.keepOriginalText, false);
+});
+
+test("cleaning supports explicit keepOriginalText opt-in", () => {
+  const structural = parseConfig(
+    [
+      "sources:",
+      "  - id: a",
+      "    type: fs",
+      "    path: /x",
+      "cleaning:",
+      "  keepOriginalText: true",
+      "",
+    ].join("\n"),
+    "/",
+  );
+  assert.equal(structural.cleaning.keepOriginalText, true);
+  assert.equal(structural.cleaning.nfkc, true);
 });
 
 test("cleaning rejects unknown keys and non-booleans", () => {
@@ -403,6 +422,10 @@ test("cleaning rejects unknown keys and non-booleans", () => {
   assert.throws(
     () => parseCleaningConfig({ nfkc: "yes" }),
     /cleaning\.nfkc.*boolean/,
+  );
+  assert.throws(
+    () => parseCleaningConfig({ keepOriginalText: "true" }),
+    /cleaning\.keepOriginalText.*boolean/,
   );
 });
 

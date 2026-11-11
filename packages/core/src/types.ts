@@ -170,13 +170,15 @@ export interface ScanConfig {
   hash: boolean;
 }
 
-/** Per-step toggles for the built-in JA/VN cleaner. All default to true. */
+/** Per-step toggles and retention flags for the built-in JA/VN cleaner. */
 export interface CleaningConfig {
   nfkc: boolean;
   wareki: boolean;
   datesIso: boolean;
   legacyVietnamese: boolean;
   tokenReduce: boolean;
+  /** Retain pre-clean `originalContent` / `originalTables` in metadata (default false). */
+  keepOriginalText?: boolean;
 }
 
 /** Extraction resource limits (`extraction:` in config). */
