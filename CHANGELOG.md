@@ -2,6 +2,13 @@
 
 All notable changes to KnotSync are documented in this file.
 
+## Unreleased
+
+Docs-only prep for a future 1.0 public contract (no package version bump):
+
+- Document the stable CLI / MCP / plugin `apiVersion` 1 surface toward 1.0
+- Clarify that Paid plugins are not separate npm packages
+
 ## 0.2.0 — 2026-11-11
 
 Open-core hooks for the shipped Paid edition surface, plus docs aligned with

@@ -5,9 +5,11 @@ Semantic Catalog (business names, descriptions, valid values for cryptic fields
 like `TKSK_CD` or `ma_kh`) is the core value.
 
 **Current status (2026-11-11):** open-core **v0.1–v0.3** ✅ and Paid edition
-capabilities **#1–#7** ✅ are shipped in this repo (archived OpenSpec changes;
-no active `openspec/changes/` work). Next planned open-core item: **After v1.0**
-write tools / stored procedures (human approval). See the tables below.
+capabilities **#1–#7** ✅ are shipped in this repo. Docs prep
+`prepare-v1-public-contract` is archived (1.0 public surface + Paid npm
+clarity; **do not** tag `1.0.0` until a real pilot). Next planned feature scope:
+**After v1.0** write tools / stored procedures (human approval). See the tables
+below.
 
 Pipeline (4 stages):
 

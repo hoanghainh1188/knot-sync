@@ -54,8 +54,10 @@ config (hoặc `--suite`). Không ghi vào thư mục/nguồn khách hàng. Kế
 thuộc dữ liệu; không có “% tiết kiệm token” cố định trên trang marketing.
 
 Plugin trả phí (OCR / 方眼紙 / SQL doanh nghiệp / OAuth / catalog-llm /
-search-vector / guard-llm) bật bằng `plugins:` + biến môi trường license. Chi tiết
-tiếng Anh: bảng Paid plugins trong [README.md](../../README.md).
+search-vector / guard-llm) **không phải gói npm riêng** trên registry. Bật từ
+monorepo bằng đường dẫn trong `plugins:` và biến môi trường license của từng
+plugin (core không kiểm tra license). Chi tiết tiếng Anh: bảng Paid plugins trong
+[README.md](../../README.md).
 
 ### Ngôn ngữ thông báo
 
