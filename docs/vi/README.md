@@ -190,6 +190,61 @@ Plugin trả phí (OCR / 方眼紙 / SQL doanh nghiệp / OAuth / catalog-llm / 
 
 ---
 
+## Kết nối AI Agent qua MCP Server (`serve`)
+
+Mặc định `knot-sync serve` chạy qua **stdio** (không mở port mạng) cho Claude Desktop / Cursor. Mọi truy cập đều **chỉ đọc**, dữ liệu tài liệu được bọc trong khung `UNTRUSTED DATA` để chống prompt injection, và mọi lượt gọi tool đều được ghi cục bộ vào `mcp-audit.jsonl` (`server.audit_log`).
+
+### Chế độ HTTP cho team / LAN (tuỳ chọn)
+
+```bash
+export KNOT_SYNC_API_KEY='your-shared-secret'
+npx @hoanghainh/knot-sync serve --http --port 3000
+# lắng nghe tại http://127.0.0.1:3000/mcp (đổi bằng --host)
+```
+
+Client cần gửi header `Authorization: Bearer <KNOT_SYNC_API_KEY>`. API key chỉ lấy từ biến môi trường (không ghi vào YAML). Transport sử dụng là MCP **Streamable HTTP** tại `/mcp`.
+
+### Các MCP Tools & Resources cung cấp cho AI
+
+| Loại | Định danh | Mô tả |
+|---|---|---|
+| **Resource** | `knot://sources` | Liệt kê tất cả nguồn dữ liệu đã cấu hình |
+| **Resource** | `knot://docs/{source}/{doc_id}` | Đọc một tài liệu đã làm sạch kèm metadata |
+| **Resource** | `knot://db/{source}/{table}/schema` | Xem schema bảng SQL trong `allow:` và nhãn nghiệp vụ |
+| **Tool** | `search_documents` | Tìm kiếm full-text trigram (`query`, `source`, `type`, `limit`) |
+| **Tool** | `get_document` | Lấy nội dung tài liệu theo ID |
+| **Tool** | `describe_table` | Xem danh sách cột được phép, kiểu dữ liệu và mô tả tiếng người |
+| **Tool** | `query_table` | Truy vấn SQL tham số hoá an toàn (`eq`, `in`, `range`, `contains`, `starts_with`, `between_dates`, `is_null`) |
+| **Tool** | `search_similar` | Tìm kiếm tương đồng ngữ nghĩa (chỉ bật khi nạp plugin `search-vector`) |
+
+### Đăng ký vào Claude Desktop (`claude_desktop_config.json`)
+
+```json
+{
+  "mcpServers": {
+    "knot-sync": {
+      "command": "npx",
+      "args": ["@hoanghainh/knot-sync", "serve", "-c", "/absolute/path/to/knot-sync.config.yaml"]
+    }
+  }
+}
+```
+
+### Đăng ký vào Cursor / Windsurf (`.cursor/mcp.json`)
+
+```json
+{
+  "mcpServers": {
+    "knot-sync": {
+      "command": "npx",
+      "args": ["@hoanghainh/knot-sync", "serve", "-c", "/absolute/path/to/knot-sync.config.yaml"]
+    }
+  }
+}
+```
+
+---
+
 ### Ngôn ngữ thông báo
 
 Hiện trợ giúp / lỗi bằng tiếng Việt:
