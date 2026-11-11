@@ -89,7 +89,7 @@ plugins:
   "run.noInventory":
     'Không tìm thấy kiểm kê scan trong {path}.\nChạy "knot-sync scan" trước, rồi "knot-sync run".',
   "run.complete":
-    "run xong: {extracted} đã trích, {skipped} không đổi, {failed} sự cố",
+    "run xong: {extracted} đã trích, {skipped} không đổi, {pruned} đã dọn, {failed} sự cố",
   "run.issuesHeader": "\nSự cố:",
   "run.andMoreIssues": "  … và {n} nữa",
   "run.documentsSaved": "Đã lưu tài liệu vào {path}",

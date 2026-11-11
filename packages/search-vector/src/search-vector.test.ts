@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   ConfigError,
   createPluginHost,
+  documentId,
   PLUGIN_API_VERSION,
   type Document,
   type KnotSyncPlugin,
@@ -172,4 +173,50 @@ test("invalid plugin settings throw ConfigError", () => {
   const bad: KnotSyncPlugin = createSearchVectorPlugin({ settings: { nope: 1 } });
   assert.equal(bad.apiVersion, PLUGIN_API_VERSION);
   assert.throws(() => host.registerPlugin(bad), ConfigError);
+});
+
+test("pruneStaleDocuments removes deleted document embedding and excludes it from searchSimilar", async () => {
+  const store = new Store(":memory:");
+  const keepId = documentId("share", "keep.txt");
+  const deadId = documentId("share", "請求書2026.txt");
+  store.upsertDocument(doc(keepId, "メモ", "定例会議メモ"));
+  store.upsertDocument(doc(deadId, "請求書2026", "令和8年度 請求書 サンプル"));
+
+  const runtime = {
+    settings: parseSearchVectorSettings({
+      licenseKey: SEARCH_VECTOR_TEST_LICENSE_SENTINEL,
+      model: "test-embed",
+    }),
+    fetchImpl: mockFetch((t) => fakeEmbed(t)),
+  };
+
+  const stats = await embedAllDocuments(store, runtime);
+  assert.equal(stats.written, 2);
+  assert.ok(getEmbedding(store.db, deadId, "test-embed"));
+
+  store.replaceScan(
+    "share",
+    [
+      {
+        sourceId: "share",
+        absPath: "/root/keep.txt",
+        relPath: "keep.txt",
+        ext: ".txt",
+        type: "txt",
+        size: 10,
+        mtimeMs: Date.now(),
+        hash: "h-keep",
+      },
+    ],
+    [],
+  );
+
+  const pruneRes = store.pruneStaleDocuments(["share"]);
+  assert.equal(pruneRes.pruned, 1);
+  assert.equal(getEmbedding(store.db, deadId, "test-embed"), null);
+  assert.ok(getEmbedding(store.db, keepId, "test-embed"));
+
+  const hits = await searchSimilar(store, { query: "請求書", limit: 5 }, runtime);
+  assert.ok(hits.every((h) => h.id !== deadId));
+  store.close();
 });
