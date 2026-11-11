@@ -35,6 +35,7 @@ export {
 } from "./tools.js";
 export {
   createKnotMcpServer,
+  queryTableInput,
   serveStdio,
   type CreateKnotMcpServerOptions,
 } from "./server.js";

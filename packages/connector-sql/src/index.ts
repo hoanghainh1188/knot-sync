@@ -2,11 +2,16 @@ export { quoteIdent, type SqlDialect } from "./quote.js";
 export { parseSqlSource, parseAllow, resolveEnvUrl } from "./parse.js";
 export {
   buildSelectQuery,
+  planAggregations,
   quoteTableRef,
   DEFAULT_QUERY_LIMIT,
   MAX_QUERY_LIMIT,
-  type QueryFilter,
+  type AggregateFunc,
   type BuiltQuery,
+  type QueryAggregation,
+  type QueryFilter,
+  type QueryOrderBy,
+  type SortDirection,
 } from "./query-build.js";
 export {
   DEFAULT_POOL_MAX,

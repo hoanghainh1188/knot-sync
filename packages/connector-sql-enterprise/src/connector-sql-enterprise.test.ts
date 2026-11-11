@@ -310,3 +310,75 @@ test("soft-fail messages name missing odbc/oracledb modules", async () => {
     /odbc|IBM i|AS400/,
   );
 });
+
+test("enterprise dialects support groupBy, aggregations, and orderBy via query_table", async () => {
+  clearSqlDriverRegistry();
+  const cases: Array<{
+    type: "mssql" | "oracle" | "access" | "as400";
+    expectedSql: string;
+    expectedValues: unknown[];
+  }> = [
+    {
+      type: "mssql",
+      expectedSql:
+        "SELECT TOP 5 [trang_thai], SUM([金額]) AS [total_amt] FROM [請求] GROUP BY [trang_thai] ORDER BY [total_amt] DESC",
+      expectedValues: [],
+    },
+    {
+      type: "access",
+      expectedSql:
+        "SELECT TOP 5 [trang_thai], SUM([金額]) AS [total_amt] FROM [請求] GROUP BY [trang_thai] ORDER BY [total_amt] DESC",
+      expectedValues: [],
+    },
+    {
+      type: "oracle",
+      expectedSql:
+        'SELECT "trang_thai", SUM("金額") AS "total_amt" FROM "請求" GROUP BY "trang_thai" ORDER BY "total_amt" DESC FETCH FIRST :1 ROWS ONLY',
+      expectedValues: [5],
+    },
+    {
+      type: "as400",
+      expectedSql:
+        'SELECT "trang_thai", SUM("金額") AS "total_amt" FROM "請求" GROUP BY "trang_thai" ORDER BY "total_amt" DESC FETCH FIRST 5 ROWS ONLY',
+      expectedValues: [],
+    },
+  ];
+
+  for (const c of cases) {
+    const driver = mockDriver(
+      c.type,
+      {
+        請求: {
+          name: "請求",
+          columns: [
+            { name: "trang_thai", dataType: "varchar", isNullable: false, isPrimaryKey: false },
+            { name: "金額", dataType: "numeric", isNullable: false, isPrimaryKey: false },
+          ],
+          rowEstimate: 2,
+        },
+      },
+      [{ trang_thai: "paid", total_amt: 1000 }],
+    );
+    const source: SqlSourceConfig = {
+      id: c.type,
+      type: c.type,
+      url: `${c.type}://mock`,
+      urlEnv: "X",
+      allow: { 請求: { columns: ["trang_thai", "金額"] } },
+    };
+    const res = await handleQueryTable(
+      {
+        source: c.type,
+        table: "請求",
+        groupBy: ["trang_thai"],
+        aggregations: [{ func: "sum", column: "金額", as: "total_amt" }],
+        orderBy: [{ column: "total_amt", dir: "desc" }],
+        limit: 5,
+      },
+      { config: baseConfig([source]), sqlDriverFactories: { [c.type]: async () => driver } },
+    );
+    assert.equal(res.meta?.resultCount, 1);
+    assert.equal(driver.queries[0]?.text, c.expectedSql);
+    assert.deepEqual(driver.queries[0]?.values, c.expectedValues);
+  }
+});

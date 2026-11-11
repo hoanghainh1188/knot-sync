@@ -3,13 +3,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { z } from "zod";
 import {
+  PLUGIN_API_VERSION,
   createPluginHost,
   documentId,
   sha256,
   type AppConfig,
   type Document,
 } from "@hoanghainh/knot-sync-core";
+import { handleQueryTable, type SqlDriver } from "@hoanghainh/knot-sync-connector-sql";
 import { Store } from "@hoanghainh/knot-sync-store-sqlite";
 import {
   API_KEY_ENV,
@@ -26,6 +29,7 @@ import {
   isAllowedLoopbackHostHeader,
   missingApiKeyMessage,
   parseDocumentUri,
+  queryTableInput,
   readApiKeyFromEnv,
   runWithAuditHttpContext,
   serveHttp,
@@ -373,4 +377,196 @@ test("serveHttp fails fast without API key", async () => {
     /KNOT_SYNC_API_KEY/,
   );
   store.close();
+});
+
+test("queryTableInput validates analytics fields and extended filter operators", () => {
+  const schema = z.object(queryTableInput);
+  const parsed = schema.parse({
+    source: "erp",
+    table: "hoa_don",
+    filters: [
+      { op: "starts_with", column: "trang_thai", value: "paid" },
+      { op: "between_dates", column: "ngay", from: "2025-01-01", to: "2025-12-31" },
+      { op: "is_null", column: "deleted_at", value: true },
+    ],
+    groupBy: ["trang_thai"],
+    aggregations: [
+      { func: "count", column: "*", as: "cnt" },
+      { func: "sum", column: "so_tien", as: "total_amount" },
+    ],
+    orderBy: [{ column: "total_amount", dir: "desc" }],
+    limit: 20,
+  });
+  assert.equal(parsed.filters?.length, 3);
+  assert.equal(parsed.groupBy?.[0], "trang_thai");
+  assert.equal(parsed.aggregations?.length, 2);
+  assert.equal(parsed.orderBy?.[0]?.dir, "desc");
+
+  assert.throws(() =>
+    schema.parse({
+      source: "erp",
+      table: "hoa_don",
+      aggregations: [{ func: "median", column: "so_tien" }],
+    }),
+  );
+  assert.throws(() =>
+    schema.parse({
+      source: "erp",
+      table: "hoa_don",
+      orderBy: [{ column: "so_tien", dir: "sideways" }],
+    }),
+  );
+});
+
+test("serveHttp executes query_table analytics end-to-end with untrusted framing and audit counts", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-sql-analytics-"));
+  const share = join(root, "share");
+  const auditLog = join(root, "audit.jsonl");
+  const store = new Store(":memory:");
+  const executedQueries: Array<{ text: string; values: unknown[] }> = [];
+  const mockDriver: SqlDriver = {
+    dialect: "postgres",
+    enableReadOnly: async () => undefined,
+    introspectTable: async () => null,
+    query: async (text, values) => {
+      executedQueries.push({ text, values });
+      return [{ trang_thai: "paid_secret_row", cnt: 3, total_amount: 1500 }];
+    },
+    close: async () => undefined,
+  };
+
+  const config = minimalConfig(share, auditLog);
+  config.sources.push({
+    id: "erp",
+    type: "postgres",
+    url: "postgres://mock",
+    urlEnv: "MOCK_PG_URL",
+    allow: { hoa_don: { columns: ["trang_thai", "so_tien", "ngay"] } },
+  });
+
+  const host = createPluginHost();
+  host.registerPlugin(createMcpToolsPlugin());
+  host.registerPlugin({
+    name: "test-sql-tools",
+    version: "0.0.1",
+    apiVersion: PLUGIN_API_VERSION,
+    register(api) {
+      api.registerMcpTool({
+        id: "query_table",
+        description: "Test SQL query tool",
+        inputSchema: { type: "object", properties: {} },
+        handler: (args, ctx) =>
+          handleQueryTable(
+            args as Parameters<typeof handleQueryTable>[0],
+            { ...ctx, sqlDriverFactories: { erp: async () => mockDriver } } as Parameters<
+              typeof handleQueryTable
+            >[1],
+          ),
+      });
+    },
+  });
+
+  const ac = new AbortController();
+  let boundPort = 0;
+  const serving = serveHttp({
+    store,
+    host,
+    config,
+    apiKey: "test-secret",
+    bindHost: "127.0.0.1",
+    port: 0,
+    signal: ac.signal,
+    onListening: (info) => {
+      boundPort = info.port;
+    },
+  });
+  for (let i = 0; i < 50 && boundPort === 0; i++) {
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  assert.ok(boundPort > 0);
+
+  try {
+    const init = await fetch(`http://127.0.0.1:${boundPort}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        authorization: "Bearer test-secret",
+        host: "127.0.0.1",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2024-11-05",
+          capabilities: {},
+          clientInfo: { name: "t", version: "0" },
+        },
+      }),
+    });
+    const sessionId = init.headers.get("mcp-session-id");
+    assert.ok(sessionId);
+
+    const callRes = await fetch(`http://127.0.0.1:${boundPort}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        authorization: "Bearer test-secret",
+        host: "127.0.0.1",
+        "mcp-session-id": sessionId,
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: {
+          name: "query_table",
+          arguments: {
+            source: "erp",
+            table: "hoa_don",
+            filters: [{ op: "starts_with", column: "trang_thai", value: "secret_filter_val" }],
+            groupBy: ["trang_thai"],
+            aggregations: [
+              { func: "count", column: "*", as: "cnt" },
+              { func: "sum", column: "so_tien", as: "total_amount" },
+            ],
+            orderBy: [{ column: "total_amount", dir: "desc" }],
+            limit: 10,
+          },
+        },
+      }),
+    });
+    assert.equal(callRes.status, 200);
+    const bodyText = await callRes.text();
+    assert.match(bodyText, /UNTRUSTED_DOCUMENT_CONTENT/);
+    assert.match(bodyText, /paid_secret_row/);
+    assert.equal(executedQueries.length, 1);
+    assert.match(executedQueries[0]!.text, /GROUP BY "trang_thai" ORDER BY "total_amount" DESC LIMIT \$2/);
+
+    const auditText = await readFile(auditLog, "utf8");
+    const entry = JSON.parse(auditText.trim()) as {
+      name: string;
+      status: string;
+      arguments: Record<string, unknown>;
+    };
+    assert.equal(entry.name, "query_table");
+    assert.equal(entry.status, "ok");
+    assert.deepEqual(entry.arguments, {
+      source: "erp",
+      table: "hoa_don",
+      filterCount: 1,
+      groupByCount: 1,
+      aggregationCount: 2,
+      orderByCount: 1,
+      limit: 10,
+    });
+    assert.doesNotMatch(auditText, /secret_filter_val|paid_secret_row/);
+  } finally {
+    ac.abort();
+    await serving;
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  }
 });

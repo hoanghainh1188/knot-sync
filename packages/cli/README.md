@@ -389,8 +389,24 @@ server:
 | **Tool** | `search_documents` | Trigram full-text search (`query`, `source`, `type`, `limit`) |
 | **Tool** | `get_document` | Fetch document by its unique ID |
 | **Tool** | `describe_table` | Inspect allowed columns, data types, and business descriptions |
-| **Tool** | `query_table` | Parameterized SQL query with safe filters (`eq`, `in`, `range`, `contains`, `starts_with`, `between_dates`, `is_null`) |
+| **Tool** | `query_table` | Parameterized SQL query with safe filters (`eq`, `in`, `range`, `contains`, `starts_with`, `between_dates`, `is_null`), optional `groupBy`, `aggregations` (`count`/`sum`/`avg`/`min`/`max`), and allow-listed `orderBy` |
 | **Tool** | `search_similar` | Semantic similarity search (only when `search-vector` plugin is loaded) |
+
+Example `query_table` analytics call (physical names or unique Semantic Catalog business labels):
+
+```json
+{
+  "source": "erp",
+  "table": "hoa_don",
+  "groupBy": ["trang_thai"],
+  "aggregations": [
+    { "func": "count", "column": "*", "as": "total_count" },
+    { "func": "sum", "column": "so_tien", "as": "total_amount" }
+  ],
+  "orderBy": [{ "column": "total_amount", "dir": "desc" }],
+  "limit": 10
+}
+```
 
 ### Registering in Claude Desktop
 

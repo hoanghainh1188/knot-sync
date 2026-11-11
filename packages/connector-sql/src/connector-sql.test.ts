@@ -606,3 +606,358 @@ test("query_table resolves catalog business labels and validates enums", async (
     /valid values|Allowed/,
   );
 });
+
+test("buildSelectQuery supports orderBy, groupBy, and aggregations across dialects", () => {
+  const allowed = new Set(["trang_thai", "so_tien", "顧客名", "金額"]);
+
+  const pgSorted = buildSelectQuery({
+    dialect: "postgres",
+    table: "受注",
+    selectColumns: ["顧客名", "金額"],
+    allowedColumns: allowed,
+    filters: [{ op: "eq", column: "顧客名", value: "A社" }],
+    orderBy: [{ column: "金額", dir: "desc" }, { column: "顧客名" }],
+    limit: 5,
+  });
+  assert.equal(
+    pgSorted.text,
+    'SELECT "顧客名", "金額" FROM "受注" WHERE "顧客名" = $1 ORDER BY "金額" DESC, "顧客名" ASC LIMIT $2',
+  );
+  assert.deepEqual(pgSorted.values, ["A社", 5]);
+
+  const vnAgg = buildSelectQuery({
+    dialect: "postgres",
+    table: "hoa_don",
+    selectColumns: ["trang_thai", "so_tien"],
+    allowedColumns: allowed,
+    groupBy: ["trang_thai"],
+    aggregations: [
+      { func: "count", column: "*", as: "total_count" },
+      { func: "sum", column: "so_tien", as: "total_amount" },
+      { func: "avg", column: "so_tien" },
+      { func: "min", column: "金額" },
+      { func: "max", column: "金額" },
+    ],
+    orderBy: [{ column: "total_amount", dir: "desc" }],
+    limit: 10,
+  });
+  assert.equal(
+    vnAgg.text,
+    'SELECT "trang_thai", COUNT(*) AS "total_count", SUM("so_tien") AS "total_amount", ' +
+      'AVG("so_tien") AS "avg_so_tien", MIN("金額") AS "min_col", MAX("金額") AS "max_col" ' +
+      'FROM "hoa_don" GROUP BY "trang_thai" ORDER BY "total_amount" DESC LIMIT $1',
+  );
+  assert.deepEqual(vnAgg.values, [10]);
+
+  // Distinct grouping when groupBy is supplied without aggregations
+  const distinctGroup = buildSelectQuery({
+    dialect: "mysql",
+    table: "hoa_don",
+    selectColumns: ["trang_thai", "so_tien"],
+    allowedColumns: allowed,
+    groupBy: ["trang_thai"],
+    orderBy: [{ column: "trang_thai", dir: "asc" }],
+    limit: 20,
+  });
+  assert.equal(
+    distinctGroup.text,
+    "SELECT `trang_thai` FROM `hoa_don` GROUP BY `trang_thai` ORDER BY `trang_thai` ASC LIMIT ?",
+  );
+  assert.deepEqual(distinctGroup.values, [20]);
+
+  // Dialect-specific limit/order placement
+  const oracle = buildSelectQuery({
+    dialect: "oracle",
+    table: "受注",
+    selectColumns: ["金額"],
+    allowedColumns: allowed,
+    orderBy: [{ column: "金額", dir: "asc" }],
+    limit: 10,
+  });
+  assert.equal(
+    oracle.text,
+    'SELECT "金額" FROM "受注" ORDER BY "金額" ASC FETCH FIRST :1 ROWS ONLY',
+  );
+  assert.deepEqual(oracle.values, [10]);
+
+  const mssql = buildSelectQuery({
+    dialect: "mssql",
+    table: "受注",
+    selectColumns: ["金額"],
+    allowedColumns: allowed,
+    groupBy: ["顧客名"],
+    aggregations: [{ func: "sum", column: "金額", as: "sum_amt" }],
+    orderBy: [{ column: "sum_amt", dir: "desc" }],
+    limit: 10,
+  });
+  assert.equal(
+    mssql.text,
+    "SELECT TOP 10 [顧客名], SUM([金額]) AS [sum_amt] FROM [受注] GROUP BY [顧客名] ORDER BY [sum_amt] DESC",
+  );
+  assert.deepEqual(mssql.values, []);
+});
+
+test("buildSelectQuery validates aggregation aliases, wildcard, and ungrouped orderBy", () => {
+  const allowed = new Set(["trang_thai", "so_tien"]);
+
+  assert.throws(
+    () =>
+      buildSelectQuery({
+        dialect: "postgres",
+        table: "hoa_don",
+        selectColumns: ["trang_thai", "so_tien"],
+        allowedColumns: allowed,
+        aggregations: [{ func: "sum", column: "*" }],
+      }),
+    /Wildcard "\*" is only supported for "count"/,
+  );
+
+  assert.throws(
+    () =>
+      buildSelectQuery({
+        dialect: "postgres",
+        table: "hoa_don",
+        selectColumns: ["trang_thai", "so_tien"],
+        allowedColumns: allowed,
+        aggregations: [{ func: "count", column: "*", as: "x; DROP TABLE t" }],
+      }),
+    /Invalid aggregation alias/,
+  );
+
+  assert.throws(
+    () =>
+      buildSelectQuery({
+        dialect: "postgres",
+        table: "hoa_don",
+        selectColumns: ["trang_thai", "so_tien"],
+        allowedColumns: allowed,
+        groupBy: ["trang_thai"],
+        aggregations: [{ func: "count", column: "*", as: "trang_thai" }],
+      }),
+    /Duplicate output alias/,
+  );
+
+  assert.throws(
+    () =>
+      buildSelectQuery({
+        dialect: "postgres",
+        table: "hoa_don",
+        selectColumns: ["trang_thai", "so_tien"],
+        allowedColumns: allowed,
+        groupBy: ["trang_thai"],
+        aggregations: [{ func: "count", column: "*", as: "cnt" }],
+        orderBy: [{ column: "so_tien", dir: "desc" }],
+      }),
+    /grouped column or aggregation alias/,
+  );
+
+  assert.throws(
+    () =>
+      buildSelectQuery({
+        dialect: "postgres",
+        table: "hoa_don",
+        selectColumns: ["trang_thai"],
+        allowedColumns: allowed,
+        orderBy: [{ column: "SALARY", dir: "desc" }],
+      }),
+    /not allow-listed/,
+  );
+});
+
+test("query_table documents analytics schema and resolves JA/VI catalog labels", async () => {
+  const host = createPluginHost();
+  host.registerPlugin(createSqlMcpToolsPlugin());
+  const tool = host.mcpTools.get("query_table");
+  assert.ok(tool);
+  assert.match(tool.description, /groupBy/);
+  assert.match(tool.description, /aggregations/);
+  assert.match(tool.description, /orderBy/);
+  const props = (tool.inputSchema as { properties?: Record<string, unknown> }).properties ?? {};
+  assert.ok(props.groupBy);
+  assert.ok(props.aggregations);
+  assert.ok(props.orderBy);
+
+  const source: SqlSourceConfig = {
+    id: "erp",
+    type: "postgres",
+    url: "postgres://mock",
+    urlEnv: "X",
+    allow: { 受注: { columns: ["TKSK_CD", "KIN", "DUP_A", "DUP_B"] } },
+  };
+  const driver = mockDriver(
+    {
+      受注: {
+        name: "受注",
+        columns: [
+          { name: "TKSK_CD", dataType: "text", isNullable: false, isPrimaryKey: false },
+          { name: "KIN", dataType: "numeric", isNullable: false, isPrimaryKey: false },
+          { name: "DUP_A", dataType: "text", isNullable: true, isPrimaryKey: false },
+          { name: "DUP_B", dataType: "text", isNullable: true, isPrimaryKey: false },
+        ],
+        rowEstimate: 2,
+      },
+    },
+    [{ TKSK_CD: "C01", sum_kin: 5000 }],
+  ) as SqlDriver & { _queries: { text: string; values: unknown[] }[] };
+  const catalog = {
+    version: 1 as const,
+    sources: {
+      erp: {
+        tables: {
+          受注: {
+            label: { ja: "受注", vi: "", en: "" },
+            description: "",
+            reviewed: false,
+            columns: {
+              TKSK_CD: {
+                label: { ja: "得意先コード", vi: "", en: "" },
+                description: "",
+                type: "text",
+                values: [],
+                pii: false,
+                expose: true,
+                reviewed: false,
+              },
+              KIN: {
+                label: { ja: "金額", vi: "Tổng tiền", en: "" },
+                description: "",
+                type: "numeric",
+                values: [],
+                pii: false,
+                expose: true,
+                reviewed: false,
+              },
+              DUP_A: {
+                label: { ja: "重複ラベル", vi: "", en: "" },
+                description: "",
+                type: "text",
+                values: [],
+                pii: false,
+                expose: true,
+                reviewed: false,
+              },
+              DUP_B: {
+                label: { ja: "重複ラベル", vi: "", en: "" },
+                description: "",
+                type: "text",
+                values: [],
+                pii: false,
+                expose: true,
+                reviewed: false,
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+  const config = {
+    baseDir: "/",
+    sources: [source],
+    store: { path: "/tmp/s.sqlite" },
+    scan: { oldFileYears: 5, hash: true },
+    cleaning: {
+      nfkc: true,
+      wareki: true,
+      datesIso: true,
+      legacyVietnamese: true,
+      tokenReduce: true,
+    },
+    extraction: { maxFileSizeMb: 50, timeoutSeconds: 30, maxTextChars: 500_000 },
+    pii: { mode: "mask" as const, saltPath: "/tmp/salt" },
+    guard: { mode: "flag" as const },
+    server: { auditLog: "/tmp/a.jsonl" },
+    logging: { path: "/tmp/system.jsonl", level: "info" as const },
+    catalog: {
+      path: "/tmp/knot-sync.catalog.yaml",
+      definitionMapping: {
+        physical: "物理名",
+        label_ja: "論理名",
+        label_vi: "Tên nghiệp vụ",
+        label_en: "Business name",
+        description: "説明",
+        sheet: "項目",
+      },
+    },
+    prompts: [],
+    cli: {},
+    plugins: [],
+    pluginSettings: {},
+  };
+  const ctx = { config, catalog, sqlDriverFactories: { erp: async () => driver } };
+
+  // Resolve JA/VI labels in groupBy, aggregations, and orderBy (group column & alias)
+  const aggRes = await handleQueryTable(
+    {
+      source: "erp",
+      table: "受注",
+      groupBy: ["得意先コード"],
+      aggregations: [{ func: "sum", column: "Tổng tiền", as: "sum_kin" }],
+      orderBy: [
+        { column: "sum_kin", dir: "desc" },
+        { column: "得意先コード", dir: "asc" },
+      ],
+      limit: 5,
+    },
+    ctx,
+  );
+  assert.match(aggRes.content, /UNTRUSTED_DOCUMENT_CONTENT/);
+  assert.equal(aggRes.meta?.resultCount, 1);
+  assert.equal(
+    driver._queries[0]?.text,
+    'SELECT "TKSK_CD", SUM("KIN") AS "sum_kin" FROM "public"."受注" GROUP BY "TKSK_CD" ORDER BY "sum_kin" DESC, "TKSK_CD" ASC LIMIT $1',
+  );
+
+  // Ambiguous label rejected in groupBy, aggregations, or orderBy before executing SQL
+  const countBefore = driver._queries.length;
+  await assert.rejects(
+    () => handleQueryTable({ source: "erp", table: "受注", groupBy: ["重複ラベル"] }, ctx),
+    /matches multiple columns/,
+  );
+  await assert.rejects(
+    () =>
+      handleQueryTable(
+        { source: "erp", table: "受注", aggregations: [{ func: "sum", column: "重複ラベル" }] },
+        ctx,
+      ),
+    /matches multiple columns/,
+  );
+  await assert.rejects(
+    () =>
+      handleQueryTable(
+        { source: "erp", table: "受注", orderBy: [{ column: "重複ラベル", dir: "asc" }] },
+        ctx,
+      ),
+    /matches multiple columns/,
+  );
+  await assert.rejects(
+    () =>
+      handleQueryTable(
+        {
+          source: "erp",
+          table: "受注",
+          groupBy: ["得意先コード"],
+          aggregations: [{ func: "count", column: "*", as: "cnt" }],
+          orderBy: [{ column: "Tổng tiền", dir: "desc" }],
+        },
+        ctx,
+      ),
+    /grouped column or aggregation alias/,
+  );
+  assert.equal(driver._queries.length, countBefore);
+
+  // Distinct groupBy without aggregations through handleQueryTable
+  await handleQueryTable(
+    {
+      source: "erp",
+      table: "受注",
+      groupBy: ["得意先コード"],
+      orderBy: [{ column: "得意先コード", dir: "asc" }],
+    },
+    ctx,
+  );
+  assert.equal(
+    driver._queries.at(-1)?.text,
+    'SELECT "TKSK_CD" FROM "public"."受注" GROUP BY "TKSK_CD" ORDER BY "TKSK_CD" ASC LIMIT $1',
+  );
+});
