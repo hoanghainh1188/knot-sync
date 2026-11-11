@@ -5,6 +5,8 @@ type Dict = Record<string, string>;
 const en: Dict = {
   title: "KnotSync — Catalog review",
   subtitle: "Review Semantic Catalog labels. Sources are never modified.",
+  contextBanner:
+    "Give abbreviated database columns (like TKSK_CD or ma_kh) human business labels so AI agents write accurate SQL queries. Edits save only to knot-sync.catalog.yaml — your source databases are never modified.",
   loading: "Loading catalog…",
   loadError: "Could not load catalog",
   save: "Save",
@@ -34,6 +36,8 @@ const ja: Dict = {
   ...en,
   title: "KnotSync — カタログレビュー",
   subtitle: "Semantic Catalog のラベルを確認します。ソースは変更しません。",
+  contextBanner:
+    "略称の DB 列名（TKSK_CD や ma_kh など）に業務上の日本語／ベトナム語ラベルを付け、AI が正しい SQL を生成できるようにする画面です。変更は knot-sync.catalog.yaml のみに保存され、元のデータベースは変更されません。",
   loading: "カタログを読み込み中…",
   loadError: "カタログを読めませんでした",
   save: "保存",
@@ -63,6 +67,8 @@ const vi: Dict = {
   ...en,
   title: "KnotSync — Duyệt catalog",
   subtitle: "Xem lại nhãn Semantic Catalog. Nguồn không bị sửa.",
+  contextBanner:
+    "Đặt nhãn tiếng người cho các cột database viết tắt (như TKSK_CD hoặc ma_kh) để AI viết câu truy vấn SQL chính xác. Thay đổi chỉ lưu vào file knot-sync.catalog.yaml — database gốc không bao giờ bị sửa.",
   loading: "Đang tải catalog…",
   loadError: "Không tải được catalog",
   save: "Lưu",

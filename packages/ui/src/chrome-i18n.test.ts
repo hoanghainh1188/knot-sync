@@ -13,6 +13,15 @@ test("Japanese chrome title", () => {
   assert.match(uiT("ja", "filterUnreviewed"), /未レビュー/);
 });
 
+test("contextBanner explains column labeling and read-only DB boundary in en/ja/vi", () => {
+  assert.match(uiT("en", "contextBanner"), /knot-sync\.catalog\.yaml/);
+  assert.match(uiT("en", "contextBanner"), /never modified/);
+  assert.match(uiT("ja", "contextBanner"), /knot-sync\.catalog\.yaml/);
+  assert.match(uiT("ja", "contextBanner"), /変更されません/);
+  assert.match(uiT("vi", "contextBanner"), /knot-sync\.catalog\.yaml/);
+  assert.match(uiT("vi", "contextBanner"), /database gốc/);
+});
+
 test("filterColumnNames keeps unreviewed only", () => {
   const cols = {
     TKSK_CD: { reviewed: false },

@@ -8,17 +8,24 @@ Everything runs on this machine. Sources are only read, never changed.
 Usage:
   knot-sync <command> [options]
 
-Commands:
-  init      Create a config file in the current folder
-  scan      Inventory all sources: file types, sizes, duplicates, old files
-  run       Extract text/tables from the last scan into the document store
-  describe  Generate/update knot-sync.catalog.yaml for SQL sources
-  ui        Open local catalog review UI (127.0.0.1 only)
-  bench     Measure token reduction and suite accuracy on the local store
-  optimize  Compact FTS5 and checkpoint the store WAL (run when idle)
-  embed     Batch-embed documents for vector search (requires search-vector plugin)
-  plugins   List loaded plugins and their extension points
-  serve     Start the MCP server (stdio by default; optional --http for team/LAN)
+Commands (by workflow):
+  1. Setup & Audit:
+    init      Create a config file in the current folder
+    scan      Inventory all sources: file types, sizes, duplicates, old files
+
+  2. Prepare Data:
+    run       Extract text/tables from the last scan into the document store
+    describe  (SQL) Generate/update knot-sync.catalog.yaml for SQL sources
+    ui        (SQL) Open local catalog review UI (127.0.0.1 only)
+
+  3. Serve to AI:
+    serve     Start the MCP server (stdio by default; optional --http for team/LAN)
+
+  Optional / Maintenance:
+    bench     Measure token reduction and suite accuracy on the local store
+    optimize  Compact FTS5 and checkpoint the store WAL (run when idle)
+    embed     Batch-embed documents for vector search (requires search-vector plugin)
+    plugins   List loaded plugins and their extension points
 
 Options:
   -c, --config <file>   Config file (default: {configFile})
@@ -77,6 +84,8 @@ plugins:
   "scan.andMorePaths": "      … and {n} more",
   "scan.couldNotRead": "\n  Could not read:",
   "scan.andMoreIssues": "    … and {n} more",
+  "scan.next":
+    "Next: run `knot-sync run` to extract, clean, and mask PII into the local store (or add `--report` for HTML).",
   "run.noInventory":
     'No scan inventory found in {path}.\nRun "knot-sync scan" first, then "knot-sync run".',
   "run.complete":
@@ -84,6 +93,8 @@ plugins:
   "run.issuesHeader": "\nIssues:",
   "run.andMoreIssues": "  … and {n} more",
   "run.documentsSaved": "Documents saved to {path}",
+  "run.next":
+    "Next: run `knot-sync serve` to connect an AI agent via MCP (or `knot-sync bench` to measure token reduction).",
   "run.issueLicense":
     "OCR license missing or invalid. Set KNOT_SYNC_OCR_LICENSE (or extractor-ocr.licenseKey), then retry knot-sync run.",
   "run.issueHousenLicense":

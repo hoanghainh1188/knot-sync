@@ -449,6 +449,7 @@ async function cmdScan(
       } else {
         for (const r of results) printStats(r, config.scan.oldFileYears, io, locale);
         io.out(t(locale, "scan.inventorySaved", { path: config.store.path }));
+        io.out(t(locale, "scan.next"));
       }
       if (reportPath !== undefined) {
         const abs = assertReportPathOutsideSources(
@@ -849,6 +850,7 @@ async function cmdRun(
       }
     }
 
+    io.out(t(locale, "run.next"));
     return 0;
   } finally {
     store.close();

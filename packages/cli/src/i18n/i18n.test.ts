@@ -35,7 +35,32 @@ test("parseLangFlag rejects invalid values", () => {
 test("t interpolates and falls back", () => {
   assert.match(t("ja", "error.unknownCommand", { command: "x" }), /x/);
   assert.match(t("vi", "init.next"), /knot-sync scan/);
+  assert.match(t("vi", "scan.next"), /knot-sync run/);
+  assert.match(t("ja", "run.next"), /knot-sync serve/);
   assert.equal(t("en", "scan.olderThan", { years: 5 }), "Older than 5 years");
+});
+
+test("help organizes commands into workflow groups across en/ja/vi", () => {
+  const required = [
+    "init",
+    "scan",
+    "run",
+    "describe",
+    "ui",
+    "serve",
+    "bench",
+    "optimize",
+    "embed",
+    "plugins",
+  ];
+  for (const locale of CLI_LOCALES) {
+    const help = t(locale, "help");
+    for (const cmd of required) {
+      assert.match(help, new RegExp(`\\b${cmd}\\b`), `${locale} help missing ${cmd}`);
+    }
+  }
+  assert.match(t("vi", "help"), /theo quy trình/);
+  assert.match(t("ja", "help"), /作業順/);
 });
 
 test("every locale defines every key", () => {

@@ -1,0 +1,64 @@
+version: 1
+sources:
+  erp_demo:
+    tables:
+      受注:
+        description: Legacy Japanese order table
+        reviewed: false
+        label:
+          ja: 受注
+          vi: Đơn đặt hàng
+          en: Sales Orders
+        columns:
+          TKSK_CD:
+            description: Abbreviated customer identifier in legacy ERP
+            type: varchar
+            pii: false
+            expose: true
+            reviewed: false
+            label:
+              ja: 得意先コード
+              vi: mã khách hàng
+              en: customer code
+            values: []
+          金額:
+            description: Order amount in JPY
+            type: numeric
+            pii: false
+            expose: true
+            reviewed: true
+            label:
+              ja: 金額
+              vi: số tiền
+              en: amount
+            values: []
+      hoa_don:
+        description: Vietnamese accounting invoice table
+        reviewed: false
+        label:
+          ja: 請求書
+          vi: Hóa đơn
+          en: Invoices
+        columns:
+          ma_kh:
+            description: Customer ID linking to danh_sach_khach_hang
+            type: varchar
+            pii: false
+            expose: true
+            reviewed: false
+            label:
+              ja: 顧客コード
+              vi: mã khách hàng
+              en: customer code
+            values: []
+          cccd_kh:
+            description: Sensitive customer ID (keep hidden from AI)
+            type: varchar
+            pii: true
+            expose: false
+            reviewed: true
+            label:
+              ja: 個人番号
+              vi: Số CCCD
+              en: National ID
+            values: []

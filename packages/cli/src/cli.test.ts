@@ -865,3 +865,31 @@ test("logging.level invalid is localized in vi", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("scan/run next-step hints localize in ja/vi while --json stays pure", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-hints-"));
+  try {
+    await mkdir(join(root, "share"), { recursive: true });
+    await writeFile(join(root, "share", "note.txt"), "Hello KnotSync");
+    const config = join(root, "cfg.yaml");
+    assert.equal(
+      await main(["init", "-c", config, "--path", "./share"], capture()),
+      0,
+    );
+
+    const jsonIo = capture();
+    assert.equal(await main(["scan", "-c", config, "--json", "--lang", "vi"], jsonIo), 0);
+    const parsed = JSON.parse(jsonIo.stdout.join("\n")) as { sources: unknown[] };
+    assert.equal(parsed.sources.length, 1);
+
+    const scanViIo = capture();
+    assert.equal(await main(["scan", "-c", config, "--lang", "vi"], scanViIo), 0);
+    assert.match(scanViIo.stdout.join("\n"), /Tiếp theo:.*knot-sync run/);
+
+    const runJaIo = capture();
+    assert.equal(await main(["run", "-c", config, "--lang", "ja"], runJaIo), 0);
+    assert.match(runJaIo.stdout.join("\n"), /次:.*knot-sync serve/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
