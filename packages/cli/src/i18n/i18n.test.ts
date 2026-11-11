@@ -38,6 +38,18 @@ test("t interpolates and falls back", () => {
   assert.match(t("vi", "scan.next"), /knot-sync run/);
   assert.match(t("ja", "run.next"), /knot-sync serve/);
   assert.equal(t("en", "scan.olderThan", { years: 5 }), "Older than 5 years");
+  assert.match(
+    t("en", "run.complete", { extracted: "1", skipped: "2", pruned: "3", failed: "0" }),
+    /3 pruned/,
+  );
+  assert.match(
+    t("ja", "run.complete", { extracted: "1", skipped: "2", pruned: "3", failed: "0" }),
+    /削除 3/,
+  );
+  assert.match(
+    t("vi", "run.complete", { extracted: "1", skipped: "2", pruned: "3", failed: "0" }),
+    /3 đã dọn/,
+  );
 });
 
 test("help organizes commands into workflow groups across en/ja/vi", () => {

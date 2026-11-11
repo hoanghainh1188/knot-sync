@@ -501,12 +501,12 @@ async function cmdRun(
       io,
       formatWriteFailed: formatSystemLogWriteFailed(locale),
     },
-    async () => {
+    async (log) => {
   const store = new Store(structural.store.path);
 
   try {
     const files = store.listFiles();
-    if (files.length === 0) {
+    if (files.length === 0 && !store.hasAnyScan()) {
       io.err(t(locale, "run.noInventory", { path: structural.store.path }));
       return 1;
     }
@@ -810,10 +810,27 @@ async function cmdRun(
 
     flushPending();
 
+    const { pruned } = store.pruneStaleDocuments(config.sources.map((s) => s.id));
+    if (pruned > 0) {
+      await appendSystemLogSafe(
+        log,
+        io,
+        {
+          level: "info",
+          event: "run.prune",
+          command: "run",
+          count: pruned,
+          storePath: structural.store.path,
+        },
+        formatSystemLogWriteFailed(locale),
+      );
+    }
+
     io.out(
       t(locale, "run.complete", {
         extracted: formatCount(extracted),
         skipped: formatCount(skipped),
+        pruned: formatCount(pruned),
         failed: formatCount(failed),
       }),
     );

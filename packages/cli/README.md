@@ -296,7 +296,7 @@ Extracts text and tables from `.xlsx`, `.docx`, `.pdf` (text-based), `.csv`, `.t
 - **PII Masking**: Mask (`***`), hash, or drop sensitive numbers.
 - **Guardrails**: Flags prompt-injection patterns, zero-width chars, and hidden cells.
 - **Optional paid steps** (when listed under `plugins:`): Docling OCR, 方眼紙 Excel rewrite, and/or local-LLM enricher after PII→guard (`guard-llm`).
-- **Incremental**: Unchanged files (matching SHA-256 hash) are skipped automatically.
+- **Incremental & auto-prune**: Unchanged files (matching SHA-256 hash) are skipped automatically, and stale documents for files removed from the latest `scan` inventory are pruned from SQLite/FTS5 (and vector embeddings if present).
 - **Hardened extraction**: `extraction.maxFileSizeMb` (default 50) skips oversized files with `SKIPPED_TOO_LARGE`; `timeoutSeconds` (default 30) soft-fails hung extracts; large `.xlsx` uses streaming parse; oversized CSV/TSV/TXT truncate at `maxTextChars`.
 
 #### 3. `ui`: Review Semantic Catalog

@@ -89,7 +89,7 @@ plugins:
   "run.noInventory":
     'No scan inventory found in {path}.\nRun "knot-sync scan" first, then "knot-sync run".',
   "run.complete":
-    "Run complete: {extracted} extracted, {skipped} unchanged, {failed} issues",
+    "Run complete: {extracted} extracted, {skipped} unchanged, {pruned} pruned, {failed} issues",
   "run.issuesHeader": "\nIssues:",
   "run.andMoreIssues": "  … and {n} more",
   "run.documentsSaved": "Documents saved to {path}",

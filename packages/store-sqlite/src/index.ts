@@ -25,6 +25,11 @@ export interface OptimizeResult {
   checkpoint: unknown;
 }
 
+export interface PruneResult {
+  pruned: number;
+  prunedIds: string[];
+}
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
@@ -401,6 +406,70 @@ export class Store {
     this.db.exec("INSERT INTO documents_fts(documents_fts) VALUES('optimize');");
     const checkpoint = this.db.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get();
     return { ftsOptimized: true, checkpoint };
+  }
+
+  /** True when at least one source has a scan inventory marker in `meta`. */
+  hasAnyScan(): boolean {
+    const row = this.db
+      .prepare("SELECT 1 FROM meta WHERE substr(key, 1, 11) = 'scanned_at:' LIMIT 1")
+      .get();
+    return row !== undefined;
+  }
+
+  /**
+   * Remove documents whose source file no longer appears in the latest `scan`
+   * inventory for that source. Only sources with a `scanned_at:<sourceId>`
+   * marker are pruned so unscanned sources remain untouched. When the optional
+   * `document_embeddings` table is present, orphaned vectors are also deleted.
+   */
+  pruneStaleDocuments(sourceIds?: string[]): PruneResult {
+    const prefix = "scanned_at:";
+    return this.tx(() => {
+      const metaRows = this.db
+        .prepare("SELECT key FROM meta WHERE substr(key, 1, 11) = 'scanned_at:'")
+        .all() as Array<{ key: string }>;
+      const scannedSet = new Set(metaRows.map((r) => r.key.slice(prefix.length)));
+
+      const targetSources =
+        sourceIds === undefined
+          ? [...scannedSet].sort()
+          : [...new Set(sourceIds)].filter((id) => scannedSet.has(id));
+
+      if (targetSources.length === 0) return { pruned: 0, prunedIds: [] };
+
+      const listRelPaths = this.db.prepare("SELECT rel_path FROM files WHERE source_id = ?");
+      const listDocIds = this.db.prepare("SELECT id FROM documents WHERE source_id = ?");
+
+      const staleIds: string[] = [];
+      for (const sourceId of targetSources) {
+        const fileRows = listRelPaths.all(sourceId) as Array<{ rel_path: string }>;
+        const liveIds = new Set(fileRows.map((row) => documentId(sourceId, row.rel_path)));
+        const docRows = listDocIds.all(sourceId) as Array<{ id: string }>;
+        for (const row of docRows) {
+          if (!liveIds.has(row.id)) staleIds.push(row.id);
+        }
+      }
+
+      if (staleIds.length === 0) return { pruned: 0, prunedIds: [] };
+
+      const hasEmbeddingsTable =
+        this.db
+          .prepare(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'document_embeddings'",
+          )
+          .get() !== undefined;
+
+      const deleteDoc = this.db.prepare("DELETE FROM documents WHERE id = ?");
+      const deleteEmb = hasEmbeddingsTable
+        ? this.db.prepare("DELETE FROM document_embeddings WHERE doc_id = ?")
+        : null;
+      for (const id of staleIds) {
+        deleteDoc.run(id);
+        deleteEmb?.run(id);
+      }
+
+      return { pruned: staleIds.length, prunedIds: staleIds };
+    });
   }
 
   getDocument(id: string): Document | null {

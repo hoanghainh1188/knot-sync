@@ -893,3 +893,75 @@ test("scan/run next-step hints localize in ja/vi while --json stays pure", async
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("run prunes deleted JP/VI files, handles empty scanned folder, and logs run.prune", async () => {
+  const { Store } = await import("@hoanghainh/knot-sync-store-sqlite");
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-prune-"));
+  try {
+    const share = join(root, "share");
+    await mkdir(share, { recursive: true });
+    await writeFile(join(share, "請求書.txt"), "令和6年度 請求書 120000円\n", "utf8");
+    await writeFile(join(share, "hoadon.txt"), "Báo cáo mật tháng 5\n", "utf8");
+
+    const config = join(root, "cfg.yaml");
+    const logPath = join(root, "ops", "system.jsonl");
+    await writeFile(
+      config,
+      [
+        "sources:",
+        "  - id: s",
+        "    type: fs",
+        "    path: ./share",
+        "    extensions: [.txt]",
+        "store:",
+        "  path: ./.data/store.sqlite",
+        "logging:",
+        "  path: ./ops/system.jsonl",
+        "  level: info",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    assert.equal(await main(["scan", "-c", config], capture()), 0);
+    assert.equal(await main(["run", "-c", config], capture()), 0);
+
+    // Delete Japanese file and re-scan + run in Japanese locale.
+    await rm(join(share, "請求書.txt"));
+    assert.equal(await main(["scan", "-c", config], capture()), 0);
+    const pruneJa = capture();
+    assert.equal(await main(["run", "-c", config, "--lang", "ja"], pruneJa), 0);
+    assert.match(pruneJa.stdout.join("\n"), /削除 1/);
+
+    let store = new Store(join(root, ".data/store.sqlite"));
+    assert.equal(store.search("請求書").length, 0, "deleted JP file must leave search index");
+    assert.equal(store.search("Báo cáo").length, 1, "remaining VN file stays searchable");
+    store.close();
+
+    // Delete remaining Vietnamese file; post-scan empty folder must exit 0 and prune it.
+    await rm(join(share, "hoadon.txt"));
+    assert.equal(await main(["scan", "-c", config], capture()), 0);
+    const pruneVi = capture();
+    assert.equal(await main(["run", "-c", config, "--lang", "vi"], pruneVi), 0);
+    assert.match(pruneVi.stdout.join("\n"), /1 đã dọn/);
+
+    store = new Store(join(root, ".data/store.sqlite"));
+    assert.equal(store.documentCount(), 0);
+    assert.equal(store.search("Báo cáo").length, 0);
+    store.close();
+
+    const logText = await readFile(logPath, "utf8");
+    assert.ok(!logText.includes("Báo cáo mật"), "system log must not contain document body");
+    const events = logText
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { event: string; command?: string; count?: number });
+    const pruneEvents = events.filter((e) => e.event === "run.prune");
+    assert.equal(pruneEvents.length, 2);
+    assert.equal(pruneEvents[0]?.command, "run");
+    assert.equal(pruneEvents[0]?.count, 1);
+    assert.equal(pruneEvents[1]?.count, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

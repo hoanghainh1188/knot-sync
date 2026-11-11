@@ -89,7 +89,7 @@ plugins:
   "run.noInventory":
     '{path} に scan インベントリがありません。\n先に "knot-sync scan" を実行してから "knot-sync run" してください。',
   "run.complete":
-    "run 完了: 抽出 {extracted}、変更なし {skipped}、問題 {failed}",
+    "run 完了: 抽出 {extracted}、変更なし {skipped}、削除 {pruned}、問題 {failed}",
   "run.issuesHeader": "\n問題:",
   "run.andMoreIssues": "  … ほか {n} 件",
   "run.documentsSaved": "ドキュメントを {path} に保存しました",

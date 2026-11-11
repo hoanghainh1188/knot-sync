@@ -175,3 +175,75 @@ test("scan stats: types, duplicates, old and empty files", () => {
   assert.equal(store.stats("s", 5).issues, 0);
   store.close();
 });
+
+test("hasAnyScan and pruneStaleDocuments remove deleted JP/VI docs and FTS hits", () => {
+  const store = new Store(":memory:");
+  assert.equal(store.hasAnyScan(), false);
+
+  const invDoc = doc("s", "令和6年度_請求書.xlsx", "請求書", "請求書 120000円");
+  const memoDoc = doc("s", "メモ.txt", "メモ", "メモ 本文");
+  const manualDoc = doc("manual", "keep.txt", "Hóa đơn thủ công", "Hóa đơn thủ công nội dung");
+  store.upsertDocuments([invDoc, memoDoc, manualDoc]);
+
+  // Without scan markers, nothing is pruned even when files table is empty.
+  assert.deepEqual(store.pruneStaleDocuments(), { pruned: 0, prunedIds: [] });
+  assert.equal(store.documentCount(), 3);
+
+  store.replaceScan(
+    "s",
+    [file("メモ.txt", 10, "h-memo")],
+    [],
+  );
+  assert.equal(store.hasAnyScan(), true);
+
+  const res = store.pruneStaleDocuments();
+  assert.equal(res.pruned, 1);
+  assert.deepEqual(res.prunedIds, [invDoc.id]);
+  assert.equal(store.getDocument(invDoc.id), null);
+  assert.equal(store.search("請求書").length, 0, "pruned document must leave FTS5 index");
+  assert.equal(store.search("メモ").length, 1, "live document stays searchable");
+  assert.equal(store.getDocument(manualDoc.id)?.title, "Hóa đơn thủ công", "unscanned source preserved");
+
+  // Scanned source cleared to 0 files prunes all remaining docs for that source.
+  store.replaceScan("s", [], []);
+  const resAll = store.pruneStaleDocuments(["s"]);
+  assert.equal(resAll.pruned, 1);
+  assert.deepEqual(resAll.prunedIds, [memoDoc.id]);
+  assert.equal(store.search("メモ").length, 0);
+  assert.equal(store.documentCount(), 1, "manual source doc remains");
+  store.close();
+});
+
+test("pruneStaleDocuments cleans orphaned rows from document_embeddings when present", () => {
+  const store = new Store(":memory:");
+  const keepDoc = doc("s", "keep.txt", "Keep", "giữ lại");
+  const staleDoc = doc("s", "deleted.txt", "Deleted", "đã xóa");
+  store.upsertDocuments([keepDoc, staleDoc]);
+
+  store.db.exec(`
+    CREATE TABLE document_embeddings (
+      doc_id TEXT NOT NULL,
+      model TEXT NOT NULL,
+      dim INTEGER NOT NULL,
+      vector_json TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (doc_id, model)
+    );
+  `);
+  const insEmb = store.db.prepare(
+    "INSERT INTO document_embeddings (doc_id, model, dim, vector_json, content_hash, updated_at) VALUES (?, 'm', 2, '[1,0]', 'h', '2026-01-01')",
+  );
+  insEmb.run(keepDoc.id);
+  insEmb.run(staleDoc.id);
+
+  store.replaceScan("s", [file("keep.txt", 5, "hk")], []);
+  const res = store.pruneStaleDocuments(["s"]);
+  assert.equal(res.pruned, 1);
+
+  const remaining = store.db
+    .prepare("SELECT doc_id FROM document_embeddings")
+    .all() as Array<{ doc_id: string }>;
+  assert.deepEqual(remaining.map((r) => r.doc_id), [keepDoc.id]);
+  store.close();
+});
