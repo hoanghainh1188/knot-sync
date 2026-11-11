@@ -190,6 +190,61 @@ npx @hoanghainh/knot-sync@0.2.0 --version
 
 ---
 
+## MCP サーバー接続ガイド（`serve`）
+
+既定では `knot-sync serve` は **stdio**（ネットワークポートを開かない形式）で Claude Desktop / Cursor に接続します。アクセスは常に**読み取り専用**で、返却される文書本文は `UNTRUSTED DATA` 枠で保護され、すべての呼び出し履歴がローカルの `mcp-audit.jsonl`（`server.audit_log`）に記録されます。
+
+### チーム／社内 LAN 向け HTTP モード（任意）
+
+```bash
+export KNOT_SYNC_API_KEY='your-shared-secret'
+npx @hoanghainh/knot-sync serve --http --port 3000
+# http://127.0.0.1:3000/mcp で待ち受け（--host で変更可）
+```
+
+クライアントは `Authorization: Bearer <KNOT_SYNC_API_KEY>` を送信します。API キーは**環境変数専用**です（YAML に書かないでください）。トランスポートは `/mcp` の MCP **Streamable HTTP** です。
+
+### AI に公開される MCP Tools / Resources
+
+| 種別 | 識別子 | 説明 |
+|---|---|---|
+| **Resource** | `knot://sources` | 設定済みデータソース一覧 |
+| **Resource** | `knot://docs/{source}/{doc_id}` | クリーニング済み文書とメタデータを取得 |
+| **Resource** | `knot://db/{source}/{table}/schema` | 許可された SQL スキーマと業務ラベルを取得 |
+| **Tool** | `search_documents` | トライグラム全文検索（`query`, `source`, `type`, `limit`） |
+| **Tool** | `get_document` | ID 指定で文書を取得 |
+| **Tool** | `describe_table` | 許可列・データ型・業務説明を確認 |
+| **Tool** | `query_table` | 安全なフィルタ付きパラメータ化 SQL 検索（`eq`, `in`, `range`, `contains`, `starts_with`, `between_dates`, `is_null`） |
+| **Tool** | `search_similar` | ベクトル類似検索（`search-vector` プラグイン有効時のみ） |
+
+### Claude Desktop への登録（`claude_desktop_config.json`）
+
+```json
+{
+  "mcpServers": {
+    "knot-sync": {
+      "command": "npx",
+      "args": ["@hoanghainh/knot-sync", "serve", "-c", "/absolute/path/to/knot-sync.config.yaml"]
+    }
+  }
+}
+```
+
+### Cursor / Windsurf への登録（`.cursor/mcp.json`）
+
+```json
+{
+  "mcpServers": {
+    "knot-sync": {
+      "command": "npx",
+      "args": ["@hoanghainh/knot-sync", "serve", "-c", "/absolute/path/to/knot-sync.config.yaml"]
+    }
+  }
+}
+```
+
+---
+
 ### メッセージ言語
 
 ヘルプやエラーを日本語にする例:
