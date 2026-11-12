@@ -31,3 +31,24 @@ test("filterColumnNames keeps unreviewed only", () => {
   assert.deepEqual(filterColumnNames(cols, false).sort(), ["DONE_COL", "TKSK_CD", "ma_kh"]);
   assert.deepEqual(filterColumnNames(cols, true).sort(), ["TKSK_CD", "ma_kh"]);
 });
+
+test("Documents & Health chrome keys are localized across en/ja/vi", () => {
+  const keys = [
+    "tabCatalog",
+    "tabDocs",
+    "docsBanner",
+    "docsSearchPlaceholder",
+    "docsRiskHigh",
+    "docsNoStore",
+    "healthHeading",
+  ];
+  for (const key of keys) {
+    assert.notEqual(uiT("en", key), key);
+    assert.notEqual(uiT("ja", key), key);
+    assert.notEqual(uiT("vi", key), key);
+    assert.notEqual(uiT("ja", key), uiT("en", key));
+    assert.notEqual(uiT("vi", key), uiT("en", key));
+  }
+  assert.match(uiT("vi", "tabDocs"), /Tài liệu/);
+  assert.match(uiT("ja", "tabDocs"), /ドキュメント/);
+});

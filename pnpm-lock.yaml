@@ -297,6 +297,12 @@ importers:
       '@hoanghainh/knot-sync-catalog':
         specifier: workspace:*
         version: link:../catalog
+      '@hoanghainh/knot-sync-core':
+        specifier: workspace:*
+        version: link:../core
+      '@hoanghainh/knot-sync-store-sqlite':
+        specifier: workspace:*
+        version: link:../store-sqlite
       react:
         specifier: ^19.0.0
         version: 19.3.1

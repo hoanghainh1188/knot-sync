@@ -55,6 +55,15 @@ CREATE TABLE IF NOT EXISTS scan_issues (
   message   TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS run_issues (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_id   TEXT NOT NULL DEFAULT '',
+  path        TEXT NOT NULL,
+  code        TEXT NOT NULL,
+  message     TEXT NOT NULL,
+  recorded_at TEXT NOT NULL
+);
+
 -- Normalized documents from "run".
 CREATE TABLE IF NOT EXISTS documents (
   id            TEXT PRIMARY KEY,
@@ -132,6 +141,121 @@ export interface SearchOptions {
   limit?: number;
   sourceId?: string;
   type?: DocumentType | string;
+}
+
+export type GuardRiskLevel = "none" | "low" | "medium" | "high";
+
+export interface RunIssueInput {
+  sourceId?: string;
+  path: string;
+  code: string;
+  message: string;
+}
+
+export interface RunIssueRecord {
+  sourceId: string;
+  path: string;
+  code: string;
+  message: string;
+  recordedAt: string;
+}
+
+export interface ScanIssueRecord extends ScanIssue {
+  sourceId: string;
+}
+
+export interface SanitizedDocumentSummary {
+  id: string;
+  sourceId: string;
+  type: DocumentType;
+  title: string;
+  updatedAt: string;
+  snippet: string;
+  piiCount: number;
+  piiByType: Record<string, number>;
+  guardRisk: GuardRiskLevel;
+  guardCount: number;
+  guardTypes: string[];
+}
+
+export interface SanitizedDocumentListOptions {
+  q?: string;
+  sourceId?: string;
+  type?: DocumentType | string;
+  guardRisk?: GuardRiskLevel | string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SanitizedDocumentListResult {
+  total: number;
+  limit: number;
+  offset: number;
+  documents: SanitizedDocumentSummary[];
+}
+
+const VALID_GUARD_RISKS = new Set<string>(["none", "low", "medium", "high"]);
+
+function deriveGuardRisk(
+  guard: Array<{ rule: string }>,
+  metadata: Record<string, unknown>,
+): GuardRiskLevel {
+  const stored = metadata.guardRisk;
+  if (typeof stored === "string" && VALID_GUARD_RISKS.has(stored)) {
+    return stored as GuardRiskLevel;
+  }
+  if (metadata.guardInHidden === true) return "high";
+  const families = new Set(guard.map((g) => g.rule).filter((r) => r.startsWith("instruction-")));
+  if (families.size >= 2) return "high";
+  if (families.size === 1) return "medium";
+  if (
+    guard.some(
+      (g) =>
+        g.rule === "controls-flood" ||
+        g.rule === "base64-payload" ||
+        g.rule === "md-exfil",
+    )
+  ) {
+    return "medium";
+  }
+  if (guard.some((g) => g.rule === "controls") || guard.length > 0) return "low";
+  return "none";
+}
+
+function summarizeDocumentRow(
+  row: Record<string, string>,
+  terms: string[],
+): SanitizedDocumentSummary {
+  const pii = JSON.parse(row.pii_json || "[]") as Array<{ rule: string }>;
+  const guard = row.guard_json ? (JSON.parse(row.guard_json) as Array<{ rule: string }>) : [];
+  const metadata = JSON.parse(row.metadata_json || "{}") as Record<string, unknown>;
+  const piiByType: Record<string, number> = {};
+  for (const finding of pii) {
+    const key = typeof finding.rule === "string" && finding.rule ? finding.rule : "unknown";
+    piiByType[key] = (piiByType[key] ?? 0) + 1;
+  }
+  const guardTypes = [...new Set(guard.map((g) => g.rule).filter(Boolean))];
+  const content = (row.content ?? "").trim();
+  const snippet =
+    terms.length > 0
+      ? snippetOf(content, terms, 180)
+      : content.length > 400
+        ? `${content.slice(0, 400)}…`
+        : content;
+
+  return {
+    id: row.id!,
+    sourceId: row.source_id!,
+    type: row.type as DocumentType,
+    title: row.title!,
+    updatedAt: row.updated_at!,
+    snippet,
+    piiCount: pii.length,
+    piiByType,
+    guardRisk: deriveGuardRisk(guard, metadata),
+    guardCount: guard.length,
+    guardTypes,
+  };
 }
 
 function rowToDocument(row: Record<string, string>): Document {
@@ -564,5 +688,157 @@ export class Store {
       title: r.title!,
       snippet: snippetOf(r.content!, terms),
     }));
+  }
+
+  /** Replace the latest extraction/run issues recorded for UI & health inspection. */
+  replaceRunIssues(issues: RunIssueInput[]): void {
+    const recordedAt = new Date().toISOString();
+    this.tx(() => {
+      this.db.prepare("DELETE FROM run_issues").run();
+      const ins = this.db.prepare(
+        "INSERT INTO run_issues (source_id, path, code, message, recorded_at) VALUES (?, ?, ?, ?, ?)",
+      );
+      for (const issue of issues) {
+        ins.run(issue.sourceId ?? "", issue.path, issue.code, issue.message, recordedAt);
+      }
+    });
+  }
+
+  /** List recorded issues from the most recent extraction/run pass. */
+  listRunIssues(): RunIssueRecord[] {
+    const rows = this.db
+      .prepare(
+        "SELECT source_id, path, code, message, recorded_at FROM run_issues ORDER BY id ASC",
+      )
+      .all() as Array<{
+      source_id: string;
+      path: string;
+      code: string;
+      message: string;
+      recorded_at: string;
+    }>;
+    return rows.map((r) => ({
+      sourceId: r.source_id,
+      path: r.path,
+      code: r.code,
+      message: r.message,
+      recordedAt: r.recorded_at,
+    }));
+  }
+
+  /** List recorded scan issues, optionally filtered by sourceId. */
+  listScanIssues(sourceId?: string): ScanIssueRecord[] {
+    const rows = (
+      sourceId === undefined || sourceId === ""
+        ? this.db
+            .prepare("SELECT source_id, path, code, message FROM scan_issues ORDER BY source_id, path")
+            .all()
+        : this.db
+            .prepare(
+              "SELECT source_id, path, code, message FROM scan_issues WHERE source_id = ? ORDER BY path",
+            )
+            .all(sourceId)
+    ) as Array<{ source_id: string; path: string; code: string; message: string }>;
+    return rows.map((r) => ({
+      sourceId: r.source_id,
+      path: r.path,
+      code: r.code as ScanIssue["code"],
+      message: r.message,
+    }));
+  }
+
+  /** Return per-source inventory health statistics for every known source in the store. */
+  listAllSourceStats(oldFileYears = 3, now = Date.now()): SourceStats[] {
+    const rows = this.db
+      .prepare(
+        `SELECT DISTINCT source_id FROM files
+         UNION SELECT DISTINCT source_id FROM scan_issues
+         UNION SELECT DISTINCT source_id FROM documents
+         ORDER BY source_id ASC`,
+      )
+      .all() as Array<{ source_id: string }>;
+    return rows.map((r) => this.stats(r.source_id, oldFileYears, now));
+  }
+
+  /** Count indexed documents grouped by sourceId. */
+  countDocumentsBySource(): Record<string, number> {
+    const rows = this.db
+      .prepare("SELECT source_id, COUNT(*) AS n FROM documents GROUP BY source_id")
+      .all() as Array<{ source_id: string; n: number }>;
+    const counts: Record<string, number> = {};
+    for (const r of rows) counts[r.source_id] = Number(r.n);
+    return counts;
+  }
+
+  /**
+   * List sanitized document summaries for read-only exploration.
+   * Never returns metadata.originalContent, metadata.originalTables, or raw PII strings.
+   */
+  listSanitizedDocuments(options: SanitizedDocumentListOptions = {}): SanitizedDocumentListResult {
+    const safeLimit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 25)));
+    const safeOffset = Math.max(0, Math.floor(options.offset ?? 0));
+    const terms = (options.q ?? "").trim().split(/\s+/).filter(Boolean);
+
+    const filters: string[] = [];
+    const filterParams: string[] = [];
+    if (options.sourceId !== undefined && options.sourceId !== "") {
+      filters.push("d.source_id = ?");
+      filterParams.push(options.sourceId);
+    }
+    if (options.type !== undefined && options.type !== "") {
+      filters.push("d.type = ?");
+      filterParams.push(String(options.type));
+    }
+    const filterSql = filters.length > 0 ? ` AND ${filters.join(" AND ")}` : "";
+
+    let rows: Record<string, string>[];
+    if (terms.length > 0) {
+      if (terms.every((t) => [...t].length >= 3)) {
+        const match = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(" ");
+        rows = this.db
+          .prepare(
+            `SELECT d.id, d.source_id, d.type, d.title, d.content, d.metadata_json, d.pii_json, d.guard_json, d.updated_at
+             FROM documents_fts f JOIN documents d ON d.rowid = f.rowid
+             WHERE documents_fts MATCH ?${filterSql}
+             ORDER BY rank`,
+          )
+          .all(match, ...filterParams) as Record<string, string>[];
+      } else {
+        const likeWhere = terms
+          .map(() => "(d.title || ' ' || d.content) LIKE ? ESCAPE '\\'")
+          .join(" AND ");
+        const likeParams = terms.map((t) => `%${escapeLike(t)}%`);
+        rows = this.db
+          .prepare(
+            `SELECT d.id, d.source_id, d.type, d.title, d.content, d.metadata_json, d.pii_json, d.guard_json, d.updated_at
+             FROM documents d
+             WHERE ${likeWhere}${filterSql}
+             ORDER BY d.updated_at DESC, d.id ASC`,
+          )
+          .all(...likeParams, ...filterParams) as Record<string, string>[];
+      }
+    } else {
+      const whereSql = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
+      rows = this.db
+        .prepare(
+          `SELECT d.id, d.source_id, d.type, d.title, d.content, d.metadata_json, d.pii_json, d.guard_json, d.updated_at
+           FROM documents d
+           ${whereSql}
+           ORDER BY d.updated_at DESC, d.id ASC`,
+        )
+        .all(...filterParams) as Record<string, string>[];
+    }
+
+    let summaries = rows.map((row) => summarizeDocumentRow(row, terms));
+    if (options.guardRisk !== undefined && options.guardRisk !== "") {
+      summaries = summaries.filter((s) => s.guardRisk === options.guardRisk);
+    }
+
+    return {
+      total: summaries.length,
+      limit: safeLimit,
+      offset: safeOffset,
+      documents: summaries.slice(safeOffset, safeOffset + safeLimit),
+    };
   }
 }

@@ -11,6 +11,7 @@ import {
   writeCatalogFile,
   type CatalogDocument,
 } from "@hoanghainh/knot-sync-catalog";
+import { Store } from "@hoanghainh/knot-sync-store-sqlite";
 
 export const LOOPBACK_HOST = "127.0.0.1";
 export const DEFAULT_UI_PORT = 8787;
@@ -30,6 +31,8 @@ const MIME: Record<string, string> = {
 export interface CreateUiServerOptions {
   /** Absolute path to knot-sync.catalog.yaml. */
   catalogPath: string;
+  /** Optional path to the SQLite store for read-only Document Explorer & Health views. */
+  storePath?: string;
   /** Directory of built static assets (Vite outDir). */
   staticDir?: string;
   /** Listen port (default 8787). */
@@ -133,6 +136,7 @@ export async function createUiServer(options: CreateUiServerOptions): Promise<Ui
   const port = options.port ?? DEFAULT_UI_PORT;
   const staticDir = options.staticDir ?? resolveStaticDir();
   const catalogPath = options.catalogPath;
+  const storePath = options.storePath;
 
   const server = createServer(async (req, res) => {
     try {
@@ -141,6 +145,98 @@ export async function createUiServer(options: CreateUiServerOptions): Promise<Ui
 
       if (url.pathname === "/api/health") {
         sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (url.pathname === "/api/documents") {
+        if (method !== "GET") {
+          res.writeHead(405).end("Method not allowed");
+          return;
+        }
+        if (!storePath || !existsSync(storePath)) {
+          sendJson(res, 200, {
+            storeExists: false,
+            total: 0,
+            limit: 25,
+            offset: 0,
+            documents: [],
+            sources: [],
+            types: [],
+          });
+          return;
+        }
+        const rawLimit = Number(url.searchParams.get("limit") ?? 25);
+        const rawOffset = Number(url.searchParams.get("offset") ?? 0);
+        const limit = Number.isFinite(rawLimit) ? rawLimit : 25;
+        const offset = Number.isFinite(rawOffset) ? rawOffset : 0;
+        const store = new Store(storePath);
+        try {
+          const result = store.listSanitizedDocuments({
+            q: url.searchParams.get("q") ?? undefined,
+            sourceId: url.searchParams.get("sourceId") ?? undefined,
+            type: url.searchParams.get("type") ?? undefined,
+            guardRisk: url.searchParams.get("guardRisk") ?? undefined,
+            limit,
+            offset,
+          });
+          const sources = (
+            store.db
+              .prepare("SELECT DISTINCT source_id FROM documents ORDER BY source_id ASC")
+              .all() as Array<{ source_id: string }>
+          ).map((r) => r.source_id);
+          const types = (
+            store.db
+              .prepare("SELECT DISTINCT type FROM documents ORDER BY type ASC")
+              .all() as Array<{ type: string }>
+          ).map((r) => r.type);
+          sendJson(res, 200, {
+            storeExists: true,
+            ...result,
+            sources,
+            types,
+          });
+        } finally {
+          store.close();
+        }
+        return;
+      }
+
+      if (url.pathname === "/api/health-summary") {
+        if (method !== "GET") {
+          res.writeHead(405).end("Method not allowed");
+          return;
+        }
+        if (!storePath || !existsSync(storePath)) {
+          sendJson(res, 200, {
+            storeExists: false,
+            totalDocuments: 0,
+            sources: [],
+            scanIssues: [],
+            runIssues: [],
+          });
+          return;
+        }
+        const store = new Store(storePath);
+        try {
+          const stats = store.listAllSourceStats();
+          const docCounts = store.countDocumentsBySource();
+          const sources = stats.map((s) => ({
+            ...s,
+            documentCount: docCounts[s.sourceId] ?? 0,
+          }));
+          const scanIssues = store.listScanIssues();
+          const runIssues = store.listRunIssues();
+          const totalDocuments = store.documentCount();
+          sendJson(res, 200, {
+            storeExists: true,
+            totalDocuments,
+            sources,
+            scanIssues,
+            runIssues,
+          });
+        } finally {
+          store.close();
+        }
         return;
       }
 

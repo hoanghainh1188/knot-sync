@@ -632,7 +632,11 @@ async function cmdUi(
     port = n;
   }
   const catalogPath = structural.catalog.path;
-  const ui = await createUiServer({ catalogPath, port });
+  const ui = await createUiServer({
+    catalogPath,
+    storePath: structural.store.path,
+    port,
+  });
   const pageUrl = `${ui.url}?lang=${locale}`;
   io.err(t(locale, "ui.listening", { url: pageUrl }));
   io.err(t(locale, "ui.openHint", { path: catalogPath }));

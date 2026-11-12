@@ -247,3 +247,83 @@ test("pruneStaleDocuments cleans orphaned rows from document_embeddings when pre
   assert.deepEqual(remaining.map((r) => r.doc_id), [keepDoc.id]);
   store.close();
 });
+
+test("run_issues round-trip replacement and listScanIssues", () => {
+  const store = new Store(":memory:");
+  store.replaceScan("s", [file("ok.txt", 10, "h1")], [
+    { sourceId: "s", path: "bad.pdf", code: "EACCES", message: "Permission denied" },
+  ]);
+  store.replaceRunIssues([
+    { sourceId: "s", path: "scan.pdf", code: "EXTRACT", message: "No text layer" },
+    { path: "sheet.xlsx", code: "PII", message: "Masked 2 findings" },
+  ]);
+
+  const scanIssues = store.listScanIssues();
+  assert.equal(scanIssues.length, 1);
+  assert.equal(scanIssues[0]?.code, "EACCES");
+  assert.equal(store.listScanIssues("other").length, 0);
+
+  const runIssues = store.listRunIssues();
+  assert.equal(runIssues.length, 2);
+  assert.equal(runIssues[0]?.code, "EXTRACT");
+  assert.equal(runIssues[1]?.sourceId, "");
+  assert.ok(runIssues[0]?.recordedAt);
+
+  // Subsequent pass replaces previous run_issues
+  store.replaceRunIssues([]);
+  assert.equal(store.listRunIssues().length, 0);
+
+  const allStats = store.listAllSourceStats();
+  assert.equal(allStats.length, 1);
+  assert.equal(allStats[0]?.sourceId, "s");
+  store.close();
+});
+
+test("listSanitizedDocuments filters JP/VN/guardRisk and omits originalContent/raw PII", () => {
+  const store = new Store(":memory:");
+  const jpDoc = {
+    ...doc("jp-src", "seikyu.pdf", "令和6年度 請求書一覧", "担当者: [PII:email] 請求書の内容です。"),
+    pii: [{ rule: "email", start: 5, end: 25 }],
+    guard: [{ rule: "instruction-en", start: 0, end: 10 }],
+    metadata: {
+      guardRisk: "medium",
+      originalContent: "担当者: taro@example.com 請求書の内容です。",
+      originalTables: "[[\"0901234567\"]]",
+    },
+  };
+  const vnDoc = {
+    ...doc("vn-src", "hoadon.docx", "Hóa đơn tháng 5", "Khách hàng: [PII:cccd]"),
+    pii: [{ rule: "cccd", start: 12, end: 24 }],
+    guard: [{ rule: "controls", start: 0, end: 1 }],
+    metadata: {
+      guardRisk: "low",
+      originalContent: "Khách hàng: 079099001234",
+    },
+  };
+  store.upsertDocuments([jpDoc, vnDoc]);
+
+  const counts = store.countDocumentsBySource();
+  assert.deepEqual(counts, { "jp-src": 1, "vn-src": 1 });
+
+  const jpSearch = store.listSanitizedDocuments({ q: "請求書" });
+  assert.equal(jpSearch.total, 1);
+  assert.equal(jpSearch.documents[0]?.id, jpDoc.id);
+  assert.equal(jpSearch.documents[0]?.piiCount, 1);
+  assert.deepEqual(jpSearch.documents[0]?.piiByType, { email: 1 });
+  assert.equal(jpSearch.documents[0]?.guardRisk, "medium");
+
+  const payloadJson = JSON.stringify(jpSearch);
+  assert.equal(payloadJson.includes("taro@example.com"), false);
+  assert.equal(payloadJson.includes("0901234567"), false);
+  assert.equal(payloadJson.includes("originalContent"), false);
+  assert.equal(payloadJson.includes("originalTables"), false);
+
+  const riskLow = store.listSanitizedDocuments({ guardRisk: "low" });
+  assert.equal(riskLow.total, 1);
+  assert.equal(riskLow.documents[0]?.id, vnDoc.id);
+
+  const paged = store.listSanitizedDocuments({ limit: 1, offset: 1 });
+  assert.equal(paged.total, 2);
+  assert.equal(paged.documents.length, 1);
+  store.close();
+});
