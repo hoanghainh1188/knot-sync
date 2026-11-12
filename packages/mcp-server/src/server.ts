@@ -657,8 +657,48 @@ export function createKnotMcpServer(options: CreateKnotMcpServerOptions): McpSer
 }
 
 /** Connect the server to stdio and run until the transport closes. */
-export async function serveStdio(options: CreateKnotMcpServerOptions): Promise<void> {
+export async function serveStdio(
+  options: CreateKnotMcpServerOptions & { signal?: AbortSignal },
+): Promise<void> {
   const server = createKnotMcpServer(options);
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  await new Promise<void>((resolve) => {
+    let done = false;
+    const prevTransportClose = transport.onclose;
+    const prevServerClose = server.server.onclose;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      process.off("SIGINT", onSignal);
+      process.off("SIGTERM", onSignal);
+      process.stdin.off("end", onSignal);
+      process.stdin.off("close", onSignal);
+      options.signal?.removeEventListener("abort", onSignal);
+      resolve();
+    };
+    const onSignal = () => {
+      void server.close().catch(() => undefined).finally(finish);
+    };
+
+    transport.onclose = () => {
+      prevTransportClose?.();
+      finish();
+    };
+    server.server.onclose = () => {
+      prevServerClose?.();
+      finish();
+    };
+
+    if (options.signal?.aborted) {
+      onSignal();
+      return;
+    }
+    options.signal?.addEventListener("abort", onSignal, { once: true });
+    process.once("SIGINT", onSignal);
+    process.once("SIGTERM", onSignal);
+    process.stdin.once("end", onSignal);
+    process.stdin.once("close", onSignal);
+  });
 }

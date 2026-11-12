@@ -59,7 +59,7 @@ const CORE_TOP_LEVEL_KEYS = new Set([
   "cli",
 ]);
 
-const SERVER_KEYS = new Set(["audit_log"]);
+const SERVER_KEYS = new Set(["audit_log", "sync_interval_seconds"]);
 const LOGGING_KEYS = new Set(["path", "level"]);
 const LOG_LEVELS = new Set<LogLevel>(["info", "warn", "error"]);
 const CLI_KEYS = new Set(["locale"]);
@@ -277,7 +277,7 @@ export function parseServerConfig(
   for (const key of Object.keys(obj)) {
     if (!SERVER_KEYS.has(key)) {
       throw new ConfigError(
-        `Unknown key "${key}" under "server". Allowed keys: audit_log.`,
+        `Unknown key "${key}" under "server". Allowed keys: audit_log, sync_interval_seconds.`,
       );
     }
   }
@@ -288,7 +288,16 @@ export function parseServerConfig(
     }
     auditLog = resolvePath(baseDir, obj.audit_log);
   }
-  return { auditLog };
+  let syncIntervalSeconds: number | undefined;
+  if (obj.sync_interval_seconds !== undefined) {
+    syncIntervalSeconds = assertPositiveNumber(
+      obj.sync_interval_seconds,
+      "server.sync_interval_seconds",
+    );
+  }
+  return syncIntervalSeconds !== undefined
+    ? { auditLog, syncIntervalSeconds }
+    : { auditLog };
 }
 
 /** Parse optional `logging:` section. `defaultPath` is absolute. */
@@ -877,6 +886,7 @@ scan:
 # Optional MCP server settings for "knot-sync serve".
 # server:
 #   audit_log: ./.data/mcp-audit.jsonl
+#   sync_interval_seconds: 300
 # For "knot-sync serve --http", set API key in the environment (never in YAML):
 #   export KNOT_SYNC_API_KEY=your-shared-secret
 

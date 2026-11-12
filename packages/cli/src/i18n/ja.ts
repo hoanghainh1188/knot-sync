@@ -50,9 +50,10 @@ ui オプション:
   --port <number>       ループバックのポート（既定: 8787）
 
 serve オプション:
-  --http                HTTP で MCP を提供（/mcp の Streamable HTTP）
-  --port <number>       HTTP ポート（既定: 3000。ui でも使用）
-  --host <address>      待ち受けアドレス（既定: 127.0.0.1）
+  --http                  HTTP で MCP を提供（/mcp の Streamable HTTP）
+  --port <number>         HTTP ポート（既定: 3000。ui でも使用）
+  --host <address>        待ち受けアドレス（既定: 127.0.0.1）
+  --sync-interval <秒>    バックグラウンドで定期 scan+sync（または server.sync_interval_seconds）
   環境変数 KNOT_SYNC_API_KEY  --http 時に必須の共有 Bearer トークン
 
 plugins:
@@ -111,7 +112,10 @@ plugins:
     "KnotSync MCP サーバー http://{host}:{port}/mcp（Bearer 認証）。ストア: {store}。監査: {audit}。",
   "serve.invalidPort":
     '不正な --port "{value}" です。1〜65535 の整数を指定してください。',
+  "serve.invalidSyncInterval":
+    '不正な --sync-interval "{value}" です。0 より大きい秒数を指定してください。',
   "serve.catalogSuffix": " カタログ: {path}。",
+  "serve.syncSuffix": " 定期同期: {seconds}秒ごと。",
   "describe.noSql":
     "postgres/mysql ソースがありません。allow リスト付きの SQL ソースを追加してから describe を再実行してください。",
   "describe.moreWarnings": "…ほかサンプル省略警告 {n} 件",

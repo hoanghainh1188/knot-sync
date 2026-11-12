@@ -11,11 +11,9 @@ import {
   sourceRootPaths,
   starterConfigYaml,
   type CliLocale,
-  type Document,
   type FileEntry,
   type ScanIssue,
 } from "@hoanghainh/knot-sync-core";
-import { applyGuardToDocument } from "@hoanghainh/knot-sync-guard";
 import {
   DEFAULT_HTTP_HOST,
   DEFAULT_HTTP_PORT,
@@ -24,12 +22,8 @@ import {
   serveHttp,
   serveStdio,
 } from "@hoanghainh/knot-sync-mcp-server";
-import { applyPiiToDocument, textHasPii } from "@hoanghainh/knot-sync-pii-basic";
-import {
-  DEFAULT_UPSERT_CHUNK,
-  Store,
-  type SourceStats,
-} from "@hoanghainh/knot-sync-store-sqlite";
+import { textHasPii } from "@hoanghainh/knot-sync-pii-basic";
+import { Store, type SourceStats } from "@hoanghainh/knot-sync-store-sqlite";
 import {
   DEFAULT_UI_PORT,
   createUiServer,
@@ -39,15 +33,23 @@ import { cmdBench } from "./bench/run.js";
 import { CatalogError, cmdDescribe } from "./describe.js";
 import { formatBytes, formatCount, table } from "./format.js";
 import { resolveLocale, t } from "./i18n/index.js";
-import { maybeApplyHousenRewrite } from "./housen-rewrite.js";
-import { extractWithOcrFallback } from "./ocr-fallback.js";
-import { findExtractor, loadAppPlugins } from "./plugins.js";
+import { loadAppPlugins } from "./plugins.js";
 import {
   assertReportPathOutsideSources,
   normalizeReportArgv,
   writeScanReportHtml,
 } from "./report.js";
-import { appendSystemLogSafe, withSystemLog } from "./system-log-run.js";
+import {
+  runInProcessSyncCycle,
+  runScanPass,
+  runSyncPass,
+  startPeriodicSync,
+} from "./sync-cycle.js";
+import {
+  appendSystemLogSafe,
+  sanitizeSystemLogError,
+  withSystemLog,
+} from "./system-log-run.js";
 import type { MessageKey } from "./i18n/messages.js";
 
 const PII_SAMPLE_EXTS = new Set([".txt", ".md", ".csv", ".tsv"]);
@@ -61,6 +63,8 @@ export interface Io {
   err: (text: string) => void;
   /** Show live progress (only when stderr is a terminal). */
   progress: boolean;
+  /** Optional abort signal to trigger graceful server shutdown (used in tests/embedding). */
+  signal?: AbortSignal;
 }
 
 const defaultIo: Io = {
@@ -106,6 +110,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         port: { type: "string" },
         host: { type: "string" },
         http: { type: "boolean" },
+        "sync-interval": { type: "string" },
         suite: { type: "string" },
       },
     });
@@ -197,6 +202,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
             http: Boolean(values.http),
             port: values.port,
             host: values.host,
+            syncInterval: values["sync-interval"],
           },
           io,
           langFlag,
@@ -396,45 +402,36 @@ async function cmdScan(
       const results: ScanResult[] = [];
 
       try {
-        for (const source of config.sources) {
-          const connector = host.getConnector(source.type);
-          if (!connector) {
-            throw new ConfigError(
-              `No connector registered for source type "${source.type}". ` +
-                `Registered: ${host.listConnectorIds().join(", ") || "(none)"}.`,
-            );
-          }
-
-          const files: FileEntry[] = [];
-          const issues: ScanIssue[] = [];
-          let lastShown = 0;
-
-          for await (const entry of connector.scan(source, {
-            hash: config.scan.hash,
-            onIssue: (i) => issues.push(i),
-          })) {
-            files.push(entry);
-            if (io.progress && files.length - lastShown >= 200) {
-              lastShown = files.length;
+        let lastShown = 0;
+        const scanRes = await runScanPass({
+          config,
+          host,
+          store,
+          onSourceProgress: (sourceId, count) => {
+            if (io.progress && count - lastShown >= 200) {
+              lastShown = count;
               process.stderr.write(
                 "\r" +
                   t(locale, "scan.progressFiles", {
-                    sourceId: source.id,
-                    count: formatCount(files.length),
+                    sourceId,
+                    count: formatCount(count),
                   }),
               );
             }
-          }
-          if (io.progress && lastShown > 0) process.stderr.write("\r\x1b[K");
-
-          store.replaceScan(source.id, files, issues);
+          },
+          onSourceDone: () => {
+            if (io.progress && lastShown > 0) process.stderr.write("\r\x1b[K");
+            lastShown = 0;
+          },
+        });
+        for (const s of scanRes.sources) {
           const row: ScanResult = {
-            stats: store.stats(source.id, config.scan.oldFileYears),
-            issues,
-            topDuplicates: store.duplicateGroups(source.id, 5),
+            stats: s.stats,
+            issues: s.issues,
+            topDuplicates: s.topDuplicates,
           };
           if (piiEstimate) {
-            row.piiLikelyFiles = await estimatePiiLikelyFiles(files, host);
+            row.piiLikelyFiles = await estimatePiiLikelyFiles(s.files, host);
           }
           results.push(row);
         }
@@ -505,314 +502,13 @@ async function cmdRun(
   const store = new Store(structural.store.path);
 
   try {
-    const files = store.listFiles();
-    if (files.length === 0 && !store.hasAnyScan()) {
+    const syncRes = await runSyncPass({ config, host, store });
+    if (syncRes.noInventory) {
       io.err(t(locale, "run.noInventory", { path: structural.store.path }));
       return 1;
     }
 
-    let extracted = 0;
-    let skipped = 0;
-    let failed = 0;
-    const issues: { path: string; code: string; message: string }[] = [];
-    const pending: Document[] = [];
-    const flushPending = () => {
-      if (pending.length === 0) return;
-      store.upsertDocuments(pending);
-      pending.length = 0;
-    };
-    const enqueue = (document: Document) => {
-      pending.push(document);
-      if (pending.length >= DEFAULT_UPSERT_CHUNK) flushPending();
-    };
-
-    for (const file of files) {
-      const extractor = findExtractor(host, file);
-      if (!extractor) {
-        failed += 1;
-        issues.push({
-          path: file.relPath,
-          code: "UNSUPPORTED",
-          message: `No extractor registered for ${file.ext || "(no extension)"}.`,
-        });
-        continue;
-      }
-
-      if (store.isUnchangedExtraction(file)) {
-        skipped += 1;
-        continue;
-      }
-
-      const maxFileSizeBytes = structural.extraction.maxFileSizeMb * 1024 * 1024;
-      if (file.size > maxFileSizeBytes) {
-        failed += 1;
-        issues.push({
-          path: file.relPath,
-          code: "SKIPPED_TOO_LARGE",
-          message:
-            `Skipped "${file.relPath}" (${file.size} bytes) — over extraction.maxFileSizeMb=${structural.extraction.maxFileSizeMb}. ` +
-            `Raise the limit or exclude the file, then retry "knot-sync run".`,
-        });
-        continue;
-      }
-
-      const timeoutMs = Math.max(1, Math.floor(structural.extraction.timeoutSeconds * 1000));
-      const signal = AbortSignal.timeout(timeoutMs);
-      const timeoutMessage =
-        `Extraction timed out for "${file.relPath}" after ${structural.extraction.timeoutSeconds}s. ` +
-        `Raise extraction.timeoutSeconds or exclude the file, then retry "knot-sync run".`;
-
-      try {
-        const extractCtx = {
-          signal,
-          maxFileSizeBytes,
-          maxTextChars: structural.extraction.maxTextChars,
-        };
-        const raced = await Promise.race([
-          (async () => {
-            const primary = await extractWithOcrFallback(
-              host,
-              file,
-              extractor,
-              extractCtx,
-            );
-            return maybeApplyHousenRewrite(host, file, primary, extractCtx);
-          })(),
-          new Promise<never>((_, reject) => {
-            const onAbort = () => {
-              signal.removeEventListener("abort", onAbort);
-              reject(Object.assign(new Error(timeoutMessage), { name: "TimeoutError" }));
-            };
-            if (signal.aborted) onAbort();
-            else signal.addEventListener("abort", onAbort, { once: true });
-          }),
-        ]);
-        if (signal.aborted) {
-          failed += 1;
-          issues.push({
-            path: file.relPath,
-            code: "EXTRACT_TIMEOUT",
-            message: timeoutMessage,
-          });
-          continue;
-        }
-        const { result, sideIssues } = raced;
-        // Side issues (e.g. housen LICENSE) keep the office Document — record
-        // without double-counting the file as both extracted and failed.
-        for (const si of sideIssues) {
-          issues.push({ path: file.relPath, code: si.code, message: si.message });
-        }
-        if (!result.ok) {
-          failed += 1;
-          issues.push({ path: file.relPath, code: result.code, message: result.message });
-          continue;
-        }
-
-        let document = result.document;
-        let currentCleanerId = "(unknown)";
-        try {
-          for (const cleaner of host.cleaners.values()) {
-            currentCleanerId = cleaner.id;
-            document = await cleaner.clean(document);
-          }
-        } catch (err) {
-          const message =
-            `Cleaner "${currentCleanerId}" failed (${(err as Error).message || String(err)}). ` +
-            `Disable steps under cleaning: or fix the input, then retry "knot-sync run".`;
-          const {
-            sourceFileHash: _drop,
-            originalContent: _oc,
-            originalTables: _ot,
-            guardHiddenText: _ht,
-            ...restMeta
-          } = result.document.metadata;
-          void _drop;
-          void _oc;
-          void _ot;
-          void _ht;
-          // Never persist unmasked PII on error — omit originals when rules are active.
-          enqueue({
-            ...result.document,
-            content: "",
-            tables: [],
-            pii: [],
-            guard: [],
-            metadata: {
-              ...restMeta,
-              status: "error",
-              errorMessage: message,
-              ...(host.piiRules.size === 0 &&
-              structural.cleaning.keepOriginalText === true
-                ? {
-                    originalContent:
-                      result.document.metadata.originalContent ??
-                      result.document.content,
-                  }
-                : {}),
-            },
-          });
-          failed += 1;
-          issues.push({ path: file.relPath, code: "CLEAN", message });
-          continue;
-        }
-
-        try {
-          if (host.piiRules.size > 0) {
-            document = applyPiiToDocument(document, host.piiRules.values(), structural.pii);
-          }
-        } catch (err) {
-          const message =
-            `PII masking failed (${(err as Error).message || String(err)}). ` +
-            `Check pii: settings or disable rules, then retry "knot-sync run".`;
-          const {
-            sourceFileHash: _drop,
-            originalContent: _oc,
-            originalTables: _ot,
-            guardHiddenText: _ht,
-            ...restMeta
-          } = document.metadata;
-          void _drop;
-          void _oc;
-          void _ot;
-          void _ht;
-          enqueue({
-            ...document,
-            content: "",
-            tables: [],
-            pii: [],
-            guard: [],
-            metadata: {
-              ...restMeta,
-              status: "error",
-              errorMessage: message,
-            },
-          });
-          failed += 1;
-          issues.push({ path: file.relPath, code: "PII", message });
-          continue;
-        }
-
-        try {
-          if (host.guardRules.size > 0) {
-            document = applyGuardToDocument(
-              document,
-              host.guardRules.values(),
-              structural.guard,
-            );
-            if (document.metadata.status === "error") {
-              enqueue(document);
-              failed += 1;
-              issues.push({
-                path: file.relPath,
-                code: "GUARD",
-                message: String(document.metadata.errorMessage ?? "blocked by guard"),
-              });
-              continue;
-            }
-          }
-        } catch (err) {
-          const message =
-            `Prompt-injection guard failed (${(err as Error).message || String(err)}). ` +
-            `Check guard: settings or disable rules, then retry "knot-sync run".`;
-          const {
-            sourceFileHash: _drop,
-            originalContent: _oc,
-            originalTables: _ot,
-            guardHiddenText: _ht,
-            ...restMeta
-          } = document.metadata;
-          void _drop;
-          void _oc;
-          void _ot;
-          void _ht;
-          enqueue({
-            ...document,
-            content: "",
-            tables: [],
-            pii: document.pii,
-            guard: document.guard ?? [],
-            metadata: {
-              ...restMeta,
-              status: "error",
-              errorMessage: message,
-            },
-          });
-          failed += 1;
-          issues.push({ path: file.relPath, code: "GUARD", message });
-          continue;
-        }
-
-        try {
-          let blockedByEnricher = false;
-          for (const enricher of host.documentEnrichers.values()) {
-            document = await enricher.enrich(document, {
-              pii: structural.pii,
-              guard: structural.guard,
-            });
-            if (document.metadata.status === "error") {
-              enqueue(document);
-              failed += 1;
-              issues.push({
-                path: file.relPath,
-                code: "GUARD",
-                message: String(
-                  document.metadata.errorMessage ?? "blocked by document enricher",
-                ),
-              });
-              blockedByEnricher = true;
-              break;
-            }
-          }
-          if (blockedByEnricher) continue;
-          enqueue(document);
-          extracted += 1;
-        } catch (err) {
-          const message =
-            `Document enricher failed (${(err as Error).message || String(err)}). ` +
-            `Check paid enricher plugins (e.g. guard-llm) settings, then retry "knot-sync run".`;
-          const {
-            sourceFileHash: _drop,
-            originalContent: _oc,
-            originalTables: _ot,
-            guardHiddenText: _ht,
-            ...restMeta
-          } = document.metadata;
-          void _drop;
-          void _oc;
-          void _ot;
-          void _ht;
-          enqueue({
-            ...document,
-            content: "",
-            tables: [],
-            pii: document.pii,
-            guard: document.guard ?? [],
-            metadata: {
-              ...restMeta,
-              status: "error",
-              errorMessage: message,
-            },
-          });
-          failed += 1;
-          issues.push({ path: file.relPath, code: "ENRICH", message });
-        }
-      } catch (err) {
-        failed += 1;
-        const name = (err as { name?: string }).name ?? "";
-        const timedOut =
-          signal.aborted || name === "TimeoutError" || name === "AbortError";
-        issues.push({
-          path: file.relPath,
-          code: timedOut ? "EXTRACT_TIMEOUT" : "EXTRACT",
-          message: timedOut ? timeoutMessage : (err as Error).message || String(err),
-        });
-      }
-    }
-
-    flushPending();
-
-    const { pruned } = store.pruneStaleDocuments(config.sources.map((s) => s.id));
-    if (pruned > 0) {
+    if (syncRes.pruned > 0) {
       await appendSystemLogSafe(
         log,
         io,
@@ -820,7 +516,7 @@ async function cmdRun(
           level: "info",
           event: "run.prune",
           command: "run",
-          count: pruned,
+          count: syncRes.pruned,
           storePath: structural.store.path,
         },
         formatSystemLogWriteFailed(locale),
@@ -829,40 +525,36 @@ async function cmdRun(
 
     io.out(
       t(locale, "run.complete", {
-        extracted: formatCount(extracted),
-        skipped: formatCount(skipped),
-        pruned: formatCount(pruned),
-        failed: formatCount(failed),
+        extracted: formatCount(syncRes.extracted),
+        skipped: formatCount(syncRes.skipped),
+        pruned: formatCount(syncRes.pruned),
+        failed: formatCount(syncRes.failed),
       }),
     );
-    if (issues.length > 0) {
+    if (syncRes.issues.length > 0) {
       io.out(t(locale, "run.issuesHeader"));
-      for (const i of issues.slice(0, 20)) {
+      for (const i of syncRes.issues.slice(0, 20)) {
         io.out(formatRunIssue(locale, i));
       }
-      if (issues.length > 20) {
-        io.out(t(locale, "run.andMoreIssues", { n: issues.length - 20 }));
+      if (syncRes.issues.length > 20) {
+        io.out(t(locale, "run.andMoreIssues", { n: syncRes.issues.length - 20 }));
       }
     }
     io.out(t(locale, "run.documentsSaved", { path: structural.store.path }));
 
-    const embedTool = host.mcpTools.get("embed_documents");
-    if (embedTool) {
-      try {
-        const embedResult = await embedTool.handler({ onRun: true }, { store, config });
-        if (!embedResult.meta?.skippedBySetting) {
-          io.out(
-            t(locale, "embed.done", {
-              written: String(embedResult.meta?.written ?? 0),
-              skipped: String(embedResult.meta?.skipped ?? 0),
-              failed: String(embedResult.meta?.failed ?? 0),
-            }),
-          );
-        }
-      } catch (err) {
+    if (syncRes.embed) {
+      if (syncRes.embed.error !== undefined) {
         io.err(
           t(locale, "embed.failed", {
-            detail: (err as Error).message || String(err),
+            detail: syncRes.embed.error,
+          }),
+        );
+      } else if (!syncRes.embed.skippedBySetting) {
+        io.out(
+          t(locale, "embed.done", {
+            written: String(syncRes.embed.written),
+            skipped: String(syncRes.embed.skipped),
+            failed: String(syncRes.embed.failed),
           }),
         );
       }
@@ -1040,9 +732,25 @@ async function loadCatalogIfPresent(path: string) {
   return loadCatalogFile(path);
 }
 
+function resolveSyncIntervalSeconds(
+  flagValue: string | undefined,
+  configured: number | undefined,
+  locale: CliLocale,
+): number | undefined {
+  if (flagValue === undefined) return configured;
+  const trimmed = flagValue.trim();
+  const parsed = Number(trimmed);
+  if (!trimmed || !Number.isFinite(parsed) || parsed <= 0) {
+    throw new ConfigError(
+      t(locale, "serve.invalidSyncInterval", { value: String(flagValue) }),
+    );
+  }
+  return parsed;
+}
+
 async function cmdServe(
   configPath: string,
-  flags: { http: boolean; port?: string; host?: string },
+  flags: { http: boolean; port?: string; host?: string; syncInterval?: string },
   io: Io,
   langFlag: string | undefined,
   onLocale: (locale: CliLocale) => void,
@@ -1050,6 +758,11 @@ async function cmdServe(
   const structural = await loadConfig(configPath);
   const locale = localeForConfig(langFlag, structural.cli.locale);
   onLocale(locale);
+  const syncIntervalSeconds = resolveSyncIntervalSeconds(
+    flags.syncInterval,
+    structural.server.syncIntervalSeconds,
+    locale,
+  );
   const pluginHost = await loadAppPlugins(structural);
   const config = resolveConfig(structural, pluginHost);
   const writeFailed = formatSystemLogWriteFailed(locale);
@@ -1066,11 +779,12 @@ async function cmdServe(
       const store = new Store(config.store.path);
 
       try {
+        let port = DEFAULT_HTTP_PORT;
+        let bindHost = DEFAULT_HTTP_HOST;
         if (flags.http) {
           if (!readApiKeyFromEnv() && !pluginHost.mcpAuthProvider) {
             throw new ConfigError(missingApiKeyMessage());
           }
-          let port = DEFAULT_HTTP_PORT;
           if (flags.port !== undefined) {
             const n = Number(flags.port);
             if (!Number.isInteger(n) || n <= 0 || n > 65535) {
@@ -1080,14 +794,26 @@ async function cmdServe(
             }
             port = n;
           }
-          const bindHost = flags.host?.trim() || DEFAULT_HTTP_HOST;
+          bindHost = flags.host?.trim() || DEFAULT_HTTP_HOST;
+        }
+
+        const catalogSuffix = catalog
+          ? t(locale, "serve.catalogSuffix", { path: config.catalog.path })
+          : "";
+        const syncSuffix =
+          syncIntervalSeconds !== undefined
+            ? t(locale, "serve.syncSuffix", { seconds: String(syncIntervalSeconds) })
+            : "";
+        let listenLogPromise: Promise<void> | undefined;
+
+        if (!flags.http) {
           io.err(
-            t(locale, "serve.listeningHttp", {
-              host: bindHost,
-              port: String(port),
+            t(locale, "serve.listening", {
               store: config.store.path,
               audit: config.server.auditLog,
-            }) + (catalog ? t(locale, "serve.catalogSuffix", { path: config.catalog.path }) : ""),
+            }) +
+              catalogSuffix +
+              syncSuffix,
           );
           await appendSystemLogSafe(
             log,
@@ -1096,13 +822,78 @@ async function cmdServe(
               level: "info",
               event: "serve.listen",
               command: "serve",
-              host: bindHost,
-              port,
               storePath: config.store.path,
             },
             writeFailed,
           );
-          try {
+        }
+
+        const periodic =
+          syncIntervalSeconds !== undefined
+            ? startPeriodicSync({
+                intervalSeconds: syncIntervalSeconds,
+                runCycle: (signal) =>
+                  runInProcessSyncCycle({
+                    config,
+                    host: pluginHost,
+                    store,
+                    signal,
+                  }),
+                onCycleStart: async () => {
+                  await appendSystemLogSafe(
+                    log,
+                    io,
+                    {
+                      level: "info",
+                      event: "sync.start",
+                      command: "serve",
+                      storePath: config.store.path,
+                    },
+                    writeFailed,
+                  );
+                },
+                onCycleEnd: async (summary) => {
+                  await appendSystemLogSafe(
+                    log,
+                    io,
+                    {
+                      level: summary.failed > 0 || summary.embedError ? "warn" : "info",
+                      event: "sync.end",
+                      command: "serve",
+                      durationMs: summary.durationMs,
+                      scanned: summary.scanned,
+                      extracted: summary.extracted,
+                      skipped: summary.skipped,
+                      pruned: summary.pruned,
+                      failed: summary.failed,
+                      storePath: config.store.path,
+                      ...(summary.embedError !== undefined
+                        ? { error: sanitizeSystemLogError(summary.embedError) }
+                        : {}),
+                    },
+                    writeFailed,
+                  );
+                },
+                onCycleError: async (err, durationMs) => {
+                  await appendSystemLogSafe(
+                    log,
+                    io,
+                    {
+                      level: "error",
+                      event: "sync.error",
+                      command: "serve",
+                      durationMs,
+                      error: sanitizeSystemLogError(err),
+                      storePath: config.store.path,
+                    },
+                    writeFailed,
+                  );
+                },
+              })
+            : undefined;
+
+        try {
+          if (flags.http) {
             await serveHttp({
               store,
               config,
@@ -1110,53 +901,56 @@ async function cmdServe(
               catalog,
               bindHost,
               port,
-            });
-          } finally {
-            await appendSystemLogSafe(
-              log,
-              io,
-              {
-                level: "info",
-                event: "serve.shutdown",
-                command: "serve",
-                storePath: config.store.path,
+              ...(io.signal ? { signal: io.signal } : {}),
+              onListening: ({ host: boundHost, port: boundPort }) => {
+                io.err(
+                  t(locale, "serve.listeningHttp", {
+                    host: boundHost,
+                    port: String(boundPort),
+                    store: config.store.path,
+                    audit: config.server.auditLog,
+                  }) +
+                    catalogSuffix +
+                    syncSuffix,
+                );
+                listenLogPromise = appendSystemLogSafe(
+                  log,
+                  io,
+                  {
+                    level: "info",
+                    event: "serve.listen",
+                    command: "serve",
+                    host: boundHost,
+                    port: boundPort,
+                    storePath: config.store.path,
+                  },
+                  writeFailed,
+                );
               },
-              writeFailed,
-            );
+            });
+          } else {
+            await serveStdio({
+              store,
+              config,
+              host: pluginHost,
+              catalog,
+              ...(io.signal ? { signal: io.signal } : {}),
+            });
           }
-        } else {
-          io.err(
-            t(locale, "serve.listening", {
-              store: config.store.path,
-              audit: config.server.auditLog,
-            }) + (catalog ? t(locale, "serve.catalogSuffix", { path: config.catalog.path }) : ""),
-          );
+        } finally {
+          await listenLogPromise;
+          await periodic?.stop();
           await appendSystemLogSafe(
             log,
             io,
             {
               level: "info",
-              event: "serve.listen",
+              event: "serve.shutdown",
               command: "serve",
               storePath: config.store.path,
             },
             writeFailed,
           );
-          try {
-            await serveStdio({ store, config, host: pluginHost, catalog });
-          } finally {
-            await appendSystemLogSafe(
-              log,
-              io,
-              {
-                level: "info",
-                event: "serve.shutdown",
-                command: "serve",
-                storePath: config.store.path,
-              },
-              writeFailed,
-            );
-          }
         }
       } finally {
         store.close();

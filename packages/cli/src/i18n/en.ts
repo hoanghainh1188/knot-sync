@@ -50,10 +50,11 @@ ui options:
   --port <number>       Loopback port (default: 8787)
 
 serve options:
-  --http                Serve MCP over HTTP (Streamable HTTP at /mcp)
-  --port <number>       HTTP port (default: 3000; also used by ui)
-  --host <address>      HTTP bind address (default: 127.0.0.1)
-  Env KNOT_SYNC_API_KEY Required shared Bearer token when using --http
+  --http                  Serve MCP over HTTP (Streamable HTTP at /mcp)
+  --port <number>         HTTP port (default: 3000; also used by ui)
+  --host <address>        HTTP bind address (default: 127.0.0.1)
+  --sync-interval <sec>   Re-scan & sync periodically in background (or server.sync_interval_seconds)
+  Env KNOT_SYNC_API_KEY   Required shared Bearer token when using --http
 
 plugins:
   Plugins run in-process with full trust. Install only plugins you trust.
@@ -111,7 +112,10 @@ plugins:
     "KnotSync MCP server on http://{host}:{port}/mcp (Bearer auth). Store: {store}. Audit: {audit}.",
   "serve.invalidPort":
     'Invalid --port "{value}". Use an integer from 1 to 65535.',
+  "serve.invalidSyncInterval":
+    'Invalid --sync-interval "{value}". Use a positive number of seconds.',
   "serve.catalogSuffix": " Catalog: {path}.",
+  "serve.syncSuffix": " Periodic sync: every {seconds}s.",
   "describe.noSql":
     'No postgres/mysql sources found. Add a SQL source with an "allow" list, then re-run describe.',
   "describe.moreWarnings": "…and {n} more sample skip warnings",

@@ -343,6 +343,23 @@ npx @hoanghainh/knot-sync serve --http --port 3000
 
 Clients must send `Authorization: Bearer <KNOT_SYNC_API_KEY>`. The API key is **environment-only** (never put it in YAML). Default bind is loopback; use a reverse proxy / firewall if you bind `0.0.0.0`. Transport is MCP **Streamable HTTP** at `/mcp` (SDK’s current HTTP mode; legacy SSE is not required).
 
+### Optional background periodic sync
+
+To keep the local SQLite store fresh while `knot-sync serve` is running (in either stdio or `--http` mode), enable periodic scan+extraction+pruning cycles:
+
+```bash
+knot-sync serve --http --port 3000 --sync-interval 300
+```
+
+Or configure it in `knot-sync.yaml` (overridden by `--sync-interval`):
+
+```yaml
+server:
+  sync_interval_seconds: 300
+```
+
+Cycles run sequentially (waiting the configured interval after each completed pass before starting the next), log `sync.start` / `sync.end` / `sync.error` to `system.jsonl` without document bodies or PII, and drain cleanly on shutdown before closing SQLite.
+
 ### Paid plugins (opt-in)
 
 Paid edition plugins are **not** separate npm packages on the registry. Only `@hoanghainh/knot-sync` is published. Enable Paid features from this monorepo by listing package paths under config `plugins:` and setting each plugin’s license environment variable. Core never checks licenses. Defaults stay offline; these may talk to **local** Ollama/Docker/OCR only.

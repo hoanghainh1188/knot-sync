@@ -25,6 +25,11 @@ export interface SystemLogRecord {
   host?: string;
   port?: number;
   count?: number;
+  scanned?: number;
+  extracted?: number;
+  skipped?: number;
+  pruned?: number;
+  failed?: number;
 }
 
 export interface CreateSystemLoggerOptions {
@@ -88,6 +93,11 @@ export class SystemLogger {
     if (record.host !== undefined) line.host = record.host;
     if (record.port !== undefined) line.port = record.port;
     if (record.count !== undefined) line.count = record.count;
+    if (record.scanned !== undefined) line.scanned = record.scanned;
+    if (record.extracted !== undefined) line.extracted = record.extracted;
+    if (record.skipped !== undefined) line.skipped = record.skipped;
+    if (record.pruned !== undefined) line.pruned = record.pruned;
+    if (record.failed !== undefined) line.failed = record.failed;
 
     await appendFile(this.absPath, `${JSON.stringify(line)}\n`, "utf8");
   }
