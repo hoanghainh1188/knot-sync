@@ -4,10 +4,31 @@ All notable changes to KnotSync are documented in this file.
 
 ## Unreleased
 
-Docs-only prep for a future 1.0 public contract (no package version bump):
+## 0.4.0 — 2026-11-12
 
-- Document the stable CLI / MCP / plugin `apiVersion` 1 surface toward 1.0
-- Clarify that Paid plugins are not separate npm packages
+Pre-pilot release of the bundled open-core CLI (`@hoanghainh/knot-sync`), adding
+in-memory `Connector.readBytes` streaming for zero-disk-footprint ingestion
+alongside the v0.4 Paid plugin surface (`connector-cloud-drive` and legacy
+`.xls`/`.doc` conversion).
+
+### Added
+
+- Optional `Connector.readBytes` contract in `@knotsync/core` and `cli` so
+  remote connectors stream extracted bytes in-memory through `extractor-office`,
+  JA/VI cleaner, PII masker, and injection guard without writing unmasked
+  customer files to disk
+- Paid plugin `@knotsync/connector-cloud-drive` (zero third-party deps, built on
+  Node.js `fetch` and `node:crypto` Ed25519 offline license verification via
+  `KNOT_SYNC_CLOUD_DRIVE_LICENSE`) supporting read-only Google Drive, SharePoint,
+  and OneDrive ingestion
+- Paid legacy `.xls` / `.doc` conversion support in `@knotsync/extractor-office`
+- Stable CLI / MCP / plugin `apiVersion` 1 public contract documentation toward 1.0
+
+### Notes
+
+- Verify after publish: `npx @hoanghainh/knot-sync@0.4.0 --version`
+- Paid plugins are not published as separate npm packages in this release;
+  enable them from the monorepo via `plugins:` + license env vars
 
 ## 0.2.0 — 2026-11-11
 

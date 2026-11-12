@@ -29,7 +29,7 @@ test("only CLI is public; internals are private with README/LICENSE", () => {
     assert.ok(files.includes("LICENSE"), `${dir} files LICENSE`);
 
     if (pkg.name === "@hoanghainh/knot-sync") {
-      assert.equal(pkg.version, "0.2.0", "CLI publishable version");
+      assert.equal(pkg.version, "0.4.0", "CLI publishable version");
       assert.notEqual(pkg.private, true, "CLI must be publishable");
     } else {
       assert.equal(pkg.private, true, `${dir} must be private`);
