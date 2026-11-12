@@ -157,7 +157,7 @@ flowchart LR
 - 🏷️ **Semantic Catalog (Explain Cryptic Fields)**:
   - Introspects SQL tables and maps cryptic column names (`TKSK_CD` → "得意先コード" / "customer code", `ma_kh` → "mã khách hàng").
   - Ingests company-specific dictionary files or legacy Excel table definitions (テーブル定義書 / 項目定義書).
-  - Includes a local web UI (`knot-sync ui`) to review, label, and approve mappings — **this UI is for human review of SQL column labels, not an AI chat window**.
+  - Includes a local loopback web UI (`knot-sync ui`, `en`/`ja`/`vi`) with two tabs: **Catalog Review** (for human review and approval of SQL column labels, never an AI chat window) and a strictly read-only **Documents & Health** tab (browse sanitized document snippets, PII/guard badges, source health stats, and `scan`/`run` issues without ever exposing unmasked PII or writing to customer sources).
   - Optional paid local-LLM fill for blank labels (`packages/catalog-llm`).
 - 🔒 **PII Masking & Safety Guard**:
   - Mask, hash, or drop PII: Japanese My Number (with checksum), Vietnamese CCCD / MST, bank-account heuristics, JP/VN name cues, phones, emails, and credit cards (Luhn).

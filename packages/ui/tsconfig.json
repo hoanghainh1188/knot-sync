@@ -9,5 +9,9 @@
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/client/**"],
-  "references": [{ "path": "../catalog" }]
+  "references": [
+    { "path": "../catalog" },
+    { "path": "../core" },
+    { "path": "../store-sqlite" }
+  ]
 }

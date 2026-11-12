@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { filterColumnNames } from "../chrome-i18n.js";
+import { DocumentsHealthTab } from "./DocumentsHealthTab.js";
 import { resolveUiLocale, t, type UiLocale } from "./i18n.js";
 import type { CatalogColumn, CatalogDocument } from "./types.js";
+
+type UiTab = "catalog" | "docs";
 
 export function App() {
   const locale: UiLocale = useMemo(
     () => resolveUiLocale(typeof window !== "undefined" ? window.location.search : ""),
     [],
   );
+  const [activeTab, setActiveTab] = useState<UiTab>("catalog");
   const [doc, setDoc] = useState<CatalogDocument | null>(null);
   const [loadOk, setLoadOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +100,7 @@ export function App() {
     }
   }
 
-  if (!doc && !error) {
+  if (activeTab === "catalog" && !doc && !error) {
     return (
       <div className="app">
         <p>{t(locale, "loading")}</p>
@@ -109,12 +113,32 @@ export function App() {
       <header>
         <h1>{t(locale, "title")}</h1>
         <p>{t(locale, "subtitle")}</p>
-        <p className="context-banner">{t(locale, "contextBanner")}</p>
+        <nav className="tabs" aria-label="Views">
+          <button
+            type="button"
+            className={`tab-btn ${activeTab === "catalog" ? "active" : ""}`}
+            onClick={() => setActiveTab("catalog")}
+          >
+            {t(locale, "tabCatalog")}
+          </button>
+          <button
+            type="button"
+            className={`tab-btn ${activeTab === "docs" ? "active" : ""}`}
+            onClick={() => setActiveTab("docs")}
+          >
+            {t(locale, "tabDocs")}
+          </button>
+        </nav>
       </header>
 
-      {error ? <p className="status err">{error}</p> : null}
+      {activeTab === "docs" ? (
+        <DocumentsHealthTab locale={locale} />
+      ) : (
+        <>
+          <p className="context-banner">{t(locale, "contextBanner")}</p>
+          {error ? <p className="status err">{error}</p> : null}
 
-      <div className="toolbar">
+          <div className="toolbar">
         <label>
           <input
             type="checkbox"
@@ -289,6 +313,8 @@ export function App() {
             )}
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

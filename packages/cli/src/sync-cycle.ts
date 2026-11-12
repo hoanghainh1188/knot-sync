@@ -465,6 +465,7 @@ export async function runSyncPass(options: SyncPassOptions): Promise<SyncPassRes
   }
 
   flushPending();
+  store.replaceRunIssues(issues);
 
   const { pruned } = aborted
     ? { pruned: 0 }
