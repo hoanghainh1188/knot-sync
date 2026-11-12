@@ -215,3 +215,49 @@ test("extracts legacy binary .xls (JP) and .doc (VN) with truncation and error h
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("extractOfficeFile uses ctx.readBytes in-memory without touching disk", async () => {
+  const xlsxBytes = await buildXlsx([["契約名", "金額"], ["保守", "1000"]]);
+  const txtBytes = Buffer.from("Báo cáo tháng 5", "utf8");
+  const remoteXlsx: FileEntry = {
+    sourceId: "gdrive",
+    relPath: "経理/請求書.xlsx",
+    absPath: "gdrive://file-1",
+    ext: ".xlsx",
+    type: "xlsx",
+    size: xlsxBytes.length,
+    mtimeMs: Date.now(),
+    hash: "h1",
+  };
+  const resXlsx = await extractOfficeFile(remoteXlsx, {
+    readBytes: async () => xlsxBytes,
+  });
+  assert.equal(resXlsx.ok, true);
+  if (resXlsx.ok) {
+    assert.match(resXlsx.document.content, /保守/);
+    assert.equal(resXlsx.document.tables.length, 1);
+  }
+
+  const remoteTxt: FileEntry = {
+    ...remoteXlsx,
+    relPath: "bao-cao.txt",
+    absPath: "gdrive://file-2",
+    ext: ".txt",
+    type: "txt",
+    size: txtBytes.length,
+    hash: "h2",
+  };
+  const resTxt = await extractOfficeFile(remoteTxt, {
+    readBytes: async () => txtBytes,
+  });
+  assert.equal(resTxt.ok, true);
+  if (resTxt.ok) assert.match(resTxt.document.content, /Báo cáo tháng 5/);
+
+  const resTooLarge = await extractOfficeFile(remoteTxt, {
+    readBytes: async () => {
+      throw Object.assign(new Error("Remote export too large"), { code: "SKIPPED_TOO_LARGE" });
+    },
+  });
+  assert.equal(resTooLarge.ok, false);
+  if (!resTooLarge.ok) assert.equal(resTooLarge.code, "SKIPPED_TOO_LARGE");
+});

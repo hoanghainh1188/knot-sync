@@ -32,6 +32,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const PAID_PLUGINS = [
   "auth-oauth",
   "catalog-llm",
+  "connector-cloud-drive",
   "connector-sql-enterprise",
   "extractor-housen",
   "extractor-ocr",

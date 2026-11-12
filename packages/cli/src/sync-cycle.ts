@@ -1,7 +1,9 @@
 import {
   ConfigError,
   type AppConfig,
+  type Connector,
   type Document,
+  type ExtractContext,
   type FileEntry,
   type PluginHost,
   type ScanIssue,
@@ -222,6 +224,11 @@ export async function runSyncPass(options: SyncPassOptions): Promise<SyncPassRes
   let aborted = false;
   const issues: SyncRunIssue[] = [];
   const pending: Document[] = [];
+  const sourceConnectorById = new Map<string, Connector>();
+  for (const src of config.sources) {
+    const conn = host.connectors.get(src.type);
+    if (conn) sourceConnectorById.set(src.id, conn);
+  }
 
   const flushPending = () => {
     if (pending.length === 0) return;
@@ -285,10 +292,14 @@ export async function runSyncPass(options: SyncPassOptions): Promise<SyncPassRes
       `Raise extraction.timeoutSeconds or exclude the file, then retry "knot-sync run".`;
 
     try {
-      const extractCtx = {
+      const connector = sourceConnectorById.get(file.sourceId);
+      const extractCtx: ExtractContext = {
         signal: combinedSignal,
         maxFileSizeBytes,
         maxTextChars: config.extraction.maxTextChars,
+        ...(connector?.readBytes
+          ? { readBytes: (f) => connector.readBytes!(f, combinedSignal, maxFileSizeBytes) }
+          : {}),
       };
       const raced = await Promise.race([
         (async () => {

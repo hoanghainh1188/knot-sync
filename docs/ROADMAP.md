@@ -355,7 +355,7 @@ Target: Production-grade offline licensing for Paid plugins, read-only document/
 | # | Change | Scope | Status |
 |---|---|---|---|
 | 1 | `human-approved-write-tools` | Opt-in MCP action/stored-procedure tools requiring a 2-step dry-run + explicit human approval token in UI/CLI and full JSONL audit logging | ⏳ planned (After v1.0) |
-| 2 | `enterprise-saas-connectors` | Read-only connectors for regional enterprise tools (Kintone, Backlog, SharePoint / OneDrive / Google Drive folders) feeding the same local JA/VI + PII + Guard pipeline | ⏳ planned (After v1.0) |
+| 2 | `enterprise-saas-connectors` | Read-only connectors for regional enterprise tools (SharePoint / OneDrive / Google Drive ✅ via `add-cloud-drive-connectors`; Kintone, Backlog ⏳ planned) feeding the same local JA/VI + PII + Guard pipeline | ⏳ partial (Cloud Drive ✅; Kintone/Backlog planned) |
 
 ### Paid edition (shipped capabilities)
 
