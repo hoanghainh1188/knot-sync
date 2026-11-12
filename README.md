@@ -1,7 +1,7 @@
 # KnotSync
 
 > **The Local Data Adapter & Security Shield Between Legacy Enterprise Data and AI Agents.**  
-> Turn messy office files (`.xlsx`, `.docx`, `.pdf`) and cryptic internal databases into clean, PII-masked, AI-ready context via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) — without modifying source data or sending it to the cloud.
+> Turn messy office files (`.xlsx`, `.xls`, `.docx`, `.doc`, `.pdf`) and cryptic internal databases into clean, PII-masked, AI-ready context via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) — without modifying source data or sending it to the cloud.
 
 [![npm version](https://img.shields.io/npm/v/@hoanghainh/knot-sync?color=cb3837)](https://www.npmjs.com/package/@hoanghainh/knot-sync)
 [![CI Status](https://github.com/hoanghainh1188/knot-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/hoanghainh/knot-sync/actions)
@@ -249,7 +249,7 @@ node packages/cli/dist/bin.js ui -c examples/demo.config.yaml
 |---|---|---|
 | **1. Setup & Audit** | `init` | Generate starter `knot-sync.config.yaml` |
 | | `scan` | Inventory files/tables, detect duplicates, old files, and likely PII (`--report` for offline HTML) |
-| **2. Prepare Data** | `run` | Extract `.xlsx`/`.docx`/`.pdf`/`.csv`/`.txt`, clean JA/VI, mask PII, guard injections into local SQLite |
+| **2. Prepare Data** | `run` | Extract `.xlsx`/`.xls`/`.docx`/`.doc`/`.pdf`/`.csv`/`.txt`, clean JA/VI, mask PII, guard injections into local SQLite |
 | | `describe` | *(SQL only)* Introspect allow-listed tables into `knot-sync.catalog.yaml` |
 | | `ui` | *(SQL only)* Local web UI (`127.0.0.1`) to label cryptic columns and mark `reviewed: true` |
 | **3. Serve to AI** | `serve` | Run the read-only MCP server (`stdio` by default, or `--http` for LAN) |
@@ -291,7 +291,7 @@ Example terminal output:
 ```
 
 #### 2. `run`: Ingest & Normalize Pipeline
-Extracts text and tables from `.xlsx`, `.docx`, `.pdf` (text-based), `.csv`, `.tsv`, `.txt`, `.md` into a local SQLite store (`node:sqlite`).
+Extracts text and tables from `.xlsx`, `.xls` (BIFF8), `.docx`, `.doc` (Word 97–2003), `.pdf` (text-based), `.csv`, `.tsv`, `.txt`, `.md` into a local SQLite store (`node:sqlite`).
 - **Cleaning**: NFKC normalization, Wareki $\rightarrow$ Gregorian, ISO 8601 dates, TCVN3/VNI conversion, and whitespace/empty-row token reduction. Pre-clean copies (`originalContent` / `originalTables`) are omitted by default (`cleaning.keepOriginalText: false`) to keep the SQLite store compact while recording `tokensBefore` / `tokensAfter` for `bench`; set `cleaning.keepOriginalText: true` in config to retain PII-masked originals in metadata.
 - **PII Masking**: Mask (`***`), hash, or drop sensitive numbers.
 - **Guardrails**: Flags prompt-injection patterns, zero-width chars, and hidden cells.

@@ -327,7 +327,7 @@ Target: Production-grade offline licensing for Paid plugins, read-only document/
 |---|---|:---:|---|
 | 1 | `cryptographic-plugin-licensing` | P1 (Paid) | ✅ done |
 | 2 | `expand-ui-document-explorer` | P2 | ✅ done |
-| 3 | `legacy-xls-doc-conversion` | P2 | ⏳ planned |
+| 3 | `legacy-xls-doc-conversion` | P2 | ✅ done |
 | 4 | `release-v1-0-0` | P1 | ⏳ after pilot |
 
 ### 1. cryptographic-plugin-licensing (Paid P1)
