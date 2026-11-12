@@ -17,6 +17,8 @@ export {
   isValidOauthLicense,
   licenseMissingMessage,
   resolveOauthLicense,
+  verifyOauthLicense,
+  type OauthLicenseCheckOptions,
 } from "./license.js";
 export {
   authorizeToolScope,

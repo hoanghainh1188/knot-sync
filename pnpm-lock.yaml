@@ -26,6 +26,9 @@ importers:
       '@hoanghainh/knot-sync-core':
         specifier: workspace:*
         version: link:../core
+      '@hoanghainh/knot-sync-plugin-license':
+        specifier: workspace:*
+        version: link:../plugin-license
       jose:
         specifier: ^6.0.11
         version: 6.2.15
@@ -47,6 +50,9 @@ importers:
       '@hoanghainh/knot-sync-core':
         specifier: workspace:*
         version: link:../core
+      '@hoanghainh/knot-sync-plugin-license':
+        specifier: workspace:*
+        version: link:../plugin-license
 
   packages/cleaner-ja-vi:
     dependencies:
@@ -156,6 +162,9 @@ importers:
       '@hoanghainh/knot-sync-core':
         specifier: workspace:*
         version: link:../core
+      '@hoanghainh/knot-sync-plugin-license':
+        specifier: workspace:*
+        version: link:../plugin-license
       tedious:
         specifier: ^18.6.1
         version: 18.6.2
@@ -182,6 +191,9 @@ importers:
       '@hoanghainh/knot-sync-core':
         specifier: workspace:*
         version: link:../core
+      '@hoanghainh/knot-sync-plugin-license':
+        specifier: workspace:*
+        version: link:../plugin-license
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0
@@ -191,6 +203,9 @@ importers:
       '@hoanghainh/knot-sync-core':
         specifier: workspace:*
         version: link:../core
+      '@hoanghainh/knot-sync-plugin-license':
+        specifier: workspace:*
+        version: link:../plugin-license
 
   packages/extractor-office:
     dependencies:
@@ -224,6 +239,9 @@ importers:
       '@hoanghainh/knot-sync-pii-basic':
         specifier: workspace:*
         version: link:../pii-basic
+      '@hoanghainh/knot-sync-plugin-license':
+        specifier: workspace:*
+        version: link:../plugin-license
 
   packages/mcp-server:
     dependencies:
@@ -252,6 +270,8 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/plugin-license: {}
+
   packages/report-html: {}
 
   packages/search-vector:
@@ -259,6 +279,9 @@ importers:
       '@hoanghainh/knot-sync-core':
         specifier: workspace:*
         version: link:../core
+      '@hoanghainh/knot-sync-plugin-license':
+        specifier: workspace:*
+        version: link:../plugin-license
       '@hoanghainh/knot-sync-store-sqlite':
         specifier: workspace:*
         version: link:../store-sqlite

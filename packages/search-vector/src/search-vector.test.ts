@@ -220,3 +220,57 @@ test("pruneStaleDocuments removes deleted document embedding and excludes it fro
   assert.ok(hits.every((h) => h.id !== deadId));
   store.close();
 });
+
+test("Ed25519 KS1 license enforcement and production sentinel gating", async () => {
+  const { generateKeyPairSync } = await import("node:crypto");
+  const { signLicensePayload } = await import("@hoanghainh/knot-sync-plugin-license");
+  const {
+    SEARCH_VECTOR_PLUGIN_NAME,
+    SEARCH_VECTOR_TEST_LICENSE_SENTINEL,
+    assertSearchVectorLicense,
+    isValidSearchVectorLicense,
+    parseSearchVectorSettings,
+  } = await import("./index.js");
+
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519", {
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+
+  assert.equal(isValidSearchVectorLicense("arbitrary-string", process.env, { publicKey }), false);
+  assert.equal(isValidSearchVectorLicense(SEARCH_VECTOR_TEST_LICENSE_SENTINEL, process.env, { publicKey }), true);
+  assert.equal(
+    isValidSearchVectorLicense(
+      SEARCH_VECTOR_TEST_LICENSE_SENTINEL,
+      { KNOT_SYNC_ALLOW_TEST_LICENSE: "0" },
+      { publicKey },
+    ),
+    false,
+  );
+
+  const validToken = signLicensePayload(
+    { licensee: "Công ty Vector", plugins: [SEARCH_VECTOR_PLUGIN_NAME], exp: 4_102_444_800 },
+    privateKey,
+  );
+  assert.doesNotThrow(() =>
+    assertSearchVectorLicense(parseSearchVectorSettings({ licenseKey: validToken }), {}, { publicKey }),
+  );
+
+  const expiredToken = signLicensePayload(
+    { licensee: "Công ty Vector", plugins: [SEARCH_VECTOR_PLUGIN_NAME], exp: 1_700_000_000 },
+    privateKey,
+  );
+  assert.throws(
+    () => assertSearchVectorLicense(parseSearchVectorSettings({ licenseKey: expiredToken }), {}, { publicKey }),
+    /expired/i,
+  );
+
+  const wrongPluginToken = signLicensePayload(
+    { licensee: "Công ty Vector", plugins: ["catalog-llm"], exp: 4_102_444_800 },
+    privateKey,
+  );
+  assert.throws(
+    () => assertSearchVectorLicense(parseSearchVectorSettings({ licenseKey: wrongPluginToken }), {}, { publicKey }),
+    /plugin_not_allowed/,
+  );
+});

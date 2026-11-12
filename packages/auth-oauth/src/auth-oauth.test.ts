@@ -247,3 +247,55 @@ test("JWKS validation accepts injected key set", async () => {
     /JWKS token validation failed/,
   );
 });
+
+test("Ed25519 KS1 license enforcement and production sentinel gating", async () => {
+  const { generateKeyPairSync } = await import("node:crypto");
+  const { signLicensePayload } = await import("@hoanghainh/knot-sync-plugin-license");
+  const {
+    AUTH_OAUTH_PLUGIN_NAME,
+    OAUTH_TEST_LICENSE_SENTINEL,
+    assertOauthLicense,
+    isValidOauthLicense,
+    parseAuthOauthSettings,
+  } = await import("./index.js");
+
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519", {
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+
+  // Plain arbitrary strings are rejected even under node:test.
+  assert.equal(isValidOauthLicense("arbitrary-string", process.env, { publicKey }), false);
+  // Sentinel works inside node:test unless disabled for production simulation.
+  assert.equal(isValidOauthLicense(OAUTH_TEST_LICENSE_SENTINEL, process.env, { publicKey }), true);
+  assert.equal(
+    isValidOauthLicense(OAUTH_TEST_LICENSE_SENTINEL, { KNOT_SYNC_ALLOW_TEST_LICENSE: "0" }, { publicKey }),
+    false,
+  );
+
+  const validToken = signLicensePayload(
+    { licensee: "Công ty OAuth", plugins: [AUTH_OAUTH_PLUGIN_NAME], exp: 4_102_444_800 },
+    privateKey,
+  );
+  assert.doesNotThrow(() =>
+    assertOauthLicense(parseAuthOauthSettings({ licenseKey: validToken }), {}, { publicKey }),
+  );
+
+  const expiredToken = signLicensePayload(
+    { licensee: "Công ty OAuth", plugins: [AUTH_OAUTH_PLUGIN_NAME], exp: 1_700_000_000 },
+    privateKey,
+  );
+  assert.throws(
+    () => assertOauthLicense(parseAuthOauthSettings({ licenseKey: expiredToken }), {}, { publicKey }),
+    /expired/i,
+  );
+
+  const wrongPluginToken = signLicensePayload(
+    { licensee: "Công ty OAuth", plugins: ["extractor-ocr"], exp: 4_102_444_800 },
+    privateKey,
+  );
+  assert.throws(
+    () => assertOauthLicense(parseAuthOauthSettings({ licenseKey: wrongPluginToken }), {}, { publicKey }),
+    /plugin_not_allowed/,
+  );
+});

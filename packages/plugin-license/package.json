@@ -1,0 +1,26 @@
+{
+  "name": "@hoanghainh/knot-sync-plugin-license",
+  "version": "0.1.0",
+  "description": "Internal offline Ed25519 license verification utilities for KnotSync Paid plugins (never imported by core).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "author": "hoanghainh",
+  "private": true
+}

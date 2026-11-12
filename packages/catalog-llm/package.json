@@ -22,7 +22,8 @@
     "node": ">=22.13.0"
   },
   "dependencies": {
-    "@hoanghainh/knot-sync-core": "workspace:*"
+    "@hoanghainh/knot-sync-core": "workspace:*",
+    "@hoanghainh/knot-sync-plugin-license": "workspace:*"
   },
   "author": "hoanghainh",
   "private": true

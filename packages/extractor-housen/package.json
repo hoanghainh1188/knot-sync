@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@hoanghainh/knot-sync-core": "workspace:*",
+    "@hoanghainh/knot-sync-plugin-license": "workspace:*",
     "exceljs": "^4.4.0"
   },
   "author": "hoanghainh",

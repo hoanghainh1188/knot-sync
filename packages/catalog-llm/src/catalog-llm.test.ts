@@ -165,3 +165,53 @@ test("invalid plugin settings throw ConfigError", () => {
   assert.equal(bad.apiVersion, PLUGIN_API_VERSION);
   assert.throws(() => host.registerPlugin(bad), ConfigError);
 });
+
+test("Ed25519 KS1 license enforcement and production sentinel gating", async () => {
+  const { generateKeyPairSync } = await import("node:crypto");
+  const { signLicensePayload } = await import("@hoanghainh/knot-sync-plugin-license");
+  const {
+    CATALOG_LLM_PLUGIN_NAME,
+    CATALOG_LLM_TEST_LICENSE_SENTINEL,
+    assertCatalogLlmLicense,
+    isValidCatalogLlmLicense,
+    parseCatalogLlmSettings,
+  } = await import("./index.js");
+
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519", {
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+
+  assert.equal(isValidCatalogLlmLicense("arbitrary-string", process.env, { publicKey }), false);
+  assert.equal(isValidCatalogLlmLicense(CATALOG_LLM_TEST_LICENSE_SENTINEL, process.env, { publicKey }), true);
+  assert.equal(
+    isValidCatalogLlmLicense(CATALOG_LLM_TEST_LICENSE_SENTINEL, { KNOT_SYNC_ALLOW_TEST_LICENSE: "0" }, { publicKey }),
+    false,
+  );
+
+  const validToken = signLicensePayload(
+    { licensee: "株式会社カタログ", plugins: [CATALOG_LLM_PLUGIN_NAME], exp: 4_102_444_800 },
+    privateKey,
+  );
+  assert.doesNotThrow(() =>
+    assertCatalogLlmLicense(parseCatalogLlmSettings({ licenseKey: validToken }), {}, { publicKey }),
+  );
+
+  const expiredToken = signLicensePayload(
+    { licensee: "株式会社カタログ", plugins: [CATALOG_LLM_PLUGIN_NAME], exp: 1_700_000_000 },
+    privateKey,
+  );
+  assert.throws(
+    () => assertCatalogLlmLicense(parseCatalogLlmSettings({ licenseKey: expiredToken }), {}, { publicKey }),
+    /expired/i,
+  );
+
+  const wrongPluginToken = signLicensePayload(
+    { licensee: "株式会社カタログ", plugins: ["extractor-ocr"], exp: 4_102_444_800 },
+    privateKey,
+  );
+  assert.throws(
+    () => assertCatalogLlmLicense(parseCatalogLlmSettings({ licenseKey: wrongPluginToken }), {}, { publicKey }),
+    /plugin_not_allowed/,
+  );
+});

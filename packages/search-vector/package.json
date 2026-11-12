@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@hoanghainh/knot-sync-core": "workspace:*",
+    "@hoanghainh/knot-sync-plugin-license": "workspace:*",
     "@hoanghainh/knot-sync-store-sqlite": "workspace:*"
   },
   "author": "hoanghainh",

@@ -216,7 +216,10 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         return 2;
     }
   } catch (err) {
-    if (err instanceof ConfigError) {
+    if (
+      err instanceof ConfigError ||
+      (err instanceof Error && err.name === "ConfigError")
+    ) {
       io.err(
         t(activeLocale, "error.configPrefix", {
           message: formatLoggingConfigError(activeLocale, err.message),

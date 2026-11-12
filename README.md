@@ -362,7 +362,15 @@ Cycles run sequentially (waiting the configured interval after each completed pa
 
 ### Paid plugins (opt-in)
 
-Paid edition plugins are **not** separate npm packages on the registry. Only `@hoanghainh/knot-sync` is published. Enable Paid features from this monorepo by listing package paths under config `plugins:` and setting each plugin’s license environment variable. Core never checks licenses. Defaults stay offline; these may talk to **local** Ollama/Docker/OCR only.
+Paid edition plugins are **not** separate npm packages on the registry. Only `@hoanghainh/knot-sync` is published. Enable Paid features from this monorepo or standalone bundles by listing package paths under config `plugins:` and setting each plugin’s license environment variable (or `<plugin>.licenseKey`) to a signed `KS1` Ed25519 license token. Core never checks licenses; each Paid plugin verifies its own offline signature via `node:crypto` (validating licensee, allowed plugin IDs or `"*"`, and `exp`). Legacy `knot-sync-*-dev` test sentinels are accepted only inside `node --test` or when `KNOT_SYNC_ALLOW_TEST_LICENSE=1` is set. Defaults stay offline; these may talk to **local** Ollama/Docker/OCR only.
+
+To issue test/commercial offline keys and build standalone Paid plugin bundles locally:
+
+```bash
+node scripts/license-tool.mjs keygen --out .keys
+node scripts/license-tool.mjs sign --private-key .keys/license-private.pem --licensee "Your Org" --plugins "*" --days 365
+pnpm bundle:paid --public-key .keys/license-public.pem   # outputs dist/paid-plugins/<plugin>/index.mjs
+```
 
 | Plugin | What you get | License env (default) |
 |---|---|---|
@@ -515,6 +523,7 @@ KnotSync is structured as a clean, modular TypeScript monorepo managed by `pnpm`
 | Package | Responsibility |
 |---|---|
 | [`packages/core`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/core) | Data models (`Document`, `FileEntry`), config loader, plugin host API |
+| [`packages/plugin-license`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/plugin-license) | Private offline Ed25519 `KS1` license verifier for Paid plugins only (never imported by core) |
 | [`packages/connector-fs`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-fs) | Read-only folder walker and file inventory scanner |
 | [`packages/connector-sql`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-sql) | Read-only PostgreSQL and MySQL connector, schema introspection |
 | [`packages/connector-sql-enterprise`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-sql-enterprise) | Opt-in paid mssql/oracle/access/as400 connectors (license self-check) |

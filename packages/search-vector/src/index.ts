@@ -16,6 +16,8 @@ export {
   isValidSearchVectorLicense,
   licenseMissingMessage,
   resolveSearchVectorLicense,
+  verifySearchVectorLicense,
+  type SearchVectorLicenseCheckOptions,
 } from "./license.js";
 export {
   parseSearchVectorSettings,

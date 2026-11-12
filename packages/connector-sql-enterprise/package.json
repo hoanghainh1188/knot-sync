@@ -24,6 +24,7 @@
   "dependencies": {
     "@hoanghainh/knot-sync-connector-sql": "workspace:*",
     "@hoanghainh/knot-sync-core": "workspace:*",
+    "@hoanghainh/knot-sync-plugin-license": "workspace:*",
     "tedious": "^18.6.1"
   },
   "optionalDependencies": {

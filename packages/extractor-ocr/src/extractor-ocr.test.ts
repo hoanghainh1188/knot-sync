@@ -297,3 +297,62 @@ test("invalid settings fail at register time", () => {
     ConfigError,
   );
 });
+
+test("Ed25519 KS1 license enforcement and production sentinel gating", async () => {
+  const { generateKeyPairSync } = await import("node:crypto");
+  const { signLicensePayload } = await import("@hoanghainh/knot-sync-plugin-license");
+  const {
+    OCR_PLUGIN_NAME,
+    OCR_TEST_LICENSE_SENTINEL,
+    checkOcrLicense,
+    isValidOcrLicense,
+    parseOcrSettings,
+  } = await import("./index.js");
+
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519", {
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+
+  assert.equal(isValidOcrLicense("arbitrary-string", process.env, { publicKey }), false);
+  assert.equal(isValidOcrLicense(OCR_TEST_LICENSE_SENTINEL, process.env, { publicKey }), true);
+  assert.equal(
+    isValidOcrLicense(OCR_TEST_LICENSE_SENTINEL, { KNOT_SYNC_ALLOW_TEST_LICENSE: "0" }, { publicKey }),
+    false,
+  );
+
+  const validToken = signLicensePayload(
+    { licensee: "Công ty OCR", plugins: [OCR_PLUGIN_NAME], exp: 4_102_444_800 },
+    privateKey,
+  );
+  assert.equal(
+    checkOcrLicense(parseOcrSettings({ licenseKey: validToken }), "scan.png", {}, { publicKey }),
+    undefined,
+  );
+
+  const expiredToken = signLicensePayload(
+    { licensee: "Công ty OCR", plugins: [OCR_PLUGIN_NAME], exp: 1_700_000_000 },
+    privateKey,
+  );
+  const expFail = checkOcrLicense(
+    parseOcrSettings({ licenseKey: expiredToken }),
+    "scan.png",
+    {},
+    { publicKey },
+  );
+  assert.ok(expFail && !expFail.ok && expFail.code === "LICENSE");
+  assert.match(expFail.message, /expired/i);
+
+  const wrongPluginToken = signLicensePayload(
+    { licensee: "Công ty OCR", plugins: ["extractor-housen"], exp: 4_102_444_800 },
+    privateKey,
+  );
+  const wrongFail = checkOcrLicense(
+    parseOcrSettings({ licenseKey: wrongPluginToken }),
+    "scan.png",
+    {},
+    { publicKey },
+  );
+  assert.ok(wrongFail && !wrongFail.ok && wrongFail.code === "LICENSE");
+  assert.match(wrongFail.message, /plugin_not_allowed/);
+});

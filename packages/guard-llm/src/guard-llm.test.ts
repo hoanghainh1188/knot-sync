@@ -203,3 +203,53 @@ test("invalid plugin settings throw ConfigError", () => {
     (err: unknown) => err instanceof ConfigError,
   );
 });
+
+test("Ed25519 KS1 license enforcement and production sentinel gating", async () => {
+  const { generateKeyPairSync } = await import("node:crypto");
+  const { signLicensePayload } = await import("@hoanghainh/knot-sync-plugin-license");
+  const {
+    GUARD_LLM_PLUGIN_NAME,
+    GUARD_LLM_TEST_LICENSE_SENTINEL,
+    assertGuardLlmLicense,
+    isValidGuardLlmLicense,
+    parseGuardLlmSettings,
+  } = await import("./index.js");
+
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519", {
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+
+  assert.equal(isValidGuardLlmLicense("arbitrary-string", process.env, { publicKey }), false);
+  assert.equal(isValidGuardLlmLicense(GUARD_LLM_TEST_LICENSE_SENTINEL, process.env, { publicKey }), true);
+  assert.equal(
+    isValidGuardLlmLicense(GUARD_LLM_TEST_LICENSE_SENTINEL, { KNOT_SYNC_ALLOW_TEST_LICENSE: "0" }, { publicKey }),
+    false,
+  );
+
+  const validToken = signLicensePayload(
+    { licensee: "株式会社ガード", plugins: [GUARD_LLM_PLUGIN_NAME], exp: 4_102_444_800 },
+    privateKey,
+  );
+  assert.doesNotThrow(() =>
+    assertGuardLlmLicense(parseGuardLlmSettings({ licenseKey: validToken }), {}, { publicKey }),
+  );
+
+  const expiredToken = signLicensePayload(
+    { licensee: "株式会社ガード", plugins: [GUARD_LLM_PLUGIN_NAME], exp: 1_700_000_000 },
+    privateKey,
+  );
+  assert.throws(
+    () => assertGuardLlmLicense(parseGuardLlmSettings({ licenseKey: expiredToken }), {}, { publicKey }),
+    /expired/i,
+  );
+
+  const wrongPluginToken = signLicensePayload(
+    { licensee: "株式会社ガード", plugins: ["search-vector"], exp: 4_102_444_800 },
+    privateKey,
+  );
+  assert.throws(
+    () => assertGuardLlmLicense(parseGuardLlmSettings({ licenseKey: wrongPluginToken }), {}, { publicKey }),
+    /plugin_not_allowed/,
+  );
+});
