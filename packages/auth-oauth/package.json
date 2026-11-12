@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@hoanghainh/knot-sync-core": "workspace:*",
+    "@hoanghainh/knot-sync-plugin-license": "workspace:*",
     "jose": "^6.0.11"
   },
   "author": "hoanghainh",

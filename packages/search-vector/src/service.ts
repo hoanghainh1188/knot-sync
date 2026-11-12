@@ -8,7 +8,7 @@ import {
   listEmbeddings,
   upsertEmbedding,
 } from "./embeddings-store.js";
-import { resolveSearchVectorLicense } from "./license.js";
+import { licenseMissingMessage, verifySearchVectorLicense } from "./license.js";
 import type { SearchVectorSettings } from "./settings.js";
 
 const UNTRUSTED_BANNER =
@@ -33,10 +33,11 @@ export async function embedDocument(
 ): Promise<"written" | "skipped" | "failed"> {
   const settings = runtime.settings;
   const env = runtime.env ?? process.env;
-  if (!resolveSearchVectorLicense(settings, env)) {
+  const licenseRes = verifySearchVectorLicense(settings, env);
+  if (!licenseRes.valid) {
     runtime.onSoftFail?.(
-      `Search-vector skipped embed for "${doc.id}": license missing. ` +
-        `Set ${settings.licenseEnv} or search-vector.licenseKey, then retry.`,
+      `Search-vector skipped embed for "${doc.id}": ` +
+        licenseMissingMessage(settings.licenseEnv, licenseRes),
     );
     return "failed";
   }
@@ -102,10 +103,11 @@ export async function searchSimilar(
 ): Promise<SimilarHit[]> {
   const settings = runtime.settings;
   const env = runtime.env ?? process.env;
-  if (!resolveSearchVectorLicense(settings, env)) {
+  const licenseRes = verifySearchVectorLicense(settings, env);
+  if (!licenseRes.valid) {
     runtime.onSoftFail?.(
-      `Search-vector search_similar blocked: license missing. ` +
-        `Set ${settings.licenseEnv} or search-vector.licenseKey, then retry.`,
+      `Search-vector search_similar blocked: ` +
+        licenseMissingMessage(settings.licenseEnv, licenseRes),
     );
     return [];
   }

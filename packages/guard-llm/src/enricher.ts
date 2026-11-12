@@ -11,7 +11,7 @@ import { computeRisk, stripSpans } from "@hoanghainh/knot-sync-guard";
 import { applyModeToText, loadOrCreateSalt } from "@hoanghainh/knot-sync-pii-basic";
 import { analyzeViaChat, GuardLlmSoftFail, type FetchLike, type ModelFindingRaw } from "./client.js";
 import { GUARD_LLM_ENRICHER_ID } from "./constants.js";
-import { licenseMissingMessage, resolveGuardLlmLicense } from "./license.js";
+import { licenseMissingMessage, verifyGuardLlmLicense } from "./license.js";
 import type { GuardLlmSettings } from "./settings.js";
 
 export interface CreateGuardLlmEnricherOptions {
@@ -189,8 +189,9 @@ export function createGuardLlmEnricher(
   return {
     id: GUARD_LLM_ENRICHER_ID,
     async enrich(document, ctx) {
-      if (!resolveGuardLlmLicense(settings, env)) {
-        onSoftFail?.(licenseMissingMessage(settings.licenseEnv));
+      const licenseRes = verifyGuardLlmLicense(settings, env);
+      if (!licenseRes.valid) {
+        onSoftFail?.(licenseMissingMessage(settings.licenseEnv, licenseRes));
         return document;
       }
 

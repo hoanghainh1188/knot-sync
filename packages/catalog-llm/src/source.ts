@@ -5,7 +5,7 @@ import type {
 } from "@hoanghainh/knot-sync-core";
 import { CatalogLlmSoftFail, suggestViaChat, type FetchLike } from "./client.js";
 import { CATALOG_LLM_SOURCE_ID } from "./constants.js";
-import { resolveCatalogLlmLicense } from "./license.js";
+import { licenseMissingMessage, verifyCatalogLlmLicense } from "./license.js";
 import type { CatalogLlmSettings } from "./settings.js";
 
 export interface CreateCatalogLlmSourceOptions {
@@ -25,10 +25,11 @@ export function createCatalogLlmSource(
   return {
     id: CATALOG_LLM_SOURCE_ID,
     async suggest(input: CatalogSuggestInput): Promise<CatalogSuggestion> {
-      if (!resolveCatalogLlmLicense(settings, env)) {
+      const licenseRes = verifyCatalogLlmLicense(settings, env);
+      if (!licenseRes.valid) {
         options.onSoftFail?.(
-          `Catalog LLM skipped for "${input.column}": license missing. ` +
-            `Set ${settings.licenseEnv} or catalog-llm.licenseKey, then retry.`,
+          `Catalog LLM skipped for "${input.column}": ` +
+            licenseMissingMessage(settings.licenseEnv, licenseRes),
         );
         return {};
       }

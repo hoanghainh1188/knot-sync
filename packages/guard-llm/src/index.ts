@@ -14,6 +14,8 @@ export {
   isValidGuardLlmLicense,
   licenseMissingMessage,
   resolveGuardLlmLicense,
+  verifyGuardLlmLicense,
+  type GuardLlmLicenseCheckOptions,
 } from "./license.js";
 export {
   parseGuardLlmSettings,

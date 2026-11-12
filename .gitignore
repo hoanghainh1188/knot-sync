@@ -13,3 +13,6 @@ logs/
 .pnpm-store/
 knot-sync-catalog-ui-demo.png
 examples/.demo-data/
+.keys/
+license-private.pem
+*.license-private.pem

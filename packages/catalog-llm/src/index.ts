@@ -13,6 +13,8 @@ export {
   isValidCatalogLlmLicense,
   licenseMissingMessage,
   resolveCatalogLlmLicense,
+  verifyCatalogLlmLicense,
+  type CatalogLlmLicenseCheckOptions,
 } from "./license.js";
 export {
   parseCatalogLlmSettings,

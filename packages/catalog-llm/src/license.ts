@@ -1,38 +1,83 @@
 import { ConfigError } from "@hoanghainh/knot-sync-core";
 import {
+  formatLicenseFailureMessage,
+  resolveAndVerifyPluginLicense,
+  type LicenseVerificationFailure,
+  type LicenseVerificationResult,
+  type ResolvePluginLicenseOptions,
+} from "@hoanghainh/knot-sync-plugin-license";
+import {
   CATALOG_LLM_PLUGIN_NAME,
   CATALOG_LLM_TEST_LICENSE_SENTINEL,
 } from "./constants.js";
 import type { CatalogLlmSettings } from "./settings.js";
 
-export function isValidCatalogLlmLicense(value: string | undefined): boolean {
-  if (value === undefined) return false;
-  return value.trim() !== "";
+export type CatalogLlmLicenseCheckOptions = Pick<
+  ResolvePluginLicenseOptions,
+  "publicKey" | "nowMs" | "allowTestSentinel"
+>;
+
+export function isValidCatalogLlmLicense(
+  value: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+  options: CatalogLlmLicenseCheckOptions = {},
+): boolean {
+  if (!value?.trim()) return false;
+  return resolveAndVerifyPluginLicense({
+    pluginId: CATALOG_LLM_PLUGIN_NAME,
+    testSentinel: CATALOG_LLM_TEST_LICENSE_SENTINEL,
+    licenseKey: value,
+    licenseEnv: "",
+    env,
+    ...options,
+  }).valid;
 }
 
-export function licenseMissingMessage(licenseEnv: string): string {
-  return (
-    `Catalog LLM license missing or invalid. ` +
-    `Set ${licenseEnv} or ${CATALOG_LLM_PLUGIN_NAME}.licenseKey ` +
-    `(tests may use ${CATALOG_LLM_TEST_LICENSE_SENTINEL}), then retry.`
-  );
+export function licenseMissingMessage(
+  licenseEnv: string,
+  failure?: Pick<LicenseVerificationFailure, "reason" | "detail">,
+): string {
+  return formatLicenseFailureMessage({
+    label: "Catalog LLM",
+    pluginId: CATALOG_LLM_PLUGIN_NAME,
+    licenseEnv,
+    reason: failure?.reason,
+    detail: failure?.detail,
+  });
+}
+
+export function verifyCatalogLlmLicense(
+  settings: CatalogLlmSettings,
+  env: NodeJS.ProcessEnv = process.env,
+  options: CatalogLlmLicenseCheckOptions = {},
+): LicenseVerificationResult {
+  return resolveAndVerifyPluginLicense({
+    pluginId: CATALOG_LLM_PLUGIN_NAME,
+    testSentinel: CATALOG_LLM_TEST_LICENSE_SENTINEL,
+    licenseKey: settings.licenseKey,
+    licenseEnv: settings.licenseEnv,
+    env,
+    ...options,
+  });
 }
 
 export function resolveCatalogLlmLicense(
   settings: CatalogLlmSettings,
   env: NodeJS.ProcessEnv = process.env,
+  options: CatalogLlmLicenseCheckOptions = {},
 ): string | undefined {
-  const fromKey = settings.licenseKey?.trim();
-  const fromEnv = env[settings.licenseEnv]?.trim();
-  const value = fromKey || fromEnv;
-  return isValidCatalogLlmLicense(value) ? value : undefined;
+  const res = verifyCatalogLlmLicense(settings, env, options);
+  if (!res.valid) return undefined;
+  return settings.licenseKey?.trim() || env[settings.licenseEnv]?.trim();
 }
 
 export function assertCatalogLlmLicense(
   settings: CatalogLlmSettings,
   env: NodeJS.ProcessEnv = process.env,
+  options: CatalogLlmLicenseCheckOptions = {},
 ): void {
-  if (!resolveCatalogLlmLicense(settings, env)) {
-    throw new ConfigError(licenseMissingMessage(settings.licenseEnv));
+  const res = verifyCatalogLlmLicense(settings, env, options);
+  if (!res.valid) {
+    throw new ConfigError(licenseMissingMessage(settings.licenseEnv, res));
   }
 }

@@ -1,38 +1,86 @@
 import { ConfigError } from "@hoanghainh/knot-sync-core";
 import {
+  formatLicenseFailureMessage,
+  resolveAndVerifyPluginLicense,
+  verifyLicenseToken,
+  type LicenseVerificationFailure,
+  type LicenseVerificationResult,
+  type ResolvePluginLicenseOptions,
+} from "@hoanghainh/knot-sync-plugin-license";
+import {
   AUTH_OAUTH_PLUGIN_NAME,
   OAUTH_TEST_LICENSE_SENTINEL,
 } from "./constants.js";
 import type { AuthOauthSettings } from "./settings.js";
 
-export function isValidOauthLicense(value: string | undefined): boolean {
-  if (value === undefined) return false;
-  return value.trim() !== "";
+export type OauthLicenseCheckOptions = Pick<
+  ResolvePluginLicenseOptions,
+  "publicKey" | "nowMs" | "allowTestSentinel"
+>;
+
+export function isValidOauthLicense(
+  value: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+  options: OauthLicenseCheckOptions = {},
+): boolean {
+  if (!value?.trim()) return false;
+  return resolveAndVerifyPluginLicense({
+    pluginId: AUTH_OAUTH_PLUGIN_NAME,
+    testSentinel: OAUTH_TEST_LICENSE_SENTINEL,
+    licenseKey: value,
+    licenseEnv: "",
+    env,
+    ...options,
+  }).valid;
 }
 
-export function licenseMissingMessage(licenseEnv: string): string {
-  return (
-    `OAuth license missing or invalid. ` +
-    `Set ${licenseEnv} or ${AUTH_OAUTH_PLUGIN_NAME}.licenseKey ` +
-    `(tests may use ${OAUTH_TEST_LICENSE_SENTINEL}), then retry.`
-  );
+export function licenseMissingMessage(
+  licenseEnv: string,
+  failure?: Pick<LicenseVerificationFailure, "reason" | "detail">,
+): string {
+  return formatLicenseFailureMessage({
+    label: "OAuth",
+    pluginId: AUTH_OAUTH_PLUGIN_NAME,
+    licenseEnv,
+    reason: failure?.reason,
+    detail: failure?.detail,
+  });
+}
+
+export function verifyOauthLicense(
+  settings: AuthOauthSettings,
+  env: NodeJS.ProcessEnv = process.env,
+  options: OauthLicenseCheckOptions = {},
+): LicenseVerificationResult {
+  return resolveAndVerifyPluginLicense({
+    pluginId: AUTH_OAUTH_PLUGIN_NAME,
+    testSentinel: OAUTH_TEST_LICENSE_SENTINEL,
+    licenseKey: settings.licenseKey,
+    licenseEnv: settings.licenseEnv,
+    env,
+    ...options,
+  });
 }
 
 export function resolveOauthLicense(
   settings: AuthOauthSettings,
   env: NodeJS.ProcessEnv = process.env,
+  options: OauthLicenseCheckOptions = {},
 ): string | undefined {
-  const fromKey = settings.licenseKey?.trim();
-  const fromEnv = env[settings.licenseEnv]?.trim();
-  const value = fromKey || fromEnv;
-  return isValidOauthLicense(value) ? value : undefined;
+  const res = verifyOauthLicense(settings, env, options);
+  if (!res.valid) return undefined;
+  return settings.licenseKey?.trim() || env[settings.licenseEnv]?.trim();
 }
 
 export function assertOauthLicense(
   settings: AuthOauthSettings,
   env: NodeJS.ProcessEnv = process.env,
+  options: OauthLicenseCheckOptions = {},
 ): void {
-  if (!resolveOauthLicense(settings, env)) {
-    throw new ConfigError(licenseMissingMessage(settings.licenseEnv));
+  const res = verifyOauthLicense(settings, env, options);
+  if (!res.valid) {
+    throw new ConfigError(licenseMissingMessage(settings.licenseEnv, res));
   }
 }
+
+export { verifyLicenseToken };

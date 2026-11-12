@@ -382,3 +382,57 @@ test("enterprise dialects support groupBy, aggregations, and orderBy via query_t
     assert.deepEqual(driver.queries[0]?.values, c.expectedValues);
   }
 });
+
+test("Ed25519 KS1 license enforcement and production sentinel gating", async () => {
+  const { generateKeyPairSync } = await import("node:crypto");
+  const { signLicensePayload } = await import("@hoanghainh/knot-sync-plugin-license");
+  const {
+    ENTERPRISE_SQL_PLUGIN_NAME,
+    SQL_ENTERPRISE_TEST_LICENSE_SENTINEL,
+    assertEnterpriseSqlLicense,
+    isValidEnterpriseSqlLicense,
+    parseEnterpriseSqlSettings,
+  } = await import("./index.js");
+
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519", {
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+
+  assert.equal(isValidEnterpriseSqlLicense("arbitrary-string", process.env, { publicKey }), false);
+  assert.equal(isValidEnterpriseSqlLicense(SQL_ENTERPRISE_TEST_LICENSE_SENTINEL, process.env, { publicKey }), true);
+  assert.equal(
+    isValidEnterpriseSqlLicense(
+      SQL_ENTERPRISE_TEST_LICENSE_SENTINEL,
+      { KNOT_SYNC_ALLOW_TEST_LICENSE: "0" },
+      { publicKey },
+    ),
+    false,
+  );
+
+  const validToken = signLicensePayload(
+    { licensee: "Công ty SQL", plugins: [ENTERPRISE_SQL_PLUGIN_NAME], exp: 4_102_444_800 },
+    privateKey,
+  );
+  assert.doesNotThrow(() =>
+    assertEnterpriseSqlLicense(parseEnterpriseSqlSettings({ licenseKey: validToken }), {}, { publicKey }),
+  );
+
+  const expiredToken = signLicensePayload(
+    { licensee: "Công ty SQL", plugins: [ENTERPRISE_SQL_PLUGIN_NAME], exp: 1_700_000_000 },
+    privateKey,
+  );
+  assert.throws(
+    () => assertEnterpriseSqlLicense(parseEnterpriseSqlSettings({ licenseKey: expiredToken }), {}, { publicKey }),
+    /expired/i,
+  );
+
+  const wrongPluginToken = signLicensePayload(
+    { licensee: "Công ty SQL", plugins: ["auth-oauth"], exp: 4_102_444_800 },
+    privateKey,
+  );
+  assert.throws(
+    () => assertEnterpriseSqlLicense(parseEnterpriseSqlSettings({ licenseKey: wrongPluginToken }), {}, { publicKey }),
+    /plugin_not_allowed/,
+  );
+});

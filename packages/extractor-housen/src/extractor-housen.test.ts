@@ -199,3 +199,62 @@ test("oversized and aborted soft-fail", async () => {
   assert.equal(timed.ok, false);
   if (!timed.ok) assert.equal(timed.code, "EXTRACT_TIMEOUT");
 });
+
+test("Ed25519 KS1 license enforcement and production sentinel gating", async () => {
+  const { generateKeyPairSync } = await import("node:crypto");
+  const { signLicensePayload } = await import("@hoanghainh/knot-sync-plugin-license");
+  const {
+    HOUSEN_PLUGIN_NAME,
+    HOUSEN_TEST_LICENSE_SENTINEL,
+    checkHousenLicense,
+    isValidHousenLicense,
+    parseHousenSettings,
+  } = await import("./index.js");
+
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519", {
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+
+  assert.equal(isValidHousenLicense("arbitrary-string", process.env, { publicKey }), false);
+  assert.equal(isValidHousenLicense(HOUSEN_TEST_LICENSE_SENTINEL, process.env, { publicKey }), true);
+  assert.equal(
+    isValidHousenLicense(HOUSEN_TEST_LICENSE_SENTINEL, { KNOT_SYNC_ALLOW_TEST_LICENSE: "0" }, { publicKey }),
+    false,
+  );
+
+  const validToken = signLicensePayload(
+    { licensee: "株式会社方眼", plugins: [HOUSEN_PLUGIN_NAME], exp: 4_102_444_800 },
+    privateKey,
+  );
+  assert.equal(
+    checkHousenLicense(parseHousenSettings({ licenseKey: validToken }), "form.xlsx", {}, { publicKey }),
+    undefined,
+  );
+
+  const expiredToken = signLicensePayload(
+    { licensee: "株式会社方眼", plugins: [HOUSEN_PLUGIN_NAME], exp: 1_700_000_000 },
+    privateKey,
+  );
+  const expFail = checkHousenLicense(
+    parseHousenSettings({ licenseKey: expiredToken }),
+    "form.xlsx",
+    {},
+    { publicKey },
+  );
+  assert.ok(expFail && !expFail.ok && expFail.code === "LICENSE");
+  assert.match(expFail.message, /expired/i);
+
+  const wrongPluginToken = signLicensePayload(
+    { licensee: "株式会社方眼", plugins: ["extractor-ocr"], exp: 4_102_444_800 },
+    privateKey,
+  );
+  const wrongFail = checkHousenLicense(
+    parseHousenSettings({ licenseKey: wrongPluginToken }),
+    "form.xlsx",
+    {},
+    { publicKey },
+  );
+  assert.ok(wrongFail && !wrongFail.ok && wrongFail.code === "LICENSE");
+  assert.match(wrongFail.message, /plugin_not_allowed/);
+});

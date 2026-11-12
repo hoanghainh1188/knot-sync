@@ -24,7 +24,8 @@
   "dependencies": {
     "@hoanghainh/knot-sync-core": "workspace:*",
     "@hoanghainh/knot-sync-guard": "workspace:*",
-    "@hoanghainh/knot-sync-pii-basic": "workspace:*"
+    "@hoanghainh/knot-sync-pii-basic": "workspace:*",
+    "@hoanghainh/knot-sync-plugin-license": "workspace:*"
   },
   "author": "hoanghainh",
   "private": true

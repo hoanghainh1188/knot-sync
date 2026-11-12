@@ -15,6 +15,8 @@ export {
   isValidEnterpriseSqlLicense,
   licenseMissingMessage,
   resolveEnterpriseSqlLicense,
+  verifyEnterpriseSqlLicense,
+  type EnterpriseSqlLicenseCheckOptions,
 } from "./license.js";
 export { createMssqlDriver, createMssqlDriverFactory } from "./mssql.js";
 export { createOracleDriver, createOracleDriverFactory } from "./oracle.js";

@@ -12,6 +12,8 @@
   "scripts": {
     "build": "tsc -b && pnpm --filter @hoanghainh/knot-sync-ui run build:client",
     "bundle:cli": "pnpm build && node scripts/bundle-cli.mjs",
+    "bundle:paid": "pnpm build && node scripts/bundle-paid-plugins.mjs",
+    "pack:paid": "pnpm build && node scripts/bundle-paid-plugins.mjs --pack",
     "pack:cli": "pnpm bundle:cli && node scripts/with-cli-publish-manifest.mjs npm pack",
     "publish:cli": "pnpm bundle:cli && node scripts/with-cli-publish-manifest.mjs npm publish --access public",
     "clean": "tsc -b --clean",
