@@ -72,6 +72,8 @@ export interface Connector {
   id: string;
   parseSource(raw: Record<string, unknown>, ctx: ParseSourceContext): SourceConfig;
   scan(source: SourceConfig, options?: ConnectorScanOptions): AsyncGenerator<FileEntry>;
+  /** Optional in-memory byte reader for non-filesystem sources (e.g. cloud drives). */
+  readBytes?(file: FileEntry, signal?: AbortSignal, maxBytes?: number): Promise<Buffer>;
 }
 
 export interface ExtractContext {
@@ -81,6 +83,8 @@ export interface ExtractContext {
   maxFileSizeBytes?: number;
   /** Cap characters from delimited / plain-text extraction. */
   maxTextChars?: number;
+  /** Optional in-memory byte reader supplied by a remote Connector. */
+  readBytes?: (file: FileEntry) => Promise<Buffer>;
 }
 
 export type ExtractResult =

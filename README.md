@@ -377,6 +377,7 @@ pnpm bundle:paid --public-key .keys/license-public.pem   # outputs dist/paid-plu
 | [`extractor-ocr`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/extractor-ocr) | Docling OCR for scanned PDF/images | `KNOT_SYNC_OCR_LICENSE` |
 | [`extractor-housen`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/extractor-housen) | 方眼紙 / form-like `.xlsx` layout | `KNOT_SYNC_HOUSEN_LICENSE` |
 | [`connector-sql-enterprise`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-sql-enterprise) | mssql / oracle / access / as400 | `KNOT_SYNC_SQL_ENTERPRISE_LICENSE` |
+| [`connector-cloud-drive`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-cloud-drive) | Read-only Google Drive, SharePoint, OneDrive | `KNOT_SYNC_CLOUD_DRIVE_LICENSE` |
 | [`auth-oauth`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/auth-oauth) | HTTP OAuth/scopes; API key fallback | `KNOT_SYNC_OAUTH_LICENSE` |
 | [`catalog-llm`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/catalog-llm) | Local LLM blank catalog labels | `KNOT_SYNC_CATALOG_LLM_LICENSE` |
 | [`search-vector`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/search-vector) | Embeddings + `search_similar` / `embed` | `KNOT_SYNC_SEARCH_VECTOR_LICENSE` |
@@ -527,6 +528,7 @@ KnotSync is structured as a clean, modular TypeScript monorepo managed by `pnpm`
 | [`packages/connector-fs`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-fs) | Read-only folder walker and file inventory scanner |
 | [`packages/connector-sql`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-sql) | Read-only PostgreSQL and MySQL connector, schema introspection |
 | [`packages/connector-sql-enterprise`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-sql-enterprise) | Opt-in paid mssql/oracle/access/as400 connectors (license self-check) |
+| [`packages/connector-cloud-drive`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/connector-cloud-drive) | Opt-in paid read-only Google Drive / SharePoint / OneDrive connectors (license self-check) |
 | [`packages/auth-oauth`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/auth-oauth) | Opt-in paid HTTP MCP OAuth/scopes (local AS + optional JWKS) |
 | [`packages/catalog-llm`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/catalog-llm) | Opt-in paid local LLM for blank Semantic Catalog labels |
 | [`packages/search-vector`](https://github.com/hoanghainh1188/knot-sync/tree/main/packages/search-vector) | Opt-in paid local embeddings + `search_similar` / `embed` |

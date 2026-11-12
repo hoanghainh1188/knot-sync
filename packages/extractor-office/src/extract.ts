@@ -1,6 +1,7 @@
 import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
+import { Readable } from "node:stream";
 import ExcelJS from "exceljs";
 import mammoth from "mammoth";
 import { extractText, getDocumentProxy } from "unpdf";
@@ -19,6 +20,22 @@ import {
 
 function fail(code: string, message: string): ExtractResult {
   return { ok: false, code, message };
+}
+
+function readSourceBytes(file: FileEntry, ctx?: ExtractContext): Promise<Buffer> {
+  return ctx?.readBytes ? ctx.readBytes(file) : readFile(file.absPath);
+}
+
+function mapReadError(file: FileEntry, err: unknown): { ok: false; code: string; message: string } {
+  const code = (err as { code?: string })?.code;
+  if (code === "SKIPPED_TOO_LARGE") {
+    return { ok: false, code: "SKIPPED_TOO_LARGE", message: (err as Error).message };
+  }
+  return {
+    ok: false,
+    code: "READ",
+    message: `Could not read "${file.relPath}": ${(err as Error).message}. Check permissions and re-run scan.`,
+  };
 }
 
 function titleFromPath(relPath: string): string {
@@ -152,7 +169,17 @@ async function extractXlsxStreaming(
   file: FileEntry,
   ctx?: ExtractContext,
 ): Promise<ExtractResult> {
-  const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(file.absPath, {
+  let input: string | Readable = file.absPath;
+  if (ctx?.readBytes) {
+    try {
+      const bytes = await ctx.readBytes(file);
+      if (aborted(ctx.signal)) return timeoutFail(file);
+      input = Readable.from(bytes);
+    } catch (err) {
+      return mapReadError(file, err);
+    }
+  }
+  const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(input as never, {
     entries: "emit",
     sharedStrings: "cache",
     hyperlinks: "cache",
@@ -214,12 +241,9 @@ async function extractXlsxBuffered(
   if (aborted(ctx?.signal)) return timeoutFail(file);
   let bytes: Buffer;
   try {
-    bytes = await readFile(file.absPath);
+    bytes = await readSourceBytes(file, ctx);
   } catch (err) {
-    return fail(
-      "READ",
-      `Could not read "${file.relPath}": ${(err as Error).message}. Check permissions and re-run scan.`,
-    );
+    return mapReadError(file, err);
   }
   if (aborted(ctx?.signal)) return timeoutFail(file);
 
@@ -375,12 +399,23 @@ async function readTextBounded(
   file: FileEntry,
   maxTextChars: number,
   signal?: AbortSignal,
+  readBytes?: ExtractContext["readBytes"],
 ): Promise<
   | { ok: true; text: string; truncated: boolean }
   | { ok: false; code: string; message: string }
 > {
   // Binary stream + fatal UTF-8 decode (preserve ENCODING soft-fail for legacy encodings).
-  const stream = createReadStream(file.absPath);
+  let stream: Readable;
+  if (readBytes) {
+    try {
+      const bytes = await readBytes(file);
+      stream = Readable.from(bytes);
+    } catch (err) {
+      return mapReadError(file, err);
+    }
+  } else {
+    stream = createReadStream(file.absPath);
+  }
   const decoder = new TextDecoder("utf-8", { fatal: true });
   let text = "";
   let truncated = false;
@@ -457,7 +492,7 @@ async function extractDelimited(
   ctx?: ExtractContext,
 ): Promise<ExtractResult> {
   const maxTextChars = ctx?.maxTextChars ?? DEFAULT_EXTRACTION_CONFIG.maxTextChars;
-  const read = await readTextBounded(file, maxTextChars, ctx?.signal);
+  const read = await readTextBounded(file, maxTextChars, ctx?.signal, ctx?.readBytes);
   if (!read.ok) return read;
   const lines = read.text.split(/\r?\n/).filter((l) => l.length > 0);
   const table = parseDelimitedLines(lines, delimiter);
@@ -477,7 +512,7 @@ async function extractDelimited(
 
 async function extractPlainText(file: FileEntry, ctx?: ExtractContext): Promise<ExtractResult> {
   const maxTextChars = ctx?.maxTextChars ?? DEFAULT_EXTRACTION_CONFIG.maxTextChars;
-  const read = await readTextBounded(file, maxTextChars, ctx?.signal);
+  const read = await readTextBounded(file, maxTextChars, ctx?.signal, ctx?.readBytes);
   if (!read.ok) return read;
   if (read.text.trim() === "") {
     return fail("EMPTY", `Text file "${file.relPath}" is empty.`);
@@ -533,12 +568,9 @@ export async function extractOfficeFile(
   // docx / pdf still need a buffer (bounded by maxFileSizeMb).
   let bytes: Buffer;
   try {
-    bytes = await readFile(file.absPath);
+    bytes = await readSourceBytes(file, ctx);
   } catch (err) {
-    return fail(
-      "READ",
-      `Could not read "${file.relPath}": ${(err as Error).message}. Check permissions and re-run scan.`,
-    );
+    return mapReadError(file, err);
   }
 
   if (aborted(ctx?.signal)) return timeoutFail(file);

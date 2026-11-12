@@ -135,6 +135,15 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
 
+  packages/connector-cloud-drive:
+    dependencies:
+      '@hoanghainh/knot-sync-core':
+        specifier: workspace:*
+        version: link:../core
+      '@hoanghainh/knot-sync-plugin-license':
+        specifier: workspace:*
+        version: link:../plugin-license
+
   packages/connector-fs:
     dependencies:
       '@hoanghainh/knot-sync-core':
