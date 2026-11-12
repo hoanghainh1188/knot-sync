@@ -1,3 +1,4 @@
+import CFB from "cfb";
 import ExcelJS from "exceljs";
 
 /** Minimal ZIP writer using store (method 0) only — enough for tiny OOXML fixtures. */
@@ -152,4 +153,137 @@ function escapeXml(s: string): string {
 
 function escapePdf(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+}
+
+function biffRec(type: number, payload: Buffer): Buffer {
+  const hdr = Buffer.alloc(4);
+  hdr.writeUInt16LE(type, 0);
+  hdr.writeUInt16LE(payload.length, 2);
+  return Buffer.concat([hdr, payload]);
+}
+
+function biffBof(substreamType: number): Buffer {
+  const p = Buffer.alloc(16);
+  p.writeUInt16LE(0x0600, 0); // BIFF8
+  p.writeUInt16LE(substreamType, 2);
+  return biffRec(0x0809, p);
+}
+
+/** Build a valid legacy binary `.xls` (OLE2 BIFF8) fixture for tests. */
+export function buildXls(
+  rows: (string | number)[][],
+  options: { sheetName?: string; encrypted?: boolean } = {},
+): Buffer {
+  const sheetName = options.sheetName ?? "Sheet1";
+  const uniqueStrings: string[] = [];
+  const strIndex = new Map<string, number>();
+  let totalRefs = 0;
+
+  for (const r of rows) {
+    for (const cell of r) {
+      if (typeof cell === "string") {
+        totalRefs += 1;
+        if (!strIndex.has(cell)) {
+          strIndex.set(cell, uniqueStrings.length);
+          uniqueStrings.push(cell);
+        }
+      }
+    }
+  }
+
+  const globalsHead: Buffer[] = [biffBof(0x0005)];
+  if (options.encrypted) {
+    globalsHead.push(biffRec(0x002f, Buffer.alloc(6)));
+  }
+  const cpPayload = Buffer.alloc(2);
+  cpPayload.writeUInt16LE(1200, 0);
+  globalsHead.push(biffRec(0x0042, cpPayload));
+
+  // Build SST record
+  const sstParts: Buffer[] = [Buffer.alloc(8)];
+  sstParts[0]!.writeUInt32LE(totalRefs, 0);
+  sstParts[0]!.writeUInt32LE(uniqueStrings.length, 4);
+  for (const s of uniqueStrings) {
+    const utf16 = Buffer.from(s, "utf16le");
+    const hdr = Buffer.alloc(3);
+    hdr.writeUInt16LE(s.length, 0);
+    hdr.writeUInt8(0x01, 2); // UTF-16LE
+    sstParts.push(hdr, utf16);
+  }
+  const sstRec = biffRec(0x00fc, Buffer.concat(sstParts));
+
+  // BOUND_SHEET8 payload (offset patched after globals length is known)
+  const sheetNameBytes = Buffer.from(sheetName, "utf16le");
+  const bsPayload = Buffer.alloc(8 + sheetNameBytes.length);
+  bsPayload.writeUInt16LE(0, 4);
+  bsPayload.writeUInt8(sheetName.length, 6);
+  bsPayload.writeUInt8(0x01, 7); // UTF-16LE
+  sheetNameBytes.copy(bsPayload, 8);
+
+  const eofRec = biffRec(0x000a, Buffer.alloc(0));
+  const globalsBytes = Buffer.concat([
+    ...globalsHead,
+    biffRec(0x0085, bsPayload),
+    sstRec,
+    eofRec,
+  ]);
+  // Patch BOF offset into BOUND_SHEET8 record
+  const bsOffsetInGlobals =
+    Buffer.concat(globalsHead).length + 4; // +4 for BOUND_SHEET8 record header
+  globalsBytes.writeUInt32LE(globalsBytes.length, bsOffsetInGlobals);
+
+  const sheetRecs: Buffer[] = [biffBof(0x0010)];
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r]!;
+    for (let c = 0; c < row.length; c++) {
+      const val = row[c]!;
+      if (typeof val === "string") {
+        const p = Buffer.alloc(10);
+        p.writeUInt16LE(r, 0);
+        p.writeUInt16LE(c, 2);
+        p.writeUInt32LE(strIndex.get(val)!, 6);
+        sheetRecs.push(biffRec(0x00fd, p)); // LABELSST
+      } else {
+        const p = Buffer.alloc(14);
+        p.writeUInt16LE(r, 0);
+        p.writeUInt16LE(c, 2);
+        p.writeDoubleLE(val, 6);
+        sheetRecs.push(biffRec(0x0203, p)); // NUMBER
+      }
+    }
+  }
+  sheetRecs.push(eofRec);
+
+  const workbook = Buffer.concat([globalsBytes, ...sheetRecs]);
+  const container = CFB.utils.cfb_new();
+  CFB.utils.cfb_add(container, "Workbook", workbook);
+  return Buffer.from(CFB.write(container, { type: "buffer" }) as Uint8Array);
+}
+
+/** Build a valid legacy binary `.doc` (Word 97-2003 OLE2) fixture for tests. */
+export function buildDoc(text: string): Buffer {
+  const fcMin = 0x0400;
+  const textBuf = Buffer.from(text, "utf16le");
+  const wordDoc = Buffer.alloc(fcMin + textBuf.length + 16);
+  wordDoc.writeUInt16LE(0xa5ec, 0x0000); // FIB magic
+  wordDoc.writeUInt16LE(0x0200, 0x000a); // fWhichTblStm = 1Table
+  wordDoc.writeUInt32LE(fcMin, 0x0018); // fcMin
+  wordDoc.writeUInt32LE(text.length, 0x004c); // ccpText
+  wordDoc.writeUInt32LE(0, 0x01a2); // fcClx = 0 in 1Table
+  textBuf.copy(wordDoc, fcMin);
+
+  // 1Table with Pcdt (flag 0x02) + 1 piece pointing to fcMin (Unicode)
+  const table = Buffer.alloc(21);
+  table.writeUInt8(0x02, 0); // Pcdt
+  table.writeUInt32LE(16, 1); // pieceTableSize -> (16 - 4) / 12 = 1 piece
+  table.writeUInt32LE(0, 5); // cp[0] = 0
+  table.writeUInt32LE(text.length, 9); // cp[1] = text.length
+  table.writeUInt16LE(0, 13); // PCD flags
+  table.writeUInt32LE(fcMin, 15); // fc (bit 30 clear = UTF-16LE)
+  table.writeUInt16LE(0, 19); // prm
+
+  const container = CFB.utils.cfb_new();
+  CFB.utils.cfb_add(container, "WordDocument", wordDoc);
+  CFB.utils.cfb_add(container, "1Table", table);
+  return Buffer.from(CFB.write(container, { type: "buffer" }) as Uint8Array);
 }

@@ -4,8 +4,15 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createPluginHost, type FileEntry } from "@hoanghainh/knot-sync-core";
-import officePlugin, { extractOfficeFile } from "./index.js";
-import { buildDocx, buildSimplePdf, buildXlsx, buildXlsxWithHiddenText } from "./fixtures.js";
+import officePlugin, { OFFICE_EXTENSIONS, extractOfficeFile } from "./index.js";
+import {
+  buildDoc,
+  buildDocx,
+  buildSimplePdf,
+  buildXls,
+  buildXlsx,
+  buildXlsxWithHiddenText,
+} from "./fixtures.js";
 
 function entry(root: string, rel: string, type: FileEntry["type"], ext: string): FileEntry {
   return {
@@ -139,6 +146,71 @@ test("Vietnamese CSV truncates at maxTextChars with metadata", async () => {
       assert.ok(result.document.content.length < header.length + body.length);
       assert.match(result.document.content, /mã khách/);
     }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("extracts legacy binary .xls (JP) and .doc (VN) with truncation and error handling", async () => {
+  assert.ok(OFFICE_EXTENSIONS.includes(".xls"));
+  assert.ok(OFFICE_EXTENSIONS.includes(".doc"));
+
+  const root = await mkdtemp(join(tmpdir(), "knot-ext-legacy-"));
+  try {
+    const xlsPath = join(root, "旧請求書.xls");
+    await writeFile(
+      xlsPath,
+      buildXls(
+        [
+          ["項目", "金額"],
+          ["サーバー保守", 150000],
+        ],
+        { sheetName: "請求一覧" },
+      ),
+    );
+    const xls = await extractOfficeFile(entry(root, "旧請求書.xls", "xls", ".xls"));
+    assert.equal(xls.ok, true, xls.ok ? "" : `${xls.code}: ${xls.message}`);
+    if (xls.ok) {
+      assert.equal(xls.document.type, "xls");
+      assert.match(xls.document.content, /サーバー保守/);
+      assert.equal(xls.document.tables[0]?.name, "請求一覧");
+      assert.deepEqual(xls.document.tables[0]?.headers, ["項目", "金額"]);
+      assert.deepEqual(xls.document.tables[0]?.rows, [["サーバー保守", "150000"]]);
+    }
+
+    const docPath = join(root, "hop-dong-cu.doc");
+    const longVn = "Hợp đồng cung cấp dịch vụ năm 2024 cho Công ty Minh Anh. ".repeat(5);
+    await writeFile(docPath, buildDoc(longVn));
+    const doc = await extractOfficeFile(entry(root, "hop-dong-cu.doc", "doc", ".doc"));
+    assert.equal(doc.ok, true, doc.ok ? "" : `${doc.code}: ${doc.message}`);
+    if (doc.ok) {
+      assert.equal(doc.document.type, "doc");
+      assert.match(doc.document.content, /Hợp đồng cung cấp dịch vụ/);
+    }
+
+    const docTrunc = await extractOfficeFile(entry(root, "hop-dong-cu.doc", "doc", ".doc"), {
+      maxTextChars: 30,
+    });
+    assert.equal(docTrunc.ok, true);
+    if (docTrunc.ok) {
+      assert.equal(docTrunc.document.metadata.truncated, true);
+      assert.equal(docTrunc.document.content.length, 30);
+    }
+
+    // Encrypted .xls -> PARSE
+    await writeFile(join(root, "locked.xls"), buildXls([["secret"]], { encrypted: true }));
+    const locked = await extractOfficeFile(entry(root, "locked.xls", "xls", ".xls"));
+    assert.equal(locked.ok, false);
+    if (!locked.ok) {
+      assert.equal(locked.code, "PARSE");
+      assert.match(locked.message, /encrypted|password/i);
+    }
+
+    // Corrupt .doc -> PARSE
+    await writeFile(join(root, "bad.doc"), "not-a-valid-ole2-doc");
+    const badDoc = await extractOfficeFile(entry(root, "bad.doc", "doc", ".doc"));
+    assert.equal(badDoc.ok, false);
+    if (!badDoc.ok) assert.equal(badDoc.code, "PARSE");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

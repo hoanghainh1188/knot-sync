@@ -4,6 +4,8 @@ import { basename } from "node:path";
 import ExcelJS from "exceljs";
 import mammoth from "mammoth";
 import { extractText, getDocumentProxy } from "unpdf";
+import WordExtractor from "word-extractor";
+import { parseBiff8Workbook } from "./biff8.js";
 import {
   DEFAULT_EXTRACTION_CONFIG,
   documentId,
@@ -271,6 +273,57 @@ async function extractDocx(file: FileEntry, bytes: Buffer): Promise<ExtractResul
   return { ok: true, document: toDocument(file, content, []) };
 }
 
+async function extractXls(
+  file: FileEntry,
+  bytes: Buffer,
+  ctx?: ExtractContext,
+): Promise<ExtractResult> {
+  const maxTextChars = ctx?.maxTextChars ?? DEFAULT_EXTRACTION_CONFIG.maxTextChars;
+  const wb = parseBiff8Workbook(bytes, {
+    maxTextChars,
+    maxTableRows: 50_000,
+  });
+  const res = sheetsToDocument(
+    file,
+    wb.sheets.map((s) => ({ name: s.name, rows: s.rows, hiddenParts: [] })),
+  );
+  if (res.ok && wb.truncated) {
+    res.document.metadata.truncated = true;
+  }
+  return res;
+}
+
+async function extractDoc(
+  file: FileEntry,
+  bytes: Buffer,
+  ctx?: ExtractContext,
+): Promise<ExtractResult> {
+  const maxTextChars = ctx?.maxTextChars ?? DEFAULT_EXTRACTION_CONFIG.maxTextChars;
+  const extractor = new WordExtractor();
+  const doc = await extractor.extract(bytes);
+  const sections = [
+    doc.getBody(),
+    doc.getHeaders({ includeFooters: false }),
+    doc.getFooters(),
+    doc.getFootnotes(),
+    doc.getEndnotes(),
+  ]
+    .map((s) => (typeof s === "string" ? s.trim() : ""))
+    .filter(Boolean);
+
+  let content = sections.join("\n\n").trim();
+  if (!content) {
+    return fail("EMPTY", `Word document "${file.relPath}" has no extractable text.`);
+  }
+
+  const extra: Record<string, string | number | boolean | null> = {};
+  if (content.length > maxTextChars) {
+    content = content.slice(0, maxTextChars);
+    extra.truncated = true;
+  }
+  return { ok: true, document: toDocument(file, content, [], extra) };
+}
+
 async function extractPdf(file: FileEntry, bytes: Buffer): Promise<ExtractResult> {
   let pdf: Awaited<ReturnType<typeof getDocumentProxy>> | undefined;
   try {
@@ -492,8 +545,12 @@ export async function extractOfficeFile(
 
   try {
     switch (file.ext) {
+      case ".xls":
+        return await extractXls(file, bytes, ctx);
       case ".docx":
         return await extractDocx(file, bytes);
+      case ".doc":
+        return await extractDoc(file, bytes, ctx);
       case ".pdf":
         return await extractPdf(file, bytes);
       default:
@@ -513,7 +570,9 @@ export async function extractOfficeFile(
 
 export const OFFICE_EXTENSIONS = [
   ".xlsx",
+  ".xls",
   ".docx",
+  ".doc",
   ".pdf",
   ".csv",
   ".tsv",
