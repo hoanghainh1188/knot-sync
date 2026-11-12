@@ -566,7 +566,6 @@ export function startPeriodicSync(options: PeriodicSyncOptions): PeriodicSyncHan
       if (stopped) return;
       inFlight = runOneCycle();
     }, delayMs);
-    timer.unref?.();
   };
 
   const safeCallback = async (fn?: () => void | Promise<void>) => {

@@ -804,32 +804,9 @@ async function cmdServe(
           syncIntervalSeconds !== undefined
             ? t(locale, "serve.syncSuffix", { seconds: String(syncIntervalSeconds) })
             : "";
+        let listenLogPromise: Promise<void> | undefined;
 
-        if (flags.http) {
-          io.err(
-            t(locale, "serve.listeningHttp", {
-              host: bindHost,
-              port: String(port),
-              store: config.store.path,
-              audit: config.server.auditLog,
-            }) +
-              catalogSuffix +
-              syncSuffix,
-          );
-          await appendSystemLogSafe(
-            log,
-            io,
-            {
-              level: "info",
-              event: "serve.listen",
-              command: "serve",
-              host: bindHost,
-              port,
-              storePath: config.store.path,
-            },
-            writeFailed,
-          );
-        } else {
+        if (!flags.http) {
           io.err(
             t(locale, "serve.listening", {
               store: config.store.path,
@@ -925,6 +902,31 @@ async function cmdServe(
               bindHost,
               port,
               ...(io.signal ? { signal: io.signal } : {}),
+              onListening: ({ host: boundHost, port: boundPort }) => {
+                io.err(
+                  t(locale, "serve.listeningHttp", {
+                    host: boundHost,
+                    port: String(boundPort),
+                    store: config.store.path,
+                    audit: config.server.auditLog,
+                  }) +
+                    catalogSuffix +
+                    syncSuffix,
+                );
+                listenLogPromise = appendSystemLogSafe(
+                  log,
+                  io,
+                  {
+                    level: "info",
+                    event: "serve.listen",
+                    command: "serve",
+                    host: boundHost,
+                    port: boundPort,
+                    storePath: config.store.path,
+                  },
+                  writeFailed,
+                );
+              },
             });
           } else {
             await serveStdio({
@@ -936,6 +938,7 @@ async function cmdServe(
             });
           }
         } finally {
+          await listenLogPromise;
           await periodic?.stop();
           await appendSystemLogSafe(
             log,
