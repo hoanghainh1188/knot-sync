@@ -4,13 +4,13 @@ Positioning: **a semantic layer for legacy data.** Cleaning is preparation; the
 Semantic Catalog (business names, descriptions, valid values for cryptic fields
 like `TKSK_CD` or `ma_kh`) is the core value.
 
-**Current status (2026-11-11):** open-core **v0.1–v0.3** ✅ and Paid edition
-capabilities **#1–#7** ✅ are shipped in this repo. Docs prep
+**Current status (2026-11-13):** open-core **v0.1–v0.4** ✅ and Paid edition
+capabilities **#1–#7** ✅ (+ Cloud Drive connectors) are shipped in this repo. Docs prep
 `prepare-v1-public-contract` (1.0 public surface + Paid npm clarity; **do not**
 tag `1.0.0` until a real pilot) and `improve-onboarding-and-demo` are archived
-✅. Next planned tracks in order: **v0.4 (Pilot Readiness & Data Hygiene)** →
-**v1.0 (Commercialization & Operator Governance)** → **v1.1+ (Safe Write Tools
-& Connectors)**. See the tables below.
+✅. Next planned tracks in order: **v0.5 (Pre-Pilot AI Reasoning, Multi-Table ERP & Turnkey LAN Appliance — Issues #53–#57)** →
+**v1.0 (`release-v1-0-0` after pilot verification)** → **v1.1+ (Safe Write Tools
+& Regional SaaS Connectors)**. See the tables below.
 
 Pipeline (4 stages):
 
@@ -276,8 +276,9 @@ under sources. Distinct from server.audit_log. No telemetry / remote shipping. N
 | v0.3 | Production hardening complete in open-core (see section above) ✅ |
 | Paid | Separate plugin packages (license checked by the plugin, never by core) ✅ #1–#7 below |
 | Onboarding | `prepare-v1-public-contract` ✅ + `improve-onboarding-and-demo` ✅ |
-| v0.4 | Pilot readiness & data hygiene (prune deleted docs, SQL sort/aggregates, slim store, periodic sync) |
-| v1.0 | Commercialization & governance (Ed25519 offline licensing, UI document explorer, `.xls`/`.doc`, `1.0.0` release) |
+| v0.4 | Pilot readiness & data hygiene (prune deleted docs, SQL sort/aggregates, slim store, periodic sync) ✅ |
+| v0.5 | Pre-Pilot AI reasoning, multi-table ERP relations & turnkey LAN deployment (Issues #53–#57) ⏳ |
+| v1.0 | Commercialization & governance (Ed25519 offline licensing ✅, UI document explorer ✅, `.xls`/`.doc` ✅, `1.0.0` release ⏳) |
 | v1.1+ (After v1.0) | Write tools / stored procedures (always with human approval) & enterprise SaaS connectors |
 
 ---
@@ -315,6 +316,50 @@ Target: Close data lifecycle and analytical gaps before running customer pilots,
 
 ```
 /opsx:propose add-periodic-sync: Add optional background sync interval (`--sync-interval <seconds>` or config `server.sync_interval_seconds`) to `knot-sync serve` so shared LAN deployments automatically run incremental `scan` + `run` + prune without an external cron job. Log each background sync cycle to `system.jsonl` without interrupting active MCP requests. No new dependencies.
+```
+
+---
+
+## v0.5 — Pre-Pilot AI Reasoning, Multi-Table ERP & Turnkey LAN Appliance
+
+Target: Maximize AI reasoning accuracy on masked PII, prevent context window overflow on large documents, unlock multi-table ERP lookups without raw SQL, and provide a turnkey Docker Compose LAN appliance before running customer pilots.
+
+| # | Issue | Change | Priority | Status |
+|---|---:|---|:---:|---|
+| 1 | [#53](https://github.com/hoanghainh1188/knot-sync/issues/53) | `enhance-pii-typed-tokens-and-allowlist` | P0 | ✅ done |
+| 2 | [#54](https://github.com/hoanghainh1188/knot-sync/issues/54) | `add-mcp-document-pagination` | P0 | ⏳ planned |
+| 3 | [#55](https://github.com/hoanghainh1188/knot-sync/issues/55) | `add-sql-views-and-catalog-relations` | P1 | ⏳ planned |
+| 4 | [#56](https://github.com/hoanghainh1188/knot-sync/issues/56) | `add-catalog-lookup-joins` | P1 | ⏳ planned |
+| 5 | [#57](https://github.com/hoanghainh1188/knot-sync/issues/57) | `add-turnkey-lan-deployment` | P2 | ⏳ planned |
+
+### 1. enhance-pii-typed-tokens-and-allowlist (P0 — #53)
+
+```
+/opsx:propose enhance-pii-typed-tokens-and-allowlist: Enhance packages/pii-basic with typed pseudonymization tokens and an allowlist to reduce false positives on B2B data. Add optional pii.tokenFormat ("legacy" | "typed", default "typed" for hash or configurable) so masked/hashed spans preserve rule type context for AI reasoning (e.g. [PII:PERSON] or pii_person-name_<hash>). Add optional pii.allowlist (array of literal terms or prefixes) in knot-sync.config.yaml to skip known company names (e.g. 佐藤工業株式会社) and internal product/order codes during PII detection. Keep all raw PII out of SQLite and MCP responses. No new dependencies.
+```
+
+### 2. add-mcp-document-pagination (P0 — #54)
+
+```
+/opsx:propose add-mcp-document-pagination: Add optional, backward-compatible pagination and table selection parameters (offset, maxChars, tableIndex, includeTables) to the get_document MCP tool in packages/mcp-server. Include totalChars and tableCount metadata in search_documents hits and get_document headers so AI agents can inspect large PDFs and multi-sheet Excel workbooks slice-by-slice without overflowing context windows. Keep UNTRUSTED_DOCUMENT_CONTENT framing and guard flags intact on every slice. No new dependencies.
+```
+
+### 3. add-sql-views-and-catalog-relations (P1 — #55)
+
+```
+/opsx:propose add-sql-views-and-catalog-relations: Support read-only SQL Views and Materialized Views in packages/connector-sql introspection and add foreign-key relationship hints (references: "table.column") to packages/catalog and packages/ui. Auto-detect foreign keys between allow-listed tables during knot-sync describe and surface references in describe_table MCP output so AI agents can resolve master-detail relationships (e.g. juchu.TKSK_CD -> tokuisaki_mst.TKSK_CD) accurately. Maintain strict read-only session enforcement. No new dependencies.
+```
+
+### 4. add-catalog-lookup-joins (P1 — #56)
+
+```
+/opsx:propose add-catalog-lookup-joins: Allow pre-approved, human-reviewed lookup joins in knot-sync.catalog.yaml so query_table in packages/connector-sql can resolve display columns from allow-listed master tables (e.g. joining juchu.TKSK_CD to tokuisaki_mst.TKSK_CD to select/filter/group by customer name) in a single parameterized read-only query. Enforce that both tables and all referenced columns are allow-listed in config and marked reviewed: true in the catalog; never accept arbitrary JOIN syntax from MCP tool arguments. No new dependencies.
+```
+
+### 5. add-turnkey-lan-deployment (P2 — #57)
+
+```
+/opsx:propose add-turnkey-lan-deployment: Add an official non-root Dockerfile, deploy/docker-compose.lan.yml (with read-only :ro customer source mounts and optional Docling OCR / Ollama profiles), and a 3-step Enterprise Pilot Playbook (docs/PILOT_PLAYBOOK.md in EN/JA/VI) so IT admins can deploy KnotSync in shared LAN environments with a single command. No new runtime dependencies.
 ```
 
 ---

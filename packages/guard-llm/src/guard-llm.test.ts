@@ -117,6 +117,13 @@ test("Vietnamese PII missed by rules is masked", async () => {
   assert.ok(out.pii.some((f) => f.rule === "model-pii"));
   assert.equal(out.content.includes(phrase), false);
   assert.match(out.content, /\*\*\*/);
+
+  const typedOut = await enricher.enrich(doc(content), {
+    pii: { mode: "mask", saltPath: join(saltDir, "salt"), tokenFormat: "typed" },
+    guard: { mode: "flag" },
+  });
+  assert.match(typedOut.content, /\[PII:MODEL_PII\]/);
+  assert.equal(typedOut.content.includes(phrase), false);
 });
 
 test("guard.mode block empties content on model injection", async () => {

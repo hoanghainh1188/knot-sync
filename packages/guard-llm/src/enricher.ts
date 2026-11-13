@@ -107,6 +107,7 @@ function applyNewFindings(
       piiNew.map((s) => ({ rule: s.rule, start: s.start, end: s.end })),
       ctx.pii.mode,
       salt,
+      ctx.pii.tokenFormat,
     );
   }
 

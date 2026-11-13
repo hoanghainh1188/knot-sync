@@ -193,11 +193,18 @@ export interface ExtractionConfig {
 
 export type PiiMode = "mask" | "hash" | "drop";
 
+/** Token formatting style for PII redaction/hashing (`pii.tokenFormat`). */
+export type PiiTokenFormat = "legacy" | "typed";
+
 /** PII masking settings for the built-in pii-basic plugin. */
 export interface PiiConfig {
   mode: PiiMode;
   /** Absolute path to the hash salt file after config loading. */
   saltPath: string;
+  /** Optional token format ("legacy" | "typed"). */
+  tokenFormat?: PiiTokenFormat;
+  /** Optional list of literal phrases or prefixes excluded from PII detection. */
+  allowlist?: string[];
 }
 
 export type GuardMode = "flag" | "strip" | "block";

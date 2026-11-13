@@ -120,6 +120,29 @@ test("pii rejects bad mode and unknown keys", () => {
   assert.throws(() => parsePiiConfig({ foo: true }, "/salt", "/base"), /Unknown key "foo".*pii/);
 });
 
+test("pii parses tokenFormat and allowlist and rejects invalid values", () => {
+  const parsed = parsePiiConfig(
+    { mode: "mask", tokenFormat: "typed", allowlist: ["佐藤工業株式会社", " ORD- "] },
+    "/salt",
+    "/base",
+  );
+  assert.equal(parsed.tokenFormat, "typed");
+  assert.deepEqual(parsed.allowlist, ["佐藤工業株式会社", "ORD-"]);
+
+  assert.throws(
+    () => parsePiiConfig({ tokenFormat: "custom" }, "/salt", "/base"),
+    /pii\.tokenFormat.*legacy, typed/,
+  );
+  assert.throws(
+    () => parsePiiConfig({ allowlist: "not-an-array" }, "/salt", "/base"),
+    /pii\.allowlist.*list of non-empty strings/,
+  );
+  assert.throws(
+    () => parsePiiConfig({ allowlist: ["valid", "   "] }, "/salt", "/base"),
+    /pii\.allowlist\[1\].*non-empty string/,
+  );
+});
+
 test("guard defaults to flag when omitted", () => {
   const structural = parseConfig("sources:\n  - id: a\n    type: fs\n    path: /x\n", "/work");
   assert.equal(structural.guard.mode, "flag");

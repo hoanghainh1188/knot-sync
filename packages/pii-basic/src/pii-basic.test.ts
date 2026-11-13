@@ -202,3 +202,63 @@ test("person-name matches labeled JP/VN names only", () => {
     ),
   );
 });
+
+test("typed tokenFormat emits [PII:<RULE>] in mask mode and pii_<rule>_<hash> in hash mode", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pii-typed-"));
+  try {
+    const maskTypedCfg: PiiConfig = {
+      mode: "mask",
+      saltPath: join(root, "salt"),
+      tokenFormat: "typed",
+    };
+    const sample = doc("氏名: 山田 太郎, CCCD: 079123456789, mail: a@b.co");
+    const masked = applyPiiToDocument(sample, ALL_RULES, maskTypedCfg);
+    assert.match(masked.content, /\[PII:PERSON_NAME\]/);
+    assert.match(masked.content, /\[PII:CCCD\]/);
+    assert.match(masked.content, /\[PII:EMAIL\]/);
+    assert.doesNotMatch(masked.content, /山田|079123456789|a@b\.co/);
+
+    const hashDefaultCfg: PiiConfig = {
+      mode: "hash",
+      saltPath: join(root, "salt"),
+    };
+    const hashed = applyPiiToDocument(sample, ALL_RULES, hashDefaultCfg);
+    assert.match(hashed.content, /pii_person-name_[A-Za-z0-9_-]{16}/);
+    assert.match(hashed.content, /pii_cccd_[A-Za-z0-9_-]{16}/);
+    assert.match(hashed.content, /pii_email_[A-Za-z0-9_-]{16}/);
+
+    const hashLegacyCfg: PiiConfig = {
+      mode: "hash",
+      saltPath: join(root, "salt"),
+      tokenFormat: "legacy",
+    };
+    const hashedLegacy = applyPiiToDocument(doc("mail: a@b.co"), ALL_RULES, hashLegacyCfg);
+    assert.match(hashedLegacy.content, /pii_[A-Za-z0-9_-]{16}/);
+    assert.doesNotMatch(hashedLegacy.content, /pii_email_/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("pii.allowlist suppresses B2B Japanese company names and Vietnamese order prefixes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pii-allowlist-"));
+  try {
+    const allowlist = ["佐藤工業株式会社", "ORD-"];
+    const text = "取引先 / 氏名: 佐藤工業株式会社 | Mã đơn hàng: ORD-079123456789";
+
+    assert.equal(textHasPii(text, ALL_RULES), true);
+    assert.equal(textHasPii(text, ALL_RULES, allowlist), false);
+
+    const cfg: PiiConfig = {
+      mode: "mask",
+      saltPath: join(root, "salt"),
+      tokenFormat: "typed",
+      allowlist,
+    };
+    const out = applyPiiToDocument(doc(text), ALL_RULES, cfg);
+    assert.equal(out.pii.length, 0);
+    assert.equal(out.content, text);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
