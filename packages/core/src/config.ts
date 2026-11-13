@@ -17,6 +17,7 @@ import type {
   LoggingConfig,
   PiiConfig,
   PiiMode,
+  PiiTokenFormat,
   PromptArgumentConfig,
   PromptConfig,
   ScanConfig,
@@ -81,7 +82,8 @@ export const DEFAULT_DEFINITION_MAPPING: CatalogDefinitionMapping = {
 };
 
 const PII_MODES = new Set<PiiMode>(["mask", "hash", "drop"]);
-const PII_KEYS = new Set(["mode", "saltPath"]);
+const PII_TOKEN_FORMATS = new Set<PiiTokenFormat>(["legacy", "typed"]);
+const PII_KEYS = new Set(["mode", "saltPath", "tokenFormat", "allowlist"]);
 
 export const DEFAULT_PII_MODE: PiiMode = "mask";
 
@@ -238,7 +240,7 @@ export function parsePiiConfig(raw: unknown, defaultSaltPath: string, baseDir: s
   for (const key of Object.keys(obj)) {
     if (!PII_KEYS.has(key)) {
       throw new ConfigError(
-        `Unknown key "${key}" under "pii". Allowed keys: mode, saltPath.`,
+        `Unknown key "${key}" under "pii". Allowed keys: mode, saltPath, tokenFormat, allowlist.`,
       );
     }
   }
@@ -258,7 +260,36 @@ export function parsePiiConfig(raw: unknown, defaultSaltPath: string, baseDir: s
     }
     saltPath = resolvePath(baseDir, obj.saltPath);
   }
-  return { mode, saltPath };
+  let tokenFormat: PiiTokenFormat | undefined;
+  if (obj.tokenFormat !== undefined) {
+    if (
+      typeof obj.tokenFormat !== "string" ||
+      !PII_TOKEN_FORMATS.has(obj.tokenFormat as PiiTokenFormat)
+    ) {
+      throw new ConfigError(
+        `"pii.tokenFormat" must be one of: legacy, typed (got ${JSON.stringify(obj.tokenFormat)}).`,
+      );
+    }
+    tokenFormat = obj.tokenFormat as PiiTokenFormat;
+  }
+  let allowlist: string[] | undefined;
+  if (obj.allowlist !== undefined) {
+    if (!Array.isArray(obj.allowlist)) {
+      throw new ConfigError('"pii.allowlist" must be a list of non-empty strings.');
+    }
+    allowlist = obj.allowlist.map((item, idx) => {
+      if (typeof item !== "string" || item.trim() === "") {
+        throw new ConfigError(
+          `"pii.allowlist[${idx}]" must be a non-empty string (got ${JSON.stringify(item)}).`,
+        );
+      }
+      return item.trim();
+    });
+  }
+  const out: PiiConfig = { mode, saltPath };
+  if (tokenFormat !== undefined) out.tokenFormat = tokenFormat;
+  if (allowlist !== undefined) out.allowlist = allowlist;
+  return out;
 }
 
 /** Parse optional `server:` section. `defaultAuditLog` is absolute. */

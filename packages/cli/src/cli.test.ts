@@ -334,6 +334,62 @@ test("run masks PII and records findings", async () => {
   }
 });
 
+test("scan --pii and run respect pii.allowlist and pii.tokenFormat", async () => {
+  const { Store } = await import("@hoanghainh/knot-sync-store-sqlite");
+  const root = await mkdtemp(join(tmpdir(), "mcpn-cli-pii-typed-"));
+  try {
+    const share = join(root, "share");
+    await mkdir(share, { recursive: true });
+    await writeFile(
+      join(share, "b2b.txt"),
+      "取引先 / 氏名: 佐藤工業株式会社 | Mã đơn: ORD-079123456789\n",
+      "utf8",
+    );
+    await writeFile(
+      join(share, "staff.txt"),
+      "氏名: 山田 太郎 | CCCD: 079123456789\n",
+      "utf8",
+    );
+    const config = join(root, "cfg.yaml");
+    let io = capture();
+    assert.equal(await main(["init", "-c", config, "--path", "./share"], io), 0);
+    const base = await readFile(config, "utf8");
+    await writeFile(
+      config,
+      `${base}\npii:\n  mode: mask\n  tokenFormat: typed\n  allowlist:\n    - "佐藤工業株式会社"\n    - "ORD-"\n`,
+      "utf8",
+    );
+
+    io = capture();
+    assert.equal(await main(["scan", "-c", config, "--pii", "--json"], io), 0);
+    const scanJson = JSON.parse(io.stdout.join("\n"));
+    assert.equal(scanJson.sources[0].piiLikelyFiles, 1);
+
+    io = capture();
+    assert.equal(await main(["run", "-c", config], io), 0);
+
+    const store = new Store(join(root, ".data/store.sqlite"));
+    const b2bHits = store.search("佐藤工業株式会社");
+    assert.equal(b2bHits.length, 1);
+    const b2bDoc = store.getDocument(b2bHits[0]!.id);
+    assert.ok(b2bDoc);
+    assert.equal(b2bDoc!.pii.length, 0);
+    assert.match(b2bDoc!.content, /佐藤工業株式会社/);
+    assert.match(b2bDoc!.content, /ORD-079123456789/);
+
+    const staffHits = store.search("PII");
+    assert.equal(staffHits.length, 1);
+    const staffDoc = store.getDocument(staffHits[0]!.id);
+    assert.ok(staffDoc);
+    assert.match(staffDoc!.content, /\[PII:PERSON_NAME\]/);
+    assert.match(staffDoc!.content, /\[PII:CCCD\]/);
+    assert.doesNotMatch(staffDoc!.content, /山田|079123456789/);
+    store.close();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("run flags injection phrases by default", async () => {
   const { Store } = await import("@hoanghainh/knot-sync-store-sqlite");
   const root = await mkdtemp(join(tmpdir(), "mcpn-cli-guard-flag-"));

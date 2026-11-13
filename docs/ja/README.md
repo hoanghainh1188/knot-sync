@@ -86,7 +86,7 @@ flowchart TB
 |---|---|---|
 | **和暦の日付** | `契約開始日: 令和6年4月1日` | `契約開始日: 2024-04-01`（ISO 8601） |
 | **ベトナム語旧フォント** | `B¸o c¸o doanh thu - NguyÔn V¨n A` (TCVN3) | `Báo cáo doanh thu - Nguyễn Văn A` (UTF-8) |
-| **個人情報（PII）** | `マイナンバー: 123456789016` / `CCCD: 079123456789` | `マイナンバー: ***` / `CCCD: ***` |
+| **個人情報（PII）** | `マイナンバー: 123456789016` / `CCCD: 079123456789` | `マイナンバー: ***`（または `pii.tokenFormat: typed` で `[PII:MY_NUMBER]` / `[PII:CCCD]`、`hash` モードで `pii_my-number_<hash>`。`pii.allowlist` で取引先社名や伝票番号接頭辞を除外可能） |
 | **略称 DB 列名** | `SELECT TKSK_CD, 金額 FROM 受注` | カタログ経由で `TKSK_CD`＝*「得意先コード / customer code」* と理解 |
 | **隠し命令（Injection）** | 白文字の指示文 `"Ignore rules..."` | 検知して `UNTRUSTED DATA` 枠内に隔離 |
 

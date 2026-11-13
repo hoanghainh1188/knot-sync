@@ -293,7 +293,7 @@ Example terminal output:
 #### 2. `run`: Ingest & Normalize Pipeline
 Extracts text and tables from `.xlsx`, `.xls` (BIFF8), `.docx`, `.doc` (Word 97–2003), `.pdf` (text-based), `.csv`, `.tsv`, `.txt`, `.md` into a local SQLite store (`node:sqlite`).
 - **Cleaning**: NFKC normalization, Wareki $\rightarrow$ Gregorian, ISO 8601 dates, TCVN3/VNI conversion, and whitespace/empty-row token reduction. Pre-clean copies (`originalContent` / `originalTables`) are omitted by default (`cleaning.keepOriginalText: false`) to keep the SQLite store compact while recording `tokensBefore` / `tokensAfter` for `bench`; set `cleaning.keepOriginalText: true` in config to retain PII-masked originals in metadata.
-- **PII Masking**: Mask (`***`), hash, or drop sensitive numbers.
+- **PII Masking**: Mask (`***` by default, or rule-tagged `[PII:PERSON_NAME]`, `[PII:CCCD]` with `pii.tokenFormat: typed`), hash (`pii_<rule>_<16-char-hmac>`, or `pii_<16-char-hmac>` with `pii.tokenFormat: legacy`), or drop sensitive numbers. Configure `pii.allowlist` (e.g. `["佐藤工業株式会社", "ORD-"]`) to prevent false positives on known B2B company names and internal order/product code prefixes.
 - **Guardrails**: Flags prompt-injection patterns, zero-width chars, and hidden cells.
 - **Optional paid steps** (when listed under `plugins:`): Docling OCR, 方眼紙 Excel rewrite, and/or local-LLM enricher after PII→guard (`guard-llm`).
 - **Incremental & auto-prune**: Unchanged files (matching SHA-256 hash) are skipped automatically, and stale documents for files removed from the latest `scan` inventory are pruned from SQLite/FTS5 (and vector embeddings if present).
@@ -570,7 +570,7 @@ pnpm scan:sample
 
 ## Public contract (toward 1.0)
 
-The latest published package is **`@hoanghainh/knot-sync@0.2.0`**. **1.0.0 is not published yet.** Customer sources remain read-only; write tools are planned only after 1.0 (with human approval).
+The latest published package is **`@hoanghainh/knot-sync@0.4.0`**. **1.0.0 is not published yet.** Customer sources remain read-only; write tools are planned only after 1.0 (with human approval).
 
 **Stable CLI commands:** `init`, `scan`, `run`, `describe`, `ui`, `bench`, `optimize`, `embed`, `plugins`, `serve` (plus global `--config`, `--lang`, `--help`, `--version`).
 

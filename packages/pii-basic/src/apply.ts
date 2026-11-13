@@ -6,6 +6,7 @@ import {
   type PiiFinding,
   type PiiMode,
   type PiiRule,
+  type PiiTokenFormat,
   type TableData,
 } from "@hoanghainh/knot-sync-core";
 import { loadOrCreateSalt } from "./salt.js";
@@ -45,29 +46,99 @@ export function mergeSpans(spans: Span[]): Span[] {
   return accepted.sort((a, b) => a.start - b.start);
 }
 
-export function collectFindings(text: string, rules: Iterable<PiiRule>): Span[] {
+function normalizeAllowlist(allowlist?: readonly string[]): string[] {
+  if (!allowlist || allowlist.length === 0) return [];
+  const out: string[] = [];
+  for (const item of allowlist) {
+    if (typeof item === "string") {
+      const trimmed = item.trim().toLowerCase();
+      if (trimmed.length > 0) out.push(trimmed);
+    }
+  }
+  return out;
+}
+
+function isSpanAllowlisted(
+  textLower: string,
+  span: Span,
+  normalizedAllowlist: readonly string[],
+): boolean {
+  if (normalizedAllowlist.length === 0) return false;
+  const before = textLower.slice(0, span.start);
+  const spanSlice = textLower.slice(span.start, span.end);
+  for (const entry of normalizedAllowlist) {
+    // Prefix adjacency (e.g. "ORD-" immediately before a 12-digit code) or span starts with entry
+    if (before.endsWith(entry) || spanSlice.startsWith(entry)) {
+      return true;
+    }
+    // Phrase containment (e.g. "佐藤" inside allowlisted "佐藤工業株式会社")
+    let searchFrom = Math.max(0, span.start - entry.length);
+    while (searchFrom <= span.start) {
+      const idx = textLower.indexOf(entry, searchFrom);
+      if (idx === -1 || idx > span.start) break;
+      const endIdx = idx + entry.length;
+      if (span.start >= idx && span.end <= endIdx) {
+        return true;
+      }
+      searchFrom = idx + 1;
+    }
+  }
+  return false;
+}
+
+export function collectFindings(
+  text: string,
+  rules: Iterable<PiiRule>,
+  allowlist?: readonly string[],
+): Span[] {
+  const normalizedAllowlist = normalizeAllowlist(allowlist);
+  const textLower = normalizedAllowlist.length > 0 ? text.toLowerCase() : "";
   const spans: Span[] = [];
   for (const rule of rules) {
     for (const hit of rule.find(text)) {
       if (hit.end > hit.start && hit.start >= 0 && hit.end <= text.length) {
-        spans.push({ rule: rule.id, start: hit.start, end: hit.end });
+        const candidate: Span = { rule: rule.id, start: hit.start, end: hit.end };
+        if (
+          normalizedAllowlist.length > 0 &&
+          isSpanAllowlisted(textLower, candidate, normalizedAllowlist)
+        ) {
+          continue;
+        }
+        spans.push(candidate);
       }
     }
   }
   return mergeSpans(spans);
 }
 
-function redactToken(original: string, rule: string): string {
+function redactToken(
+  original: string,
+  rule: string,
+  tokenFormat?: PiiTokenFormat,
+): string {
   if (rule === "credit-card") {
     const digits = original.replace(/\D/g, "");
     if (digits.length >= 4) return `****-****-****-${digits.slice(-4)}`;
   }
+  if (tokenFormat === "typed") {
+    const tag = rule.toUpperCase().replace(/[^A-Z0-9]+/g, "_") || "ENTITY";
+    return `[PII:${tag}]`;
+  }
   return "***";
 }
 
-function hashToken(original: string, salt: Buffer): string {
-  const dig = createHmac("sha256", salt).update(original, "utf8").digest("base64url");
-  return `pii_${dig.slice(0, 16)}`;
+function hashToken(
+  original: string,
+  rule: string,
+  salt: Buffer,
+  tokenFormat?: PiiTokenFormat,
+): string {
+  const dig = createHmac("sha256", salt).update(original, "utf8").digest("base64url").slice(0, 16);
+  if (tokenFormat === "legacy") {
+    return `pii_${dig}`;
+  }
+  const safeRule = rule.toLowerCase().replace(/[^a-z0-9_-]+/g, "-") || "entity";
+  return `pii_${safeRule}_${dig}`;
 }
 
 export function applyModeToText(
@@ -75,6 +146,7 @@ export function applyModeToText(
   spans: Span[],
   mode: PiiMode,
   salt: Buffer | null,
+  tokenFormat?: PiiTokenFormat,
 ): string {
   if (spans.length === 0) return text;
   const ordered = [...spans].sort((a, b) => b.start - a.start);
@@ -82,10 +154,10 @@ export function applyModeToText(
   for (const s of ordered) {
     const original = out.slice(s.start, s.end);
     let replacement = "";
-    if (mode === "mask") replacement = redactToken(original, s.rule);
+    if (mode === "mask") replacement = redactToken(original, s.rule, tokenFormat);
     else if (mode === "hash") {
       if (!salt) throw new Error("hash mode requires a salt");
-      replacement = hashToken(original, salt);
+      replacement = hashToken(original, s.rule, salt, tokenFormat);
     } else replacement = "";
     out = out.slice(0, s.start) + replacement + out.slice(s.end);
   }
@@ -101,20 +173,22 @@ function maskTables(
   rules: Iterable<PiiRule>,
   mode: PiiMode,
   salt: Buffer | null,
+  tokenFormat?: PiiTokenFormat,
+  allowlist?: readonly string[],
 ): { tables: TableData[]; anyHit: boolean } {
   let anyHit = false;
   const next = tables.map((t) => ({
     ...t,
     headers: t.headers.map((h) => {
-      const spans = collectFindings(h, rules);
+      const spans = collectFindings(h, rules, allowlist);
       if (spans.length) anyHit = true;
-      return applyModeToText(h, spans, mode, salt);
+      return applyModeToText(h, spans, mode, salt, tokenFormat);
     }),
     rows: t.rows.map((row) =>
       row.map((cell) => {
-        const spans = collectFindings(cell, rules);
+        const spans = collectFindings(cell, rules, allowlist);
         if (spans.length) anyHit = true;
-        return applyModeToText(cell, spans, mode, salt);
+        return applyModeToText(cell, spans, mode, salt, tokenFormat);
       }),
     ),
   }));
@@ -128,7 +202,7 @@ export function applyPiiToDocument(
   config: PiiConfig,
 ): Document {
   const ruleList = [...rules];
-  const contentSpans = collectFindings(document.content, ruleList);
+  const contentSpans = collectFindings(document.content, ruleList, config.allowlist);
   const salt = config.mode === "hash" ? loadOrCreateSalt(config.saltPath) : null;
 
   const findings: PiiFinding[] = contentSpans.map((s) => ({
@@ -137,14 +211,29 @@ export function applyPiiToDocument(
     end: s.end,
   }));
 
-  const content = applyModeToText(document.content, contentSpans, config.mode, salt);
-  const { tables, anyHit } = maskTables(document.tables, ruleList, config.mode, salt);
+  const content = applyModeToText(
+    document.content,
+    contentSpans,
+    config.mode,
+    salt,
+    config.tokenFormat,
+  );
+  const { tables, anyHit } = maskTables(
+    document.tables,
+    ruleList,
+    config.mode,
+    salt,
+    config.tokenFormat,
+    config.allowlist,
+  );
 
   const metadata = scrubMetadataPii(
     { ...document.metadata },
     ruleList,
     config.mode,
     salt,
+    config.tokenFormat,
+    config.allowlist,
   );
   if (anyHit) metadata.piiInTables = true;
 
@@ -165,14 +254,17 @@ function scrubMetadataPii(
   rules: PiiRule[],
   mode: PiiMode,
   salt: Buffer | null,
+  tokenFormat?: PiiTokenFormat,
+  allowlist?: readonly string[],
 ): Document["metadata"] {
   if (typeof metadata.originalContent === "string") {
-    const spans = collectFindings(metadata.originalContent, rules);
+    const spans = collectFindings(metadata.originalContent, rules, allowlist);
     metadata.originalContent = applyModeToText(
       metadata.originalContent,
       spans,
       mode,
       salt,
+      tokenFormat,
     );
   }
   if (typeof metadata.originalTables === "string") {
@@ -180,7 +272,7 @@ function scrubMetadataPii(
       const parsed = JSON.parse(metadata.originalTables) as TableData[];
       if (Array.isArray(parsed)) {
         metadata.originalTables = JSON.stringify(
-          maskTables(parsed, rules, mode, salt).tables,
+          maskTables(parsed, rules, mode, salt, tokenFormat, allowlist).tables,
         );
       }
     } catch {
@@ -188,18 +280,23 @@ function scrubMetadataPii(
     }
   }
   if (typeof metadata.guardHiddenText === "string") {
-    const spans = collectFindings(metadata.guardHiddenText, rules);
+    const spans = collectFindings(metadata.guardHiddenText, rules, allowlist);
     metadata.guardHiddenText = applyModeToText(
       metadata.guardHiddenText,
       spans,
       mode,
       salt,
+      tokenFormat,
     );
   }
   return metadata;
 }
 
 /** True if any rule finds a hit (for scan --pii). */
-export function textHasPii(text: string, rules: Iterable<PiiRule>): boolean {
-  return collectFindings(text, rules).length > 0;
+export function textHasPii(
+  text: string,
+  rules: Iterable<PiiRule>,
+  allowlist?: readonly string[],
+): boolean {
+  return collectFindings(text, rules, allowlist).length > 0;
 }

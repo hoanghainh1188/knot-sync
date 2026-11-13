@@ -359,6 +359,7 @@ interface ScanResult {
 async function estimatePiiLikelyFiles(
   files: FileEntry[],
   host: Awaited<ReturnType<typeof loadAppPlugins>>,
+  allowlist?: readonly string[],
 ): Promise<number> {
   let count = 0;
   const rules = host.piiRules.values();
@@ -370,7 +371,7 @@ async function estimatePiiLikelyFiles(
     try {
       const buf = await readFile(file.absPath);
       const text = new TextDecoder("utf-8", { fatal: true }).decode(buf);
-      if (textHasPii(text, ruleList)) count += 1;
+      if (textHasPii(text, ruleList, allowlist)) count += 1;
     } catch {
       // Skip unreadable / non-UTF-8; do not print contents.
     }
@@ -434,7 +435,11 @@ async function cmdScan(
             topDuplicates: s.topDuplicates,
           };
           if (piiEstimate) {
-            row.piiLikelyFiles = await estimatePiiLikelyFiles(s.files, host);
+            row.piiLikelyFiles = await estimatePiiLikelyFiles(
+              s.files,
+              host,
+              config.pii.allowlist,
+            );
           }
           results.push(row);
         }
