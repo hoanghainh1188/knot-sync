@@ -327,7 +327,7 @@ Target: Maximize AI reasoning accuracy on masked PII, prevent context window ove
 | # | Issue | Change | Priority | Status |
 |---|---:|---|:---:|---|
 | 1 | [#53](https://github.com/hoanghainh1188/knot-sync/issues/53) | `enhance-pii-typed-tokens-and-allowlist` | P0 | ✅ done |
-| 2 | [#54](https://github.com/hoanghainh1188/knot-sync/issues/54) | `add-mcp-document-pagination` | P0 | ⏳ planned |
+| 2 | [#54](https://github.com/hoanghainh1188/knot-sync/issues/54) | `add-mcp-document-pagination` | P0 | ✅ done |
 | 3 | [#55](https://github.com/hoanghainh1188/knot-sync/issues/55) | `add-sql-views-and-catalog-relations` | P1 | ⏳ planned |
 | 4 | [#56](https://github.com/hoanghainh1188/knot-sync/issues/56) | `add-catalog-lookup-joins` | P1 | ⏳ planned |
 | 5 | [#57](https://github.com/hoanghainh1188/knot-sync/issues/57) | `add-turnkey-lan-deployment` | P2 | ⏳ planned |
@@ -338,7 +338,7 @@ Target: Maximize AI reasoning accuracy on masked PII, prevent context window ove
 /opsx:propose enhance-pii-typed-tokens-and-allowlist: Enhance packages/pii-basic with typed pseudonymization tokens and an allowlist to reduce false positives on B2B data. Add optional pii.tokenFormat ("legacy" | "typed", default "typed" for hash or configurable) so masked/hashed spans preserve rule type context for AI reasoning (e.g. [PII:PERSON] or pii_person-name_<hash>). Add optional pii.allowlist (array of literal terms or prefixes) in knot-sync.config.yaml to skip known company names (e.g. 佐藤工業株式会社) and internal product/order codes during PII detection. Keep all raw PII out of SQLite and MCP responses. No new dependencies.
 ```
 
-### 2. add-mcp-document-pagination (P0 — #54)
+### 2. add-mcp-document-pagination (P0 — #54) — ✅ done
 
 ```
 /opsx:propose add-mcp-document-pagination: Add optional, backward-compatible pagination and table selection parameters (offset, maxChars, tableIndex, includeTables) to the get_document MCP tool in packages/mcp-server. Include totalChars and tableCount metadata in search_documents hits and get_document headers so AI agents can inspect large PDFs and multi-sheet Excel workbooks slice-by-slice without overflowing context windows. Keep UNTRUSTED_DOCUMENT_CONTENT framing and guard flags intact on every slice. No new dependencies.

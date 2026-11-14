@@ -570,3 +570,109 @@ test("serveHttp executes query_table analytics end-to-end with untrusted framing
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("frameDocument and framedDocumentText support slicing and size headers for JP/VN text", () => {
+  const jaContent = "あ".repeat(400) + "令和6年度契約書".repeat(50) + "ん".repeat(100);
+  const sample = doc("share", "keiyaku.pdf", "令和6年度_契約書.pdf", jaContent, {
+    tables: [
+      { name: "Sheet1", headers: ["項目"], rows: [["A"]] },
+      { name: "Sheet2", headers: ["金額"], rows: [["1000"]] },
+    ],
+  });
+
+  const full = framedDocumentText(frameDocument(sample));
+  assert.match(full, new RegExp(`totalChars: ${jaContent.length}`));
+  assert.match(full, /tableCount: 2/);
+  assert.doesNotMatch(full, /offset:/);
+
+  const sliced = frameDocument(sample, { offset: 400, maxChars: 300 });
+  assert.equal(sliced.offset, 400);
+  assert.equal(sliced.returnedChars, 300);
+  assert.equal(sliced.totalChars, jaContent.length);
+  assert.equal(sliced.hasMore, true);
+  const slicedText = framedDocumentText(sliced);
+  assert.match(slicedText, /UNTRUSTED_DOCUMENT_CONTENT/);
+  assert.match(slicedText, /offset: 400/);
+  assert.match(slicedText, /returnedChars: 300/);
+  assert.match(slicedText, /hasMore: true/);
+  assert.ok(slicedText.includes(jaContent.slice(400, 700)));
+});
+
+test("get_document pagination, tableIndex, includeTables, and search_documents size metadata", async () => {
+  const store = new Store(":memory:");
+  const vnContent = "Hợp đồng cung cấp dịch vụ — ".repeat(40);
+  const workbook = doc("share", "baocao.xlsx", "Báo cáo tài chính.xlsx", vnContent, {
+    guard: [{ rule: "instruction-vi", start: 0, end: 5 }],
+    metadata: { guardRisk: "low" },
+    tables: [
+      { name: "Doanh thu", headers: ["Tháng", "Số tiền"], rows: [["01", "100"]] },
+      { name: "Chi phí", headers: ["Mục", "Số tiền"], rows: [["Văn phòng", "40"]] },
+      { name: "Lợi nhuận", headers: ["Kỳ", "Lãi"], rows: [["Q1", "60"]] },
+    ],
+  });
+  store.upsertDocument(workbook);
+
+  // search_documents includes totalChars and tableCount
+  const search = await handleSearchDocuments({ query: "Hợp đồng" }, { store });
+  assert.match(search.content, new RegExp(`totalChars: ${vnContent.length}`));
+  assert.match(search.content, /tableCount: 3/);
+
+  // Backward-compatible full fetch
+  const full = await handleGetDocument({ id: workbook.id }, { store });
+  assert.match(full.content, /Doanh thu/);
+  assert.match(full.content, /Chi phí/);
+  assert.match(full.content, /Lợi nhuận/);
+  assert.match(full.content, /tableCount: 3/);
+  assert.equal(full.meta?.resultCount, 1);
+
+  // Paginated slice (middle + tail)
+  const slice1 = await handleGetDocument(
+    { id: workbook.id, offset: 100, maxChars: 200 },
+    { store },
+  );
+  assert.match(slice1.content, /UNTRUSTED_DOCUMENT_CONTENT/);
+  assert.match(slice1.content, /guardRisk: low/);
+  assert.match(slice1.content, /offset: 100/);
+  assert.match(slice1.content, /returnedChars: 200/);
+  assert.match(slice1.content, /hasMore: true/);
+  assert.equal(slice1.meta?.hasMore, true);
+
+  const tailOffset = vnContent.length - 50;
+  const sliceTail = await handleGetDocument(
+    { id: workbook.id, offset: tailOffset, maxChars: 200 },
+    { store },
+  );
+  assert.match(sliceTail.content, /returnedChars: 50/);
+  assert.match(sliceTail.content, /hasMore: false/);
+  assert.equal(sliceTail.meta?.hasMore, false);
+
+  // Single table selection by tableIndex
+  const singleTable = await handleGetDocument(
+    { id: workbook.id, tableIndex: 1 },
+    { store },
+  );
+  assert.match(singleTable.content, /tableCount: 3/);
+  assert.match(singleTable.content, /selectedTableIndex: 1/);
+  assert.match(singleTable.content, /Chi phí/);
+  assert.doesNotMatch(singleTable.content, /"Doanh thu"/);
+  assert.doesNotMatch(singleTable.content, /"Lợi nhuận"/);
+
+  // Omit tables with includeTables: false
+  const noTables = await handleGetDocument(
+    { id: workbook.id, includeTables: false },
+    { store },
+  );
+  assert.match(noTables.content, /tableCount: 3/);
+  assert.doesNotMatch(noTables.content, /--- tables \(JSON\) ---/);
+
+  // Out-of-range tableIndex returns clear error
+  const badTable = await handleGetDocument(
+    { id: workbook.id, tableIndex: 5 },
+    { store },
+  );
+  assert.match(badTable.content, /Invalid tableIndex 5/);
+  assert.match(badTable.content, /0\.\.2/);
+  assert.equal(badTable.meta?.status, "invalid_argument");
+
+  store.close();
+});

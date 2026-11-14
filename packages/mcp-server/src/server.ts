@@ -446,15 +446,27 @@ export function createKnotMcpServer(options: CreateKnotMcpServerOptions): McpSer
         const result = getTool
           ? await getTool.handler(args, toolCtx)
           : await handleGetDocument(args, toolCtx);
-        const status = result.meta?.status === "not_found" ? "error" : "ok";
+        const resultStatus = result.meta?.status;
+        const status =
+          resultStatus === "not_found" || resultStatus === "invalid_argument"
+            ? "error"
+            : "ok";
         await auditSafe(audit, {
           timestamp: new Date().toISOString(),
           kind: "tool",
           name: "get_document",
-          arguments: { id: args.id },
+          arguments: {
+            id: args.id,
+            ...(args.offset !== undefined ? { offset: args.offset } : {}),
+            ...(args.maxChars !== undefined ? { maxChars: args.maxChars } : {}),
+            ...(args.tableIndex !== undefined ? { tableIndex: args.tableIndex } : {}),
+            ...(args.includeTables !== undefined
+              ? { includeTables: args.includeTables }
+              : {}),
+          },
           resultCount: Number(result.meta?.resultCount ?? 0),
           status,
-          ...(status === "error" ? { error: "not_found" } : {}),
+          ...(status === "error" ? { error: String(resultStatus) } : {}),
         });
         return { content: [{ type: "text", text: result.content }] };
       } catch (err) {

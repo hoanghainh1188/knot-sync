@@ -18,6 +18,28 @@ export const searchDocumentsInput = {
 
 export const getDocumentInput = {
   id: z.string().min(1).describe("Document id from search or inventory"),
+  offset: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe("Optional 0-based character offset into document content (default 0)"),
+  maxChars: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Optional maximum number of content characters to return"),
+  tableIndex: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe("Optional 0-based index of a specific extracted table/sheet to return"),
+  includeTables: z
+    .boolean()
+    .optional()
+    .describe("Whether to include extracted tables (default true when tableIndex is omitted)"),
 };
 
 export interface ToolStoreContext extends McpHandlerContext {
@@ -53,6 +75,8 @@ export async function handleSearchDocuments(
       doc && typeof doc.metadata.guardRisk === "string" ? doc.metadata.guardRisk : "none";
     return frameSearchHit({
       ...h,
+      totalChars: doc?.content.length,
+      tableCount: doc?.tables.length,
       guardRisk,
       guard: doc?.guard ?? [],
     });
@@ -71,7 +95,13 @@ export async function handleSearchDocuments(
 }
 
 export async function handleGetDocument(
-  args: { id: string },
+  args: {
+    id: string;
+    offset?: number;
+    maxChars?: number;
+    tableIndex?: number;
+    includeTables?: boolean;
+  },
   ctx: McpHandlerContext,
 ): Promise<McpToolResult> {
   const store = asStoreCtx(ctx);
@@ -82,13 +112,44 @@ export async function handleGetDocument(
       meta: { resultCount: 0, status: "not_found" },
     };
   }
-  const framed = frameDocument(doc);
+  if (args.tableIndex !== undefined && args.tableIndex >= doc.tables.length) {
+    const rangeHint =
+      doc.tables.length === 0
+        ? "Document has no tables (tableCount: 0)."
+        : `Valid range is 0..${doc.tables.length - 1} (tableCount: ${doc.tables.length}).`;
+    return {
+      content: `Invalid tableIndex ${args.tableIndex} for document ${args.id}. ${rangeHint}`,
+      meta: {
+        resultCount: 0,
+        status: "invalid_argument",
+        tableCount: doc.tables.length,
+      },
+    };
+  }
+  const framed = frameDocument(doc, {
+    offset: args.offset,
+    maxChars: args.maxChars,
+    tableIndex: args.tableIndex,
+    includeTables: args.includeTables,
+  });
   return {
     content: framedDocumentText(framed),
     meta: {
       resultCount: 1,
       guardRisk: framed.guardRisk,
       guardFindings: framed.guard.length,
+      totalChars: framed.totalChars,
+      tableCount: framed.tableCount,
+      ...(framed.offset !== undefined
+        ? {
+            offset: framed.offset,
+            returnedChars: framed.returnedChars,
+            hasMore: framed.hasMore,
+          }
+        : {}),
+      ...(framed.selectedTableIndex !== undefined
+        ? { selectedTableIndex: framed.selectedTableIndex }
+        : {}),
     },
   };
 }
@@ -127,6 +188,10 @@ export function createMcpToolsPlugin(): KnotSyncPlugin {
           type: "object",
           properties: {
             id: { type: "string" },
+            offset: { type: "number" },
+            maxChars: { type: "number" },
+            tableIndex: { type: "number" },
+            includeTables: { type: "boolean" },
           },
           required: ["id"],
         },
