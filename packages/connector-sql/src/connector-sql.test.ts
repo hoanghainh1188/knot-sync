@@ -961,3 +961,90 @@ test("query_table documents analytics schema and resolves JA/VI catalog labels",
     'SELECT "TKSK_CD" FROM "public"."受注" GROUP BY "TKSK_CD" ORDER BY "TKSK_CD" ASC LIMIT $1',
   );
 });
+
+test("introspectPostgresTableWithClient supports materialized views and foreign keys", async () => {
+  const { introspectPostgresTableWithClient } = await import("./index.js");
+
+  // Materialized view: information_schema.columns returns empty, pg_attribute fallback succeeds
+  const matClient = {
+    async query(sql: string) {
+      if (sql.includes("information_schema.columns")) return { rows: [] };
+      if (sql.includes("FROM pg_attribute a") && sql.includes("c.relkind IN ('r', 'p', 'v', 'm')")) {
+        return {
+          rows: [
+            { column_name: "tksk_cd", data_type: "character varying(16)", is_nullable: "NO" },
+            { column_name: "total_kin", data_type: "numeric", is_nullable: "YES" },
+          ],
+        };
+      }
+      if (sql.includes("PRIMARY KEY")) return { rows: [] };
+      if (sql.includes("pg_constraint")) return { rows: [] };
+      if (sql.includes("reltuples::bigint::text")) {
+        assert.match(sql, /c\.relkind IN \('r', 'p', 'v', 'm'\)/);
+        return { rows: [{ estimate: "4200" }] };
+      }
+      return { rows: [] };
+    },
+  };
+  const matMeta = await introspectPostgresTableWithClient(
+    matClient as never,
+    "public",
+    "v_juchu_summary",
+  );
+  assert.ok(matMeta);
+  assert.equal(matMeta.rowEstimate, 4200);
+  assert.equal(matMeta.columns.length, 2);
+  assert.equal(matMeta.columns[0]?.name, "tksk_cd");
+
+  // Foreign key table
+  const fkClient = {
+    async query(sql: string) {
+      if (sql.includes("information_schema.columns")) {
+        return {
+          rows: [
+            { column_name: "juchu_no", data_type: "text", is_nullable: "NO" },
+            { column_name: "TKSK_CD", data_type: "text", is_nullable: "NO" },
+          ],
+        };
+      }
+      if (sql.includes("PRIMARY KEY")) return { rows: [{ column_name: "juchu_no" }] };
+      if (sql.includes("pg_constraint")) {
+        return {
+          rows: [
+            { column_name: "TKSK_CD", ref_table: "tokuisaki_mst", ref_column: "TKSK_CD" },
+          ],
+        };
+      }
+      if (sql.includes("reltuples::bigint::text")) return { rows: [{ estimate: "150" }] };
+      return { rows: [] };
+    },
+  };
+  const fkMeta = await introspectPostgresTableWithClient(fkClient as never, "public", "juchu");
+  assert.ok(fkMeta);
+  assert.equal(fkMeta.columns[1]?.references, "tokuisaki_mst.TKSK_CD");
+});
+
+test("introspectMysqlTableWithConnection captures foreign-key references", async () => {
+  const { introspectMysqlTableWithConnection } = await import("./index.js");
+  const conn = {
+    async query(sql: string) {
+      if (sql.includes("information_schema.COLUMNS")) {
+        return [
+          [
+            { column_name: "id", data_type: "int", is_nullable: "NO", column_key: "PRI" },
+            { column_name: "ma_kh", data_type: "varchar", is_nullable: "NO", column_key: "MUL" },
+          ],
+        ];
+      }
+      if (sql.includes("information_schema.TABLES")) return [[{ estimate: 90 }]];
+      if (sql.includes("information_schema.KEY_COLUMN_USAGE")) {
+        return [[{ column_name: "ma_kh", ref_table: "dm_khach_hang", ref_column: "ma_kh" }]];
+      }
+      return [[]];
+    },
+  };
+  const meta = await introspectMysqlTableWithConnection(conn as never, "don_hang");
+  assert.ok(meta);
+  assert.equal(meta.rowEstimate, 90);
+  assert.equal(meta.columns[1]?.references, "dm_khach_hang.ma_kh");
+});

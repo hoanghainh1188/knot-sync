@@ -5,6 +5,8 @@ export interface ColumnMeta {
   dataType: string;
   isNullable: boolean;
   isPrimaryKey: boolean;
+  /** Optional foreign-key target in `"<table>.<column>"` format. */
+  references?: string;
 }
 
 export interface TableMeta {

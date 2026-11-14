@@ -414,7 +414,7 @@ server:
 | **Resource** | `knot://db/{source}/{table}/schema` | Retrieve allow-listed SQL schema & business labels |
 | **Tool** | `search_documents` | Trigram full-text search (`query`, `source`, `type`, `limit`) |
 | **Tool** | `get_document` | Fetch document by its unique ID (supports optional `offset`, `maxChars`, `tableIndex`, `includeTables` pagination/sheet filtering) |
-| **Tool** | `describe_table` | Inspect allowed columns, data types, and business descriptions |
+| **Tool** | `describe_table` | Inspect allowed tables/views, columns, data types, business descriptions, and foreign-key `references` |
 | **Tool** | `query_table` | Parameterized SQL query with safe filters (`eq`, `in`, `range`, `contains`, `starts_with`, `between_dates`, `is_null`), optional `groupBy`, `aggregations` (`count`/`sum`/`avg`/`min`/`max`), and allow-listed `orderBy` |
 | **Tool** | `search_similar` | Semantic similarity search (only when `search-vector` plugin is loaded) |
 

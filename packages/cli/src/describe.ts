@@ -48,7 +48,11 @@ export function createDescribeSqlHooks(
         if (!meta) return null;
         return {
           name: meta.name,
-          columns: meta.columns.map((c) => ({ name: c.name, dataType: c.dataType })),
+          columns: meta.columns.map((c) => ({
+            name: c.name,
+            dataType: c.dataType,
+            ...(c.references ? { references: c.references } : {}),
+          })),
         };
       } finally {
         await driver.close().catch(() => undefined);

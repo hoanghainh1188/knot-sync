@@ -35,6 +35,7 @@ function mergeColumn(existing: CatalogColumn | undefined, incoming: CatalogColum
     description: incoming.description !== "" ? incoming.description : existing.description,
     type: incoming.type !== "" ? incoming.type : existing.type,
     values: incoming.values.length > 0 ? [...incoming.values] : [...existing.values],
+    references: incoming.references ?? existing.references,
     pii: incoming.pii || existing.pii,
     expose: incoming.expose,
     reviewed: false,

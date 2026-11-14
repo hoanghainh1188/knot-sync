@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -312,4 +312,116 @@ test("fill-empty catalog-llm does not overwrite dictionary; blank gets draft", a
   assert.equal(blank.reviewed, false);
   // LLM skipped for TKSK_CD because labels already filled.
   assert.equal(llmCalls, 1);
+});
+
+test("catalog column references round-trip, merge preservation, and allow-list filtering", async () => {
+  const doc = emptyCatalog();
+  doc.sources.erp = {
+    tables: {
+      juchu: emptyTable({
+        columns: {
+          TKSK_CD: emptyColumn({
+            label: { ja: "得意先コード", vi: "", en: "" },
+            references: "tokuisaki_mst.TKSK_CD",
+            reviewed: true,
+          }),
+          TANTO_CD: emptyColumn({
+            references: "tanto_mst.TANTO_CD",
+            reviewed: false,
+          }),
+        },
+      }),
+    },
+  };
+
+  const dir = await mkdtemp(join(tmpdir(), "knot-cat-ref-"));
+  try {
+    const file = join(dir, "knot-sync.catalog.yaml");
+    await writeCatalogFile(file, doc);
+    const loaded = await loadCatalogFile(file);
+    assert.equal(
+      loaded.sources.erp?.tables.juchu?.columns.TKSK_CD?.references,
+      "tokuisaki_mst.TKSK_CD",
+    );
+
+    const incoming = emptyCatalog();
+    incoming.sources.erp = {
+      tables: {
+        juchu: emptyTable({
+          columns: {
+            TKSK_CD: emptyColumn({
+              label: { ja: "別ラベル", vi: "", en: "" },
+              references: "other_tbl.ID",
+            }),
+            TANTO_CD: emptyColumn({
+              references: "staff_mst.STAFF_CD",
+            }),
+          },
+        }),
+      },
+    };
+    const merged = mergeCatalog(loaded, incoming);
+    // reviewed: true preserves existing label and references
+    assert.equal(
+      merged.sources.erp?.tables.juchu?.columns.TKSK_CD?.label.ja,
+      "得意先コード",
+    );
+    assert.equal(
+      merged.sources.erp?.tables.juchu?.columns.TKSK_CD?.references,
+      "tokuisaki_mst.TKSK_CD",
+    );
+    // reviewed: false accepts updated references
+    assert.equal(
+      merged.sources.erp?.tables.juchu?.columns.TANTO_CD?.references,
+      "staff_mst.STAFF_CD",
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+
+  // buildDescribeDraft only retains references pointing to allow-listed table+column
+  const draft = await buildDescribeDraft({
+    sqlSources: [
+      {
+        id: "erp",
+        type: "postgres",
+        url: "postgres://x",
+        urlEnv: "X",
+        allow: {
+          juchu: { columns: ["TKSK_CD", "SECRET_ID"] },
+          tokuisaki_mst: { columns: ["TKSK_CD"] },
+        },
+      },
+    ],
+    catalogSources: [],
+    hooks: {
+      async introspectTable(_src, table) {
+        if (table === "juchu") {
+          return {
+            name: "juchu",
+            columns: [
+              { name: "TKSK_CD", dataType: "text", references: "tokuisaki_mst.TKSK_CD" },
+              { name: "SECRET_ID", dataType: "text", references: "private_users.id" },
+            ],
+          };
+        }
+        return {
+          name: "tokuisaki_mst",
+          columns: [{ name: "TKSK_CD", dataType: "text" }],
+        };
+      },
+      async sampleDistinct() {
+        return [];
+      },
+    },
+  });
+
+  assert.equal(
+    draft.sources.erp?.tables.juchu?.columns.TKSK_CD?.references,
+    "tokuisaki_mst.TKSK_CD",
+  );
+  assert.equal(
+    draft.sources.erp?.tables.juchu?.columns.SECRET_ID?.references,
+    undefined,
+  );
 });

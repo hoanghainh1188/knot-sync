@@ -14,6 +14,7 @@ export const FILL_EMPTY_CATALOG_SOURCE_IDS = new Set(["catalog-llm"]);
 export interface DescribeColumnMeta {
   name: string;
   dataType: string;
+  references?: string;
 }
 
 export interface DescribeTableMeta {
@@ -48,10 +49,23 @@ function isWideType(dataType: string): boolean {
   );
 }
 
+function filterAllowedReference(
+  ref: string | undefined,
+  allow: SqlSourceConfig["allow"],
+): string | undefined {
+  if (!ref) return undefined;
+  const dot = ref.indexOf(".");
+  if (dot <= 0 || dot >= ref.length - 1) return undefined;
+  const targetTable = ref.slice(0, dot);
+  const targetCol = ref.slice(dot + 1);
+  return allow[targetTable]?.columns.includes(targetCol) ? ref : undefined;
+}
+
 function suggestionToColumn(
   suggestion: CatalogSuggestion,
   dbType: string,
   samples: string[],
+  references?: string,
 ): ReturnType<typeof emptyColumn> {
   return emptyColumn({
     label: {
@@ -62,6 +76,7 @@ function suggestionToColumn(
     description: suggestion.description ?? "",
     type: dbType,
     values: suggestion.values && suggestion.values.length > 0 ? suggestion.values : samples,
+    ...(references ? { references } : {}),
     pii: suggestion.pii ?? false,
     expose: true,
     reviewed: false,
@@ -85,7 +100,7 @@ export async function buildDescribeDraft(options: {
     const tables: CatalogDocument["sources"][string]["tables"] = {};
     for (const [tableName, allow] of Object.entries(source.allow)) {
       const meta = await hooks.introspectTable(source, tableName);
-      const columnMetas =
+      const columnMetas: DescribeColumnMeta[] =
         meta?.columns.filter((c) => allow.columns.includes(c.name)) ??
         allow.columns.map((name) => ({ name, dataType: "unknown" }));
 
@@ -128,7 +143,8 @@ export async function buildDescribeDraft(options: {
         if (samples.length > 0 && (!suggestion.values || suggestion.values.length === 0)) {
           suggestion.values = samples;
         }
-        columns[col.name] = suggestionToColumn(suggestion, col.dataType, samples);
+        const allowedRef = filterAllowedReference(col.references, source.allow);
+        columns[col.name] = suggestionToColumn(suggestion, col.dataType, samples, allowedRef);
       }
 
       tables[tableName] = emptyTable({

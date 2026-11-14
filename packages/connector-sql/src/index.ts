@@ -29,8 +29,16 @@ export {
   getRegisteredSqlDriverFactory,
   clearSqlDriverRegistry,
 } from "./driver-registry.js";
-export { createPostgresDriver, postgresStatementTimeoutSql } from "./postgres.js";
-export { createMysqlDriver, mysqlMaxExecutionTimeSql } from "./mysql.js";
+export {
+  createPostgresDriver,
+  introspectPostgresTableWithClient,
+  postgresStatementTimeoutSql,
+} from "./postgres.js";
+export {
+  createMysqlDriver,
+  introspectMysqlTableWithConnection,
+  mysqlMaxExecutionTimeSql,
+} from "./mysql.js";
 export {
   scanSql,
   tableToFileEntry,

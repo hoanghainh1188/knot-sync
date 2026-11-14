@@ -9,6 +9,7 @@ export interface CatalogColumn {
   description: string;
   type: string;
   values: string[];
+  references?: string;
   pii: boolean;
   expose: boolean;
   reviewed: boolean;
