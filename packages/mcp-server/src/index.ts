@@ -3,6 +3,7 @@ export {
   frameDocument,
   frameSearchHit,
   framedDocumentText,
+  type FrameDocumentOptions,
   type FramedDocumentPayload,
 } from "./frame.js";
 export { SOURCES_URI, documentUri, parseDocumentUri, type ParsedDocUri } from "./uri.js";
