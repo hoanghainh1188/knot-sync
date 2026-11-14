@@ -1,11 +1,13 @@
 export {
   type CatalogLabel,
   type CatalogColumn,
+  type CatalogLookupJoin,
   type CatalogTable,
   type CatalogSourceEntry,
   type CatalogDocument,
   emptyLabel,
   emptyColumn,
+  emptyLookupJoin,
   emptyTable,
   emptyCatalog,
 } from "./types.js";
@@ -60,8 +62,13 @@ export {
 export { createCatalogPlugin, type CatalogPluginOptions } from "./plugin.js";
 export {
   CatalogResolveError,
+  type AllowColumnsMap,
+  type ActiveLookupJoin,
+  type ResolvedColumnTarget,
   formatColumnLabels,
   getCatalogColumn,
+  resolveActiveLookupJoins,
   resolveColumnName,
+  resolveQueryColumn,
   validateEnumFilter,
 } from "./resolve.js";

@@ -18,11 +18,29 @@ export interface CatalogColumn {
   reviewed: boolean;
 }
 
+/** Pre-approved single-hop LEFT JOIN relationship on a catalog table. */
+export interface CatalogLookupJoin {
+  /** Logical alias & prefix for lookup columns (e.g., "tokuisaki"). */
+  name: string;
+  /** Target table or view name (e.g., "tokuisaki_mst"). */
+  targetTable: string;
+  /** Join key column on the base table. */
+  localColumn: string;
+  /** Join key column on the target table. */
+  targetColumn: string;
+  /** Exposed columns from the target table. */
+  columns: Record<string, CatalogColumn>;
+  /** Must be explicitly true in catalog YAML to activate at query time. */
+  reviewed: boolean;
+}
+
 export interface CatalogTable {
   label: CatalogLabel;
   description: string;
   reviewed: boolean;
   columns: Record<string, CatalogColumn>;
+  /** Optional pre-approved lookup joins to related tables/views. */
+  lookupJoins?: CatalogLookupJoin[];
 }
 
 export interface CatalogSourceEntry {
@@ -54,14 +72,29 @@ export function emptyColumn(partial?: Partial<CatalogColumn>): CatalogColumn {
   };
 }
 
+export function emptyLookupJoin(
+  partial: Omit<Partial<CatalogLookupJoin>, "name" | "targetTable" | "localColumn" | "targetColumn"> &
+    Pick<CatalogLookupJoin, "name" | "targetTable" | "localColumn" | "targetColumn">,
+): CatalogLookupJoin {
+  const { columns, reviewed, ...rest } = partial;
+  return {
+    ...rest,
+    columns: { ...(columns ?? {}) },
+    reviewed: reviewed ?? false,
+  };
+}
+
 export function emptyTable(partial?: Partial<CatalogTable>): CatalogTable {
-  const { label, columns, ...rest } = partial ?? {};
+  const { label, columns, lookupJoins, ...rest } = partial ?? {};
   return {
     description: "",
     reviewed: false,
     ...rest,
     label: { ...emptyLabel(), ...(label ?? {}) },
     columns: { ...(columns ?? {}) },
+    ...(lookupJoins && lookupJoins.length > 0
+      ? { lookupJoins: lookupJoins.map((j) => emptyLookupJoin(j)) }
+      : {}),
   };
 }
 

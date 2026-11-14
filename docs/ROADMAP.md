@@ -329,7 +329,7 @@ Target: Maximize AI reasoning accuracy on masked PII, prevent context window ove
 | 1 | [#53](https://github.com/hoanghainh1188/knot-sync/issues/53) | `enhance-pii-typed-tokens-and-allowlist` | P0 | ✅ done |
 | 2 | [#54](https://github.com/hoanghainh1188/knot-sync/issues/54) | `add-mcp-document-pagination` | P0 | ✅ done |
 | 3 | [#55](https://github.com/hoanghainh1188/knot-sync/issues/55) | `support-sql-views-and-relations` | P1 | ✅ done |
-| 4 | [#56](https://github.com/hoanghainh1188/knot-sync/issues/56) | `add-catalog-lookup-joins` | P1 | ⏳ planned |
+| 4 | [#56](https://github.com/hoanghainh1188/knot-sync/issues/56) | `add-catalog-lookup-joins` | P1 | ✅ done |
 | 5 | [#57](https://github.com/hoanghainh1188/knot-sync/issues/57) | `add-turnkey-lan-deployment` | P2 | ⏳ planned |
 
 ### 1. enhance-pii-typed-tokens-and-allowlist (P0 — #53)
@@ -350,7 +350,7 @@ Target: Maximize AI reasoning accuracy on masked PII, prevent context window ove
 /opsx:propose add-sql-views-and-catalog-relations: Support read-only SQL Views and Materialized Views in packages/connector-sql introspection and add foreign-key relationship hints (references: "table.column") to packages/catalog and packages/ui. Auto-detect foreign keys between allow-listed tables during knot-sync describe and surface references in describe_table MCP output so AI agents can resolve master-detail relationships (e.g. juchu.TKSK_CD -> tokuisaki_mst.TKSK_CD) accurately. Maintain strict read-only session enforcement. No new dependencies.
 ```
 
-### 4. add-catalog-lookup-joins (P1 — #56)
+### 4. add-catalog-lookup-joins (P1 — #56) — ✅ done
 
 ```
 /opsx:propose add-catalog-lookup-joins: Allow pre-approved, human-reviewed lookup joins in knot-sync.catalog.yaml so query_table in packages/connector-sql can resolve display columns from allow-listed master tables (e.g. joining juchu.TKSK_CD to tokuisaki_mst.TKSK_CD to select/filter/group by customer name) in a single parameterized read-only query. Enforce that both tables and all referenced columns are allow-listed in config and marked reviewed: true in the catalog; never accept arbitrary JOIN syntax from MCP tool arguments. No new dependencies.

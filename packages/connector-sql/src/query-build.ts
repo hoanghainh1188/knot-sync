@@ -113,6 +113,14 @@ export interface BuiltQuery {
   limit: number;
 }
 
+export interface QueryJoinSpec {
+  alias: string;
+  targetTable: string;
+  localColumn: string;
+  targetColumn: string;
+  allowedColumns: string[];
+}
+
 /** Quote a table reference, optionally schema-qualified (Postgres). */
 export function quoteTableRef(
   table: string,
@@ -158,7 +166,8 @@ function buildOrderByClauses(
   isAggregateMode: boolean,
   groupBySet: Set<string>,
   aggAliasSet: Set<string>,
-  allowedColumns: Set<string>,
+  isAllowedCol: (col: string) => boolean,
+  formatCol: (col: string) => string,
   dialect: SqlDialect,
   table: string,
 ): string[] {
@@ -176,25 +185,30 @@ function buildOrderByClauses(
           `Order-by column "${o.column}" must be a grouped column or aggregation alias for table "${table}".`,
         );
       }
-    } else if (!allowedColumns.has(o.column)) {
+      const expr = aggAliasSet.has(o.column) ? quoteIdent(o.column, dialect) : formatCol(o.column);
+      clauses.push(`${expr} ${dir === "desc" ? "DESC" : "ASC"}`);
+      continue;
+    }
+    if (!isAllowedCol(o.column)) {
       throw new Error(
         `Order-by column "${o.column}" is not allow-listed for table "${table}".`,
       );
     }
-    clauses.push(`${quoteIdent(o.column, dialect)} ${dir === "desc" ? "DESC" : "ASC"}`);
+    clauses.push(`${formatCol(o.column)} ${dir === "desc" ? "DESC" : "ASC"}`);
   }
   return clauses;
 }
 
 /**
- * Build a parameterized SELECT for an allow-listed table/columns.
- * `allowedColumns` must be the exact allow-list for the table.
+ * Build a parameterized SELECT for an allow-listed table/columns (and optional pre-approved lookup joins).
+ * `allowedColumns` must be the exact allow-list for the base table.
  */
 export function buildSelectQuery(options: {
   dialect: SqlDialect;
   table: string;
   selectColumns: string[];
   allowedColumns: Set<string>;
+  joins?: QueryJoinSpec[];
   filters?: QueryFilter[];
   groupBy?: string[];
   aggregations?: QueryAggregation[];
@@ -204,8 +218,27 @@ export function buildSelectQuery(options: {
   schema?: string;
 }): BuiltQuery {
   const { dialect, table, selectColumns, allowedColumns } = options;
+
+  const lookupMap = new Map<string, { join: QueryJoinSpec; col: string }>();
+  for (const j of options.joins ?? []) {
+    for (const col of j.allowedColumns) {
+      lookupMap.set(`${j.alias}.${col}`, { join: j, col });
+    }
+  }
+
+  const usedJoins = new Map<string, QueryJoinSpec>();
+  const isAllowedCol = (name: string): boolean => {
+    if (allowedColumns.has(name)) return true;
+    const hit = lookupMap.get(name);
+    if (hit) {
+      usedJoins.set(hit.join.alias, hit.join);
+      return true;
+    }
+    return false;
+  };
+
   for (const col of selectColumns) {
-    if (!allowedColumns.has(col)) {
+    if (!isAllowedCol(col)) {
       throw new Error(`Column "${col}" is not allow-listed for table "${table}".`);
     }
   }
@@ -214,8 +247,34 @@ export function buildSelectQuery(options: {
   const orderBy = options.orderBy ?? [];
   const isAggregateMode = groupBy.length > 0 || aggregations.length > 0;
 
+  const allowedAndLookup = new Set<string>([...allowedColumns, ...lookupMap.keys()]);
+  for (const g of groupBy) isAllowedCol(g);
+  for (const a of aggregations) {
+    if (a.column && a.column !== "*") isAllowedCol(a.column);
+  }
+  for (const f of options.filters ?? []) isAllowedCol(f.column);
+  for (const o of orderBy) isAllowedCol(o.column);
+
+  const hasJoins = usedJoins.size > 0;
+  const qualifyCol = (name: string): string => {
+    const hit = lookupMap.get(name);
+    if (hit) {
+      return `${quoteIdent(hit.join.alias, dialect)}.${quoteIdent(hit.col, dialect)}`;
+    }
+    return hasJoins
+      ? `${quoteIdent(table, dialect)}.${quoteIdent(name, dialect)}`
+      : quoteIdent(name, dialect);
+  };
+  const selectCol = (name: string): string => {
+    const hit = lookupMap.get(name);
+    if (hit) {
+      return `${qualifyCol(name)} AS ${quoteIdent(name, dialect)}`;
+    }
+    return qualifyCol(name);
+  };
+
   const plannedAggs = planAggregations(aggregations, groupBy, {
-    allowedColumns,
+    allowedColumns: allowedAndLookup,
     table,
   });
   const orderByClauses = buildOrderByClauses(
@@ -223,7 +282,8 @@ export function buildSelectQuery(options: {
     isAggregateMode,
     new Set(groupBy),
     new Set(plannedAggs.map((p) => p.alias)),
-    allowedColumns,
+    isAllowedCol,
+    qualifyCol,
     dialect,
     table,
   );
@@ -233,15 +293,22 @@ export function buildSelectQuery(options: {
 
   const colsSql = isAggregateMode
     ? [
-        ...groupBy.map((c) => quoteIdent(c, dialect)),
+        ...groupBy.map((c) => (lookupMap.has(c) ? `${qualifyCol(c)} AS ${quoteIdent(c, dialect)}` : qualifyCol(c))),
         ...plannedAggs.map(({ agg, alias }) => {
           const funcSql = agg.func.toUpperCase();
-          const argSql = agg.column === "*" ? "*" : quoteIdent(agg.column, dialect);
+          const argSql = agg.column === "*" ? "*" : qualifyCol(agg.column);
           return `${funcSql}(${argSql}) AS ${quoteIdent(alias, dialect)}`;
         }),
       ].join(", ")
-    : selectColumns.map((c) => quoteIdent(c, dialect)).join(", ");
+    : selectColumns.map((c) => selectCol(c)).join(", ");
   const tableSql = quoteTableRef(table, dialect, options.schema);
+  const joinSql = [...usedJoins.values()]
+    .map((j) => {
+      const targetSql = quoteTableRef(j.targetTable, dialect, options.schema);
+      const asKw = dialect === "oracle" ? " " : " AS ";
+      return ` LEFT JOIN ${targetSql}${asKw}${quoteIdent(j.alias, dialect)} ON ${quoteIdent(table, dialect)}.${quoteIdent(j.localColumn, dialect)} = ${quoteIdent(j.alias, dialect)}.${quoteIdent(j.targetColumn, dialect)}`;
+    })
+    .join("");
   const values: unknown[] = [];
   const where: string[] = [];
   let p = 1;
@@ -249,12 +316,12 @@ export function buildSelectQuery(options: {
   const ph = () => nextPlaceholder(dialect, p++);
 
   for (const f of options.filters ?? []) {
-    if (!allowedColumns.has(f.column)) {
+    if (!isAllowedCol(f.column)) {
       throw new Error(
         `Filter column "${f.column}" is not allow-listed for table "${table}".`,
       );
     }
-    const col = quoteIdent(f.column, dialect);
+    const col = qualifyCol(f.column);
     switch (f.op) {
       case "eq": {
         if (f.value === null) {
@@ -337,15 +404,16 @@ export function buildSelectQuery(options: {
   const whereSql = where.length > 0 ? ` WHERE ${where.join(" AND ")}` : "";
   const groupBySql =
     groupBy.length > 0
-      ? ` GROUP BY ${groupBy.map((c) => quoteIdent(c, dialect)).join(", ")}`
+      ? ` GROUP BY ${groupBy.map((c) => qualifyCol(c)).join(", ")}`
       : "";
   const orderBySql =
     orderByClauses.length > 0 ? ` ORDER BY ${orderByClauses.join(", ")}` : "";
+  const fromSql = `${tableSql}${joinSql}`;
 
   // MSSQL / Access: TOP with a clamped integer (safe; never from user SQL).
   if (dialect === "mssql" || dialect === "access") {
     const text =
-      `SELECT TOP ${limit} ${colsSql} FROM ${tableSql}${whereSql}${groupBySql}${orderBySql}`;
+      `SELECT TOP ${limit} ${colsSql} FROM ${fromSql}${whereSql}${groupBySql}${orderBySql}`;
     return { text, values, limit };
   }
 
@@ -354,17 +422,17 @@ export function buildSelectQuery(options: {
     const limitPh = ph();
     values.push(limit);
     const text =
-      `SELECT ${colsSql} FROM ${tableSql}${whereSql}${groupBySql}${orderBySql} FETCH FIRST ${limitPh} ROWS ONLY`;
+      `SELECT ${colsSql} FROM ${fromSql}${whereSql}${groupBySql}${orderBySql} FETCH FIRST ${limitPh} ROWS ONLY`;
     return { text, values, limit };
   }
   if (dialect === "as400") {
     const text =
-      `SELECT ${colsSql} FROM ${tableSql}${whereSql}${groupBySql}${orderBySql} FETCH FIRST ${limit} ROWS ONLY`;
+      `SELECT ${colsSql} FROM ${fromSql}${whereSql}${groupBySql}${orderBySql} FETCH FIRST ${limit} ROWS ONLY`;
     return { text, values, limit };
   }
 
   const limitPh = ph();
   values.push(limit);
-  const text = `SELECT ${colsSql} FROM ${tableSql}${whereSql}${groupBySql}${orderBySql} LIMIT ${limitPh}`;
+  const text = `SELECT ${colsSql} FROM ${fromSql}${whereSql}${groupBySql}${orderBySql} LIMIT ${limitPh}`;
   return { text, values, limit };
 }

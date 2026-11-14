@@ -5,10 +5,12 @@ import {
   emptyCatalog,
   emptyColumn,
   emptyLabel,
+  emptyLookupJoin,
   emptyTable,
   type CatalogColumn,
   type CatalogDocument,
   type CatalogLabel,
+  type CatalogLookupJoin,
   type CatalogSourceEntry,
   type CatalogTable,
 } from "./types.js";
@@ -101,12 +103,74 @@ function parseColumn(raw: unknown, path: string): CatalogColumn {
   });
 }
 
-function parseTable(raw: unknown, path: string): CatalogTable {
+function asRequiredNonEmptyString(raw: unknown, path: string): string {
+  if (typeof raw !== "string" || raw.trim() === "") {
+    throw new CatalogError(`${path} must be a non-empty string.`);
+  }
+  return raw.trim();
+}
+
+function parseLookupJoin(
+  raw: unknown,
+  path: string,
+  baseTableName: string | undefined,
+  seenNames: Set<string>,
+): CatalogLookupJoin {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     throw new CatalogError(`${path} must be an object.`);
   }
   const o = raw as Record<string, unknown>;
-  const allowed = new Set(["label", "description", "reviewed", "columns"]);
+  const allowed = new Set([
+    "name",
+    "targetTable",
+    "localColumn",
+    "targetColumn",
+    "columns",
+    "reviewed",
+  ]);
+  for (const k of Object.keys(o)) {
+    if (!allowed.has(k)) {
+      throw new CatalogError(
+        `${path} has unknown key "${k}". Allowed: ${[...allowed].join(", ")}.`,
+      );
+    }
+  }
+  const name = asRequiredNonEmptyString(o.name, `${path}.name`);
+  if (baseTableName && name === baseTableName) {
+    throw new CatalogError(`${path}.name "${name}" must not collide with base table name.`);
+  }
+  if (seenNames.has(name)) {
+    throw new CatalogError(`${path}.name "${name}" is duplicated in lookupJoins.`);
+  }
+  seenNames.add(name);
+
+  const targetTable = asRequiredNonEmptyString(o.targetTable, `${path}.targetTable`);
+  const localColumn = asRequiredNonEmptyString(o.localColumn, `${path}.localColumn`);
+  const targetColumn = asRequiredNonEmptyString(o.targetColumn, `${path}.targetColumn`);
+
+  if (typeof o.columns !== "object" || o.columns === null || Array.isArray(o.columns)) {
+    throw new CatalogError(`${path}.columns must be an object keyed by physical column name.`);
+  }
+  const columns: Record<string, CatalogColumn> = {};
+  for (const [colName, col] of Object.entries(o.columns as Record<string, unknown>)) {
+    columns[colName] = parseColumn(col, `${path}.columns.${colName}`);
+  }
+  return emptyLookupJoin({
+    name,
+    targetTable,
+    localColumn,
+    targetColumn,
+    columns,
+    reviewed: asBool(o.reviewed, `${path}.reviewed`, false),
+  });
+}
+
+function parseTable(raw: unknown, path: string, tableName?: string): CatalogTable {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new CatalogError(`${path} must be an object.`);
+  }
+  const o = raw as Record<string, unknown>;
+  const allowed = new Set(["label", "description", "reviewed", "columns", "lookupJoins"]);
   for (const k of Object.keys(o)) {
     if (!allowed.has(k)) {
       throw new CatalogError(
@@ -122,11 +186,22 @@ function parseTable(raw: unknown, path: string): CatalogTable {
   for (const [name, col] of Object.entries(columnsRaw as Record<string, unknown>)) {
     columns[name] = parseColumn(col, `${path}.columns.${name}`);
   }
+  let lookupJoins: CatalogLookupJoin[] | undefined;
+  if (o.lookupJoins !== undefined && o.lookupJoins !== null) {
+    if (!Array.isArray(o.lookupJoins)) {
+      throw new CatalogError(`${path}.lookupJoins must be a list of lookup join objects.`);
+    }
+    const seenNames = new Set<string>();
+    lookupJoins = o.lookupJoins.map((item, idx) =>
+      parseLookupJoin(item, `${path}.lookupJoins[${idx}]`, tableName, seenNames),
+    );
+  }
   return emptyTable({
     label: asLabel(o.label, path),
     description: asString(o.description, `${path}.description`),
     reviewed: asBool(o.reviewed, `${path}.reviewed`, false),
     columns,
+    ...(lookupJoins && lookupJoins.length > 0 ? { lookupJoins } : {}),
   });
 }
 
@@ -146,7 +221,7 @@ function parseSource(raw: unknown, path: string): CatalogSourceEntry {
   }
   const tables: Record<string, CatalogTable> = {};
   for (const [name, table] of Object.entries(tablesRaw as Record<string, unknown>)) {
-    tables[name] = parseTable(table, `${path}.tables.${name}`);
+    tables[name] = parseTable(table, `${path}.tables.${name}`, name);
   }
   return { tables };
 }

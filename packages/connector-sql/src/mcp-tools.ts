@@ -2,8 +2,11 @@ import {
   CatalogResolveError,
   formatColumnLabels,
   getCatalogColumn,
-  resolveColumnName,
+  resolveActiveLookupJoins,
+  resolveQueryColumn,
   validateEnumFilter,
+  type ActiveLookupJoin,
+  type AllowColumnsMap,
   type CatalogDocument,
 } from "@hoanghainh/knot-sync-catalog";
 import {
@@ -21,6 +24,7 @@ import {
   planAggregations,
   type QueryAggregation,
   type QueryFilter,
+  type QueryJoinSpec,
   type QueryOrderBy,
 } from "./query-build.js";
 import {
@@ -66,11 +70,43 @@ function factoryFor(source: SqlSourceConfig, ctx: SqlToolContext): DriverFactory
   return ctx.sqlDriverFactories?.[source.id] ?? defaultDriverFactory(source.type);
 }
 
+function buildAllowColumnsMap(source: SqlSourceConfig): AllowColumnsMap {
+  const map: AllowColumnsMap = {};
+  for (const [tbl, entry] of Object.entries(source.allow)) {
+    map[tbl] = entry.columns;
+  }
+  return map;
+}
+
 function enrichSchemaWithCatalog(
   schema: Awaited<ReturnType<typeof describeAllowedTable>>,
   catalog: CatalogDocument | undefined,
+  allowMap: AllowColumnsMap,
 ): unknown {
   if (!catalog) return schema;
+  const activeJoins = resolveActiveLookupJoins(
+    catalog,
+    schema.sourceId,
+    schema.table,
+    allowMap,
+  );
+  const lookupJoins = activeJoins.map((j) => ({
+    name: j.name,
+    targetTable: j.targetTable,
+    localColumn: j.localColumn,
+    targetColumn: j.targetColumn,
+    columns: Object.entries(j.columns).map(([colName, entry]) => {
+      const labels = formatColumnLabels(entry);
+      return {
+        name: `${j.name}.${colName}`,
+        column: colName,
+        businessLabel: entry.label,
+        description: entry.description || undefined,
+        validValues: entry.values.length > 0 ? entry.values : undefined,
+        labelsText: labels || undefined,
+      };
+    }),
+  }));
   return {
     ...schema,
     columns: schema.columns.map((c) => {
@@ -86,6 +122,7 @@ function enrichSchemaWithCatalog(
         labelsText: labels || undefined,
       };
     }),
+    ...(lookupJoins.length > 0 ? { lookupJoins } : {}),
   };
 }
 
@@ -100,7 +137,11 @@ export async function handleDescribeTable(
     args.table,
     factoryFor(source, ctx as SqlToolContext),
   );
-  const enriched = enrichSchemaWithCatalog(schema, catalogOf(ctx));
+  const enriched = enrichSchemaWithCatalog(
+    schema,
+    catalogOf(ctx),
+    buildAllowColumnsMap(source),
+  );
   return {
     content: frameSqlSchema(enriched),
     meta: { resultCount: schema.columns.length },
@@ -113,22 +154,32 @@ function resolveFilters(
   sourceId: string,
   table: string,
   allowedColumns: Set<string>,
+  allowMap: AllowColumnsMap,
+  activeJoins: ActiveLookupJoin[],
 ): QueryFilter[] {
   if (!filters || filters.length === 0) return [];
   return filters.map((f) => {
-    const physical = resolveColumnName(catalog, sourceId, table, f.column, allowedColumns);
-    const col = getCatalogColumn(catalog, sourceId, table, physical);
+    const resolved = resolveQueryColumn(
+      catalog,
+      sourceId,
+      table,
+      f.column,
+      allowedColumns,
+      allowMap,
+      activeJoins,
+    );
+    const col = resolved.catalogColumn;
     if (f.op === "eq") {
       const err = validateEnumFilter(col, "eq", [f.value]);
       if (err) throw new CatalogResolveError(err);
-      return { ...f, column: physical };
+      return { ...f, column: resolved.qualifiedName };
     }
     if (f.op === "in") {
       const err = validateEnumFilter(col, "in", f.values);
       if (err) throw new CatalogResolveError(err);
-      return { ...f, column: physical };
+      return { ...f, column: resolved.qualifiedName };
     }
-    return { ...f, column: physical };
+    return { ...f, column: resolved.qualifiedName };
   });
 }
 
@@ -142,22 +193,30 @@ function resolveAnalyticsArgs(
   sourceId: string,
   table: string,
   allowedColumns: Set<string>,
+  allowMap: AllowColumnsMap,
+  activeJoins: ActiveLookupJoin[],
 ): {
   groupBy?: string[];
   aggregations?: QueryAggregation[];
   orderBy?: QueryOrderBy[];
 } {
-  const groupBy = args.groupBy?.map((col) =>
-    resolveColumnName(catalog, sourceId, table, col, allowedColumns),
-  );
+  const resolveCol = (col: string) =>
+    resolveQueryColumn(catalog, sourceId, table, col, allowedColumns, allowMap, activeJoins)
+      .qualifiedName;
+
+  const groupBy = args.groupBy?.map(resolveCol);
   const aggregations = args.aggregations?.map((agg) =>
     agg.column === "*"
       ? agg
       : {
           ...agg,
-          column: resolveColumnName(catalog, sourceId, table, agg.column, allowedColumns),
+          column: resolveCol(agg.column),
         },
   );
+  const allowedAndLookup = new Set<string>([
+    ...allowedColumns,
+    ...activeJoins.flatMap((j) => Object.keys(j.columns).map((c) => `${j.name}.${c}`)),
+  ]);
   // Pre-compute resolved aggregate aliases so sorting by an alias bypasses column lookup.
   const aggAliasSet = new Set<string>();
   if (aggregations && aggregations.length > 0) {
@@ -165,7 +224,10 @@ function resolveAnalyticsArgs(
       if (agg.as !== undefined) aggAliasSet.add(agg.as);
     }
     try {
-      for (const p of planAggregations(aggregations, groupBy ?? [], { allowedColumns, table })) {
+      for (const p of planAggregations(aggregations, groupBy ?? [], {
+        allowedColumns: allowedAndLookup,
+        table,
+      })) {
         aggAliasSet.add(p.alias);
       }
     } catch {
@@ -177,7 +239,7 @@ function resolveAnalyticsArgs(
       ? o
       : {
           ...o,
-          column: resolveColumnName(catalog, sourceId, table, o.column, allowedColumns),
+          column: resolveCol(o.column),
         },
   );
   return { groupBy, aggregations, orderBy };
@@ -187,6 +249,7 @@ export async function handleQueryTable(
   args: {
     source: string;
     table: string;
+    columns?: string[];
     filters?: QueryFilter[];
     groupBy?: string[];
     aggregations?: QueryAggregation[];
@@ -204,7 +267,18 @@ export async function handleQueryTable(
     );
   }
   const allowedColumns = new Set(allow.columns);
+  const allowMap = buildAllowColumnsMap(source);
   const catalog = catalogOf(ctx);
+  const activeJoins = resolveActiveLookupJoins(catalog, source.id, args.table, allowMap);
+  const joinSpecs: QueryJoinSpec[] = activeJoins.map((j) => ({
+    alias: j.name,
+    targetTable: j.targetTable,
+    localColumn: j.localColumn,
+    targetColumn: j.targetColumn,
+    allowedColumns: Object.keys(j.columns),
+  }));
+
+  let selectColumns: string[];
   let filters: QueryFilter[];
   let resolvedAnalytics: {
     groupBy?: string[];
@@ -212,13 +286,38 @@ export async function handleQueryTable(
     orderBy?: QueryOrderBy[];
   };
   try {
-    filters = resolveFilters(args.filters, catalog, source.id, args.table, allowedColumns);
+    selectColumns =
+      args.columns && args.columns.length > 0
+        ? args.columns.map(
+            (c) =>
+              resolveQueryColumn(
+                catalog,
+                source.id,
+                args.table,
+                c,
+                allowedColumns,
+                allowMap,
+                activeJoins,
+              ).qualifiedName,
+          )
+        : allow.columns;
+    filters = resolveFilters(
+      args.filters,
+      catalog,
+      source.id,
+      args.table,
+      allowedColumns,
+      allowMap,
+      activeJoins,
+    );
     resolvedAnalytics = resolveAnalyticsArgs(
       args,
       catalog,
       source.id,
       args.table,
       allowedColumns,
+      allowMap,
+      activeJoins,
     );
   } catch (err) {
     if (err instanceof CatalogResolveError) {
@@ -229,8 +328,9 @@ export async function handleQueryTable(
   const built = buildSelectQuery({
     dialect: source.type,
     table: args.table,
-    selectColumns: allow.columns,
+    selectColumns,
     allowedColumns,
+    joins: joinSpecs,
     filters,
     groupBy: resolvedAnalytics.groupBy,
     aggregations: resolvedAnalytics.aggregations,
@@ -284,6 +384,11 @@ export function createSqlMcpToolsPlugin(): KnotSyncPlugin {
           properties: {
             source: { type: "string" },
             table: { type: "string" },
+            columns: {
+              type: "array",
+              description:
+                "Optional list of allow-listed columns or active lookup columns (<joinName>.<column> or unique catalog business labels) to select.",
+            },
             filters: {
               type: "array",
               description:
@@ -312,6 +417,7 @@ export function createSqlMcpToolsPlugin(): KnotSyncPlugin {
           const a = args as {
             source: string;
             table: string;
+            columns?: string[];
             filters?: QueryFilter[];
             groupBy?: string[];
             aggregations?: QueryAggregation[];
