@@ -11,6 +11,8 @@ export interface CatalogColumn {
   type: string;
   /** Distinct / enum hints (short lists only). */
   values: string[];
+  /** Optional foreign-key target in `"<table>.<column>"` format. */
+  references?: string;
   pii: boolean;
   expose: boolean;
   reviewed: boolean;
@@ -37,7 +39,8 @@ export function emptyLabel(): CatalogLabel {
 }
 
 export function emptyColumn(partial?: Partial<CatalogColumn>): CatalogColumn {
-  const { label, values, ...rest } = partial ?? {};
+  const { label, values, references, ...rest } = partial ?? {};
+  const trimmedRef = typeof references === "string" ? references.trim() : "";
   return {
     description: "",
     type: "",
@@ -45,6 +48,7 @@ export function emptyColumn(partial?: Partial<CatalogColumn>): CatalogColumn {
     expose: true,
     reviewed: false,
     ...rest,
+    ...(trimmedRef !== "" ? { references: trimmedRef } : {}),
     label: { ...emptyLabel(), ...(label ?? {}) },
     values: values ? [...values] : [],
   };

@@ -76,6 +76,7 @@ function parseColumn(raw: unknown, path: string): CatalogColumn {
     "description",
     "type",
     "values",
+    "references",
     "pii",
     "expose",
     "reviewed",
@@ -87,11 +88,13 @@ function parseColumn(raw: unknown, path: string): CatalogColumn {
       );
     }
   }
+  const references = asString(o.references, `${path}.references`).trim();
   return emptyColumn({
     label: asLabel(o.label, path),
     description: asString(o.description, `${path}.description`),
     type: asString(o.type, `${path}.type`),
     values: asStringArray(o.values, `${path}.values`),
+    ...(references !== "" ? { references } : {}),
     pii: asBool(o.pii, `${path}.pii`, false),
     expose: asBool(o.expose, `${path}.expose`, true),
     reviewed: asBool(o.reviewed, `${path}.reviewed`, false),

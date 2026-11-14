@@ -82,6 +82,7 @@ function enrichSchemaWithCatalog(
         businessLabel: entry.label,
         description: entry.description || undefined,
         validValues: entry.values.length > 0 ? entry.values : undefined,
+        references: entry.references || undefined,
         labelsText: labels || undefined,
       };
     }),

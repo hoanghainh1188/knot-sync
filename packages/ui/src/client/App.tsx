@@ -281,6 +281,17 @@ export function App() {
                     })
                   }
                 />
+                <label htmlFor="references">{t(locale, "references")}</label>
+                <input
+                  id="references"
+                  type="text"
+                  placeholder="tokuisaki_mst.TKSK_CD"
+                  value={column.references ?? ""}
+                  onChange={(e) => {
+                    const trimmed = e.target.value.trim();
+                    updateColumn({ references: trimmed !== "" ? trimmed : undefined });
+                  }}
+                />
                 <div className="checks">
                   <label>
                     <input

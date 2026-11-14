@@ -676,3 +676,71 @@ test("get_document pagination, tableIndex, includeTables, and search_documents s
 
   store.close();
 });
+
+test("describe_table surfaces catalog foreign-key references for JP/VN ERP columns", async () => {
+  const { handleDescribeTable } = await import("@hoanghainh/knot-sync-connector-sql");
+  const { emptyCatalog, emptyColumn, emptyTable } = await import("@hoanghainh/knot-sync-catalog");
+
+  const catalog = emptyCatalog();
+  catalog.sources.erp = {
+    tables: {
+      juchu: emptyTable({
+        columns: {
+          TKSK_CD: emptyColumn({
+            label: { ja: "得意先コード", vi: "Mã khách hàng", en: "" },
+            references: "tokuisaki_mst.TKSK_CD",
+          }),
+        },
+      }),
+    },
+  };
+
+  const config = {
+    ...minimalConfig("/tmp/share", "/tmp/audit.jsonl"),
+    sources: [
+      {
+        id: "erp",
+        type: "postgres" as const,
+        url: "postgres://unused",
+        urlEnv: "UNUSED",
+        allow: { juchu: { columns: ["TKSK_CD"] } },
+      },
+    ],
+  };
+
+  const res = await handleDescribeTable(
+    { source: "erp", table: "juchu" },
+    {
+      config,
+      catalog,
+      sqlDriverFactories: {
+        erp: async () => ({
+          dialect: "postgres",
+          async enableReadOnly() {},
+          async introspectTable() {
+            return {
+              name: "juchu",
+              rowEstimate: 100,
+              columns: [
+                {
+                  name: "TKSK_CD",
+                  dataType: "text",
+                  isNullable: false,
+                  isPrimaryKey: false,
+                },
+              ],
+            };
+          },
+          async query() {
+            return [];
+          },
+          async close() {},
+        }),
+      },
+    } as never,
+  );
+
+  assert.match(res.content, /UNTRUSTED_DOCUMENT_CONTENT/);
+  assert.match(res.content, /得意先コード/);
+  assert.match(res.content, /tokuisaki_mst\.TKSK_CD/);
+});

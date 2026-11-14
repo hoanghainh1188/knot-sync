@@ -328,7 +328,7 @@ Target: Maximize AI reasoning accuracy on masked PII, prevent context window ove
 |---|---:|---|:---:|---|
 | 1 | [#53](https://github.com/hoanghainh1188/knot-sync/issues/53) | `enhance-pii-typed-tokens-and-allowlist` | P0 | ✅ done |
 | 2 | [#54](https://github.com/hoanghainh1188/knot-sync/issues/54) | `add-mcp-document-pagination` | P0 | ✅ done |
-| 3 | [#55](https://github.com/hoanghainh1188/knot-sync/issues/55) | `add-sql-views-and-catalog-relations` | P1 | ⏳ planned |
+| 3 | [#55](https://github.com/hoanghainh1188/knot-sync/issues/55) | `support-sql-views-and-relations` | P1 | ✅ done |
 | 4 | [#56](https://github.com/hoanghainh1188/knot-sync/issues/56) | `add-catalog-lookup-joins` | P1 | ⏳ planned |
 | 5 | [#57](https://github.com/hoanghainh1188/knot-sync/issues/57) | `add-turnkey-lan-deployment` | P2 | ⏳ planned |
 
@@ -344,7 +344,7 @@ Target: Maximize AI reasoning accuracy on masked PII, prevent context window ove
 /opsx:propose add-mcp-document-pagination: Add optional, backward-compatible pagination and table selection parameters (offset, maxChars, tableIndex, includeTables) to the get_document MCP tool in packages/mcp-server. Include totalChars and tableCount metadata in search_documents hits and get_document headers so AI agents can inspect large PDFs and multi-sheet Excel workbooks slice-by-slice without overflowing context windows. Keep UNTRUSTED_DOCUMENT_CONTENT framing and guard flags intact on every slice. No new dependencies.
 ```
 
-### 3. add-sql-views-and-catalog-relations (P1 — #55)
+### 3. support-sql-views-and-relations (P1 — #55) — ✅ done
 
 ```
 /opsx:propose add-sql-views-and-catalog-relations: Support read-only SQL Views and Materialized Views in packages/connector-sql introspection and add foreign-key relationship hints (references: "table.column") to packages/catalog and packages/ui. Auto-detect foreign keys between allow-listed tables during knot-sync describe and surface references in describe_table MCP output so AI agents can resolve master-detail relationships (e.g. juchu.TKSK_CD -> tokuisaki_mst.TKSK_CD) accurately. Maintain strict read-only session enforcement. No new dependencies.
