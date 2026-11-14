@@ -1,0 +1,83 @@
+# Turnkey LAN Appliance Stack for KnotSync
+# Base:     docker compose -f deploy/docker-compose.lan.yml up -d
+# With OCR: docker compose -f deploy/docker-compose.lan.yml --profile ocr up -d
+# With LLM: docker compose -f deploy/docker-compose.lan.yml --profile local-ai up -d
+
+services:
+  knot-sync:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: knot-sync:local
+    container_name: knot-sync-lan
+    restart: unless-stopped
+    ports:
+      - "${KNOT_SYNC_PORT:-3940}:3940"
+    environment:
+      KNOT_SYNC_PORT: "3940"
+      KNOT_SYNC_API_KEY: "${KNOT_SYNC_API_KEY:?Set KNOT_SYNC_API_KEY in .env}"
+      KNOT_SYNC_OCR_LICENSE: "${KNOT_SYNC_OCR_LICENSE:-}"
+      KNOT_SYNC_SEARCH_VECTOR_LICENSE: "${KNOT_SYNC_SEARCH_VECTOR_LICENSE:-}"
+      KNOT_SYNC_CATALOG_LLM_LICENSE: "${KNOT_SYNC_CATALOG_LLM_LICENSE:-}"
+    volumes:
+      # Customer source directories MUST be mounted read-only (:ro)
+      - "${KNOT_SYNC_SOURCES_DIR:-../examples/sample-data}:/sources:ro"
+      - "${KNOT_SYNC_CONFIG:-../examples/sample.config.yaml}:/app/knot-sync.config.yaml:ro"
+      # Optional reviewed Semantic Catalog (uncomment when using SQL catalog):
+      # - "${KNOT_SYNC_CATALOG:-./knot-sync.catalog.yaml}:/app/knot-sync.catalog.yaml:ro"
+      # Persistent SQLite store & JSONL audit/system logs (read-write)
+      - "${KNOT_SYNC_DATA_DIR:-./.data}:/data:rw"
+    command:
+      - "serve"
+      - "--http"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "3940"
+      - "--sync-interval"
+      - "${KNOT_SYNC_SYNC_INTERVAL:-300}"
+      - "-c"
+      - "/app/knot-sync.config.yaml"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3940/mcp').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - knot-internal
+
+  # Optional: Offline OCR sidecar (Docling Serve CPU) for paid extractor-ocr plugin
+  docling-serve:
+    image: quay.io/docling-project/docling-serve-cpu:latest
+    container_name: knot-sync-docling
+    profiles: ["ocr"]
+    restart: unless-stopped
+    environment:
+      DOCLING_SERVE_ENABLE_UI: "false"
+    networks:
+      - knot-internal
+
+  # Optional: Local LLM / Embeddings sidecar (Ollama) for search-vector / catalog-llm / guard-llm
+  ollama:
+    image: ollama/ollama:latest
+    container_name: knot-sync-ollama
+    profiles: ["local-ai"]
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama:rw
+    networks:
+      - knot-internal
+
+volumes:
+  ollama-models:
+
+networks:
+  knot-internal:
+    driver: bridge

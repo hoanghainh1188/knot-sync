@@ -11,6 +11,8 @@
 
 [English](https://github.com/hoanghainh1188/knot-sync#readme) • [日本語](https://github.com/hoanghainh1188/knot-sync/blob/main/docs/ja/README.md) • [Tiếng Việt](https://github.com/hoanghainh1188/knot-sync/blob/main/docs/vi/README.md)
 
+> **Enterprise Pilot & LAN Docker Stack:** [Pilot Playbook (EN)](docs/PILOT_PLAYBOOK.md) · [導入プレイブック (JA)](docs/ja/PILOT_PLAYBOOK.md) · [Cẩm nang Pilot (VI)](docs/vi/PILOT_PLAYBOOK.md) · [Docker Compose LAN](deploy/docker-compose.lan.yml)
+
 ---
 
 ## What Does KnotSync Actually Do?

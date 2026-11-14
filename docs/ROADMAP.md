@@ -277,7 +277,7 @@ under sources. Distinct from server.audit_log. No telemetry / remote shipping. N
 | Paid | Separate plugin packages (license checked by the plugin, never by core) ✅ #1–#7 below |
 | Onboarding | `prepare-v1-public-contract` ✅ + `improve-onboarding-and-demo` ✅ |
 | v0.4 | Pilot readiness & data hygiene (prune deleted docs, SQL sort/aggregates, slim store, periodic sync) ✅ |
-| v0.5 | Pre-Pilot AI reasoning, multi-table ERP relations & turnkey LAN deployment (Issues #53–#57) ⏳ |
+| v0.5 | Pre-Pilot AI reasoning, multi-table ERP relations & turnkey LAN deployment (Issues #53–#57) ✅ |
 | v1.0 | Commercialization & governance (Ed25519 offline licensing ✅, UI document explorer ✅, `.xls`/`.doc` ✅, `1.0.0` release ⏳) |
 | v1.1+ (After v1.0) | Write tools / stored procedures (always with human approval) & enterprise SaaS connectors |
 
@@ -330,7 +330,7 @@ Target: Maximize AI reasoning accuracy on masked PII, prevent context window ove
 | 2 | [#54](https://github.com/hoanghainh1188/knot-sync/issues/54) | `add-mcp-document-pagination` | P0 | ✅ done |
 | 3 | [#55](https://github.com/hoanghainh1188/knot-sync/issues/55) | `support-sql-views-and-relations` | P1 | ✅ done |
 | 4 | [#56](https://github.com/hoanghainh1188/knot-sync/issues/56) | `add-catalog-lookup-joins` | P1 | ✅ done |
-| 5 | [#57](https://github.com/hoanghainh1188/knot-sync/issues/57) | `add-turnkey-lan-deployment` | P2 | ⏳ planned |
+| 5 | [#57](https://github.com/hoanghainh1188/knot-sync/issues/57) | `add-turnkey-lan-deployment` | P2 | ✅ done |
 
 ### 1. enhance-pii-typed-tokens-and-allowlist (P0 — #53)
 
@@ -356,7 +356,7 @@ Target: Maximize AI reasoning accuracy on masked PII, prevent context window ove
 /opsx:propose add-catalog-lookup-joins: Allow pre-approved, human-reviewed lookup joins in knot-sync.catalog.yaml so query_table in packages/connector-sql can resolve display columns from allow-listed master tables (e.g. joining juchu.TKSK_CD to tokuisaki_mst.TKSK_CD to select/filter/group by customer name) in a single parameterized read-only query. Enforce that both tables and all referenced columns are allow-listed in config and marked reviewed: true in the catalog; never accept arbitrary JOIN syntax from MCP tool arguments. No new dependencies.
 ```
 
-### 5. add-turnkey-lan-deployment (P2 — #57)
+### 5. add-turnkey-lan-deployment (P2 — #57) — ✅ done
 
 ```
 /opsx:propose add-turnkey-lan-deployment: Add an official non-root Dockerfile, deploy/docker-compose.lan.yml (with read-only :ro customer source mounts and optional Docling OCR / Ollama profiles), and a 3-step Enterprise Pilot Playbook (docs/PILOT_PLAYBOOK.md in EN/JA/VI) so IT admins can deploy KnotSync in shared LAN environments with a single command. No new runtime dependencies.
