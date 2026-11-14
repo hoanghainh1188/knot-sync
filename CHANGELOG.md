@@ -4,6 +4,38 @@ All notable changes to KnotSync are documented in this file.
 
 ## Unreleased
 
+## 0.5.0 — 2026-11-14
+
+Enterprise Pilot Readiness release of `@hoanghainh/knot-sync`, adding typed PII
+pseudonymization, chunked MCP document retrieval, SQL Views & catalog joins,
+and a turnkey non-root LAN Docker deployment bundle with trilingual pilot
+playbooks.
+
+### Added
+
+- Typed PII pseudonymization (`pii.tokenFormat: "typed"` emitting `[PII:<RULE>]`
+  / `pii_<rule>_<hash>`) and `pii.allowlist` false-positive suppression in
+  `@hoanghainh/knot-sync-pii-basic` (#53)
+- Chunked pagination (`offsetChars`, `maxChars`) and `tableIndex` /
+  `includeTables` filtering in `get_document`, plus document size metadata in
+  `search_documents` (#54)
+- Read-only SQL Views (`includeViews`) in `@hoanghainh/knot-sync-connector-sql`
+  and catalog column `references` (`table`, `column`) surfaced in
+  `describe_table` (#55)
+- Pre-approved `lookupJoins` in Semantic Catalog for `query_table` with
+  dual-gate (`reviewed: true` + `allow` list) enforcement (#56)
+- Non-root `Dockerfile`, `.dockerignore`, and `deploy/docker-compose.lan.yml`
+  (strict `:ro` customer source/config mounts, optional `ocr` and `local-ai`
+  profiles) paired with trilingual 3-Step Enterprise Pilot Playbooks
+  (`docs/PILOT_PLAYBOOK.md`, `docs/ja/PILOT_PLAYBOOK.md`,
+  `docs/vi/PILOT_PLAYBOOK.md`) (#57)
+
+### Notes
+
+- Verify after publish: `npx @hoanghainh/knot-sync@0.5.0 --version`
+- Paid plugins are not published as separate npm packages in this release;
+  enable them from the monorepo via `plugins:` + license env vars
+
 ## 0.4.0 — 2026-11-12
 
 Pre-pilot release of the bundled open-core CLI (`@hoanghainh/knot-sync`), adding
