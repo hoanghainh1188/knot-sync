@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -103,11 +104,38 @@ describe("turnkey LAN deployment bundle", () => {
       t.skip("Docker daemon not available in current test environment");
       return;
     }
-    execFileSync("docker", ["build", "-t", "knot-sync:smoke-test", "."], {
-      cwd: REPO_ROOT,
-      stdio: "inherit",
-      timeout: 300000,
-    });
+    const lockDir = resolve(tmpdir(), "knot-sync-cli-manifest.lock");
+    const deadline = Date.now() + 180_000;
+    const sleepBuf = new Int32Array(new SharedArrayBuffer(4));
+    while (true) {
+      try {
+        mkdirSync(lockDir);
+        break;
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+        try {
+          if (Date.now() - statSync(lockDir).mtimeMs > 300_000) {
+            rmSync(lockDir, { recursive: true, force: true });
+            continue;
+          }
+        } catch {
+          continue;
+        }
+        if (Date.now() >= deadline) {
+          throw new Error(`Timed out waiting for manifest lock at ${lockDir}`);
+        }
+        Atomics.wait(sleepBuf, 0, 0, 50);
+      }
+    }
+    try {
+      execFileSync("docker", ["build", "-t", "knot-sync:smoke-test", "."], {
+        cwd: REPO_ROOT,
+        stdio: "inherit",
+        timeout: 300000,
+      });
+    } finally {
+      rmSync(lockDir, { recursive: true, force: true });
+    }
     const helpOut = execFileSync(
       "docker",
       ["run", "--rm", "knot-sync:smoke-test", "--help"],
