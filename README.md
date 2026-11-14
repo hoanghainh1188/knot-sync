@@ -572,7 +572,7 @@ pnpm scan:sample
 
 ## Public contract (toward 1.0)
 
-The latest published package is **`@hoanghainh/knot-sync@0.4.0`**. **1.0.0 is not published yet.** Customer sources remain read-only; write tools are planned only after 1.0 (with human approval).
+The latest published package is **`@hoanghainh/knot-sync@0.5.0`**. **1.0.0 is not published yet.** Customer sources remain read-only; write tools are planned only after 1.0 (with human approval).
 
 **Stable CLI commands:** `init`, `scan`, `run`, `describe`, `ui`, `bench`, `optimize`, `embed`, `plugins`, `serve` (plus global `--config`, `--lang`, `--help`, `--version`).
 
