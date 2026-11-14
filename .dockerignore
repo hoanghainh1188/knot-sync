@@ -1,0 +1,15 @@
+.git
+.github
+.data
+node_modules
+packages/*/node_modules
+packages/*/dist
+packages/*/*.tsbuildinfo
+*.tsbuildinfo
+packages/ui/static
+openspec
+*.log
+.env
+deploy/.env
+deploy/.data
+knot-sync-scan-report.html
